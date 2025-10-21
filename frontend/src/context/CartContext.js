@@ -357,14 +357,15 @@ export const CartProvider = ({ children }) => {
       price: parseFloat(item.product?.price || item.price || 0),
       quantity: item.quantity,
       image_url: item.product?.image_url || item.image_url,
-      description: item.product?.description || item.description
+      description: item.product?.description || item.description,
+      category: item.product?.category || item.category
     }));
   };
 
-  // Get cart summary for order creation
+  // Get cart summary for order creation - UPDATED with Rs. 50 shipping
   const getCartSummary = () => {
     const subtotal = getCartTotal();
-    const shipping = subtotal > 0 ? 100 : 0; // Fixed shipping for Nepal
+    const shipping = subtotal > 0 ? 50 : 0; // Fixed Rs. 50 shipping for Nepal
     const total = subtotal + shipping;
     
     return {
@@ -376,19 +377,162 @@ export const CartProvider = ({ children }) => {
     };
   };
 
+  // Get cart item by product ID
+  const getCartItem = (productId) => {
+    return cartItems.find(item => 
+      (item.product_id || item.product?.id) === productId
+    );
+  };
+
+  // Check if product is in cart
+  const isProductInCart = (productId) => {
+    return cartItems.some(item => 
+      (item.product_id || item.product?.id) === productId
+    );
+  };
+
+  // Get product quantity in cart
+  const getProductQuantity = (productId) => {
+    const item = cartItems.find(item => 
+      (item.product_id || item.product?.id) === productId
+    );
+    return item ? item.quantity : 0;
+  };
+
+  // Calculate total savings if products have original prices
+  const getTotalSavings = () => {
+    return cartItems.reduce((savings, item) => {
+      const currentPrice = parseFloat(item.product?.price || item.price || 0);
+      const originalPrice = parseFloat(item.product?.original_price || item.original_price || currentPrice);
+      return savings + ((originalPrice - currentPrice) * item.quantity);
+    }, 0);
+  };
+
+  // Get cart items grouped by category
+  const getCartItemsByCategory = () => {
+    const grouped = {};
+    cartItems.forEach(item => {
+      const category = item.product?.category || item.category || 'Uncategorized';
+      if (!grouped[category]) {
+        grouped[category] = [];
+      }
+      grouped[category].push(item);
+    });
+    return grouped;
+  };
+
+  // Validate cart items (check if products are still available)
+  const validateCart = async () => {
+    if (!isAuthenticated || cartItems.length === 0) {
+      return { valid: true, items: [] };
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}/api/cart/validate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          cartItems: cartItems.map(item => ({
+            productId: item.product_id || item.product?.id,
+            quantity: item.quantity
+          }))
+        })
+      });
+
+      const result = await handleApiResponse(response);
+      
+      if (result.success) {
+        return result.data;
+      } else {
+        return { valid: false, items: [], error: result.data.message };
+      }
+    } catch (error) {
+      console.error('Cart validation error:', error);
+      return { valid: false, items: [], error: 'Failed to validate cart' };
+    }
+  };
+
+  // Merge local cart with server cart after login
+  const mergeCarts = async (localCartItems) => {
+    if (!isAuthenticated || localCartItems.length === 0) {
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}/api/cart/merge`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ items: localCartItems })
+      });
+
+      const result = await handleApiResponse(response);
+      
+      if (result.success) {
+        forceRefreshCart();
+        return { success: true, merged: result.data.merged || 0 };
+      } else {
+        return { success: false, error: result.data.message };
+      }
+    } catch (error) {
+      console.error('Cart merge error:', error);
+      return { success: false, error: 'Failed to merge carts' };
+    }
+  };
+
+  // Export cart data (for sharing, backup, etc.)
+  const exportCartData = () => {
+    return {
+      items: cartItems.map(item => ({
+        productId: item.product_id || item.product?.id,
+        name: item.product?.name || item.name,
+        price: item.product?.price || item.price,
+        quantity: item.quantity,
+        image: item.product?.image_url || item.image_url,
+        category: item.product?.category || item.category
+      })),
+      summary: getCartSummary(),
+      exportedAt: new Date().toISOString()
+    };
+  };
+
   const value = {
+    // State
     cartItems,
+    loading,
+    
+    // Core operations
     addToCart,
     updateCartItem,
     removeFromCart,
     clearCart,
+    
+    // Calculations
     getCartTotal,
     getCartItemsCount,
     getCartCount,
     isCartEmpty,
     getCartItemsForCheckout,
     getCartSummary,
-    loading,
+    
+    // Enhanced features
+    getCartItem,
+    isProductInCart,
+    getProductQuantity,
+    getTotalSavings,
+    getCartItemsByCategory,
+    validateCart,
+    mergeCarts,
+    exportCartData,
+    
+    // Utilities
     refreshCart: fetchCart,
     forceRefreshCart
   };

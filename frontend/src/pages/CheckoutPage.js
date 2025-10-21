@@ -1,4 +1,3 @@
-// frontend/src/pages/CheckoutPage.js
 import React, { useState, useEffect } from 'react';
 import { useCart } from '../context/CartContext.js';
 import { useAuth } from '../context/AuthContext.js';
@@ -24,6 +23,8 @@ const CheckoutPage = () => {
   const [discount, setDiscount] = useState(0);
   const [appliedPromo, setAppliedPromo] = useState(null);
   const [applyingPromo, setApplyingPromo] = useState(false);
+  const [availablePromos, setAvailablePromos] = useState([]);
+  const [showPromoDropdown, setShowPromoDropdown] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -59,9 +60,35 @@ const CheckoutPage = () => {
     }
   }, [isCartEmpty, navigate]);
 
+  useEffect(() => {
+    loadAvailablePromos();
+  }, []);
+
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
     setTimeout(() => setToast({ message: '', type: 'success' }), 4000);
+  };
+
+  const loadAvailablePromos = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      
+      const response = await fetch(`${API_BASE_URL}/api/promo/available?totalAmount=${getCartTotal()}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          setAvailablePromos(result.promos || []);
+        }
+      }
+    } catch (error) {
+      console.error('Load promos error:', error);
+    }
   };
 
   const handleInputChange = (e) => {
@@ -102,8 +129,10 @@ const CheckoutPage = () => {
     return Object.keys(errors).length === 0;
   };
 
-  const applyPromoCode = async () => {
-    if (!promoCode.trim()) {
+  const applyPromoCode = async (code = null) => {
+    const codeToApply = code || promoCode;
+    
+    if (!codeToApply.trim()) {
       showToast('Please enter a promo code', 'error');
       return;
     }
@@ -120,22 +149,24 @@ const CheckoutPage = () => {
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          code: promoCode,
-          totalAmount: getCartTotal()
+          code: codeToApply,
+          totalAmount: getCartTotal(),
+          cartItems: cartItems.map(item => ({
+            category: item.product?.category || item.category
+          }))
         })
       });
 
-      if (response.ok) {
-        const result = await response.json();
-        if (result.success) {
-          setDiscount(result.discount);
-          setAppliedPromo(result.promo);
-          showToast(`Promo code applied! ${result.discount > 0 ? `Rs. ${result.discount} discount` : 'Free shipping'}`, 'success');
-        } else {
-          showToast(result.message || 'Invalid promo code', 'error');
-        }
+      const result = await response.json();
+
+      if (result.success) {
+        setDiscount(result.discount);
+        setAppliedPromo(result.promo);
+        setPromoCode(codeToApply);
+        setShowPromoDropdown(false);
+        showToast(result.promo.description || `Promo code applied! Rs. ${result.discount} discount`, 'success');
       } else {
-        showToast('Failed to validate promo code', 'error');
+        showToast(result.message || 'Invalid promo code', 'error');
       }
     } catch (error) {
       console.error('Promo code error:', error);
@@ -164,13 +195,17 @@ const CheckoutPage = () => {
       const cartSummary = getCartSummary();
       const cartItemsForCheckout = getCartItemsForCheckout();
       
+      // Fixed shipping charge to Rs. 50
+      const shippingCharge = 50;
+      
       const orderData = {
         items: cartItemsForCheckout,
-        totalAmount: parseFloat(cartSummary.total) - discount,
+        totalAmount: parseFloat(cartSummary.subtotal) + shippingCharge - discount,
         subtotal: parseFloat(cartSummary.subtotal),
-        shipping: parseFloat(cartSummary.shipping),
+        shipping: shippingCharge,
         discount: discount,
         promoCode: appliedPromo ? promoCode : null,
+        promoCodeId: appliedPromo ? appliedPromo.id : null,
         shippingAddress: {
           fullName: formData.fullName,
           email: formData.email,
@@ -200,7 +235,8 @@ const CheckoutPage = () => {
             shippingAddress: orderData.shippingAddress,
             subtotal: orderData.subtotal,
             shipping: orderData.shipping,
-            discount: orderData.discount
+            discount: orderData.discount,
+            promoCode: orderData.promoCode
           };
           break;
 
@@ -213,6 +249,7 @@ const CheckoutPage = () => {
             subtotal: orderData.subtotal,
             shipping: orderData.shipping,
             discount: orderData.discount,
+            promoCode: orderData.promoCode,
             customer_info: {
               name: formData.fullName,
               email: formData.email,
@@ -229,7 +266,8 @@ const CheckoutPage = () => {
             shippingAddress: orderData.shippingAddress,
             subtotal: orderData.subtotal,
             shipping: orderData.shipping,
-            discount: orderData.discount
+            discount: orderData.discount,
+            promoCode: orderData.promoCode
           };
           break;
 
@@ -241,6 +279,8 @@ const CheckoutPage = () => {
             subtotal: orderData.subtotal,
             shipping: orderData.shipping,
             discount: orderData.discount,
+            promoCode: orderData.promoCode,
+            promoCodeId: orderData.promoCodeId,
             shippingAddress: orderData.shippingAddress
           };
           break;
@@ -374,7 +414,7 @@ const CheckoutPage = () => {
 
   const cartSummary = getCartSummary();
   const subtotal = parseFloat(cartSummary.subtotal);
-  const shipping = parseFloat(cartSummary.shipping);
+  const shipping = 50; // Fixed shipping charge
   const totalBeforeDiscount = subtotal + shipping;
   const total = totalBeforeDiscount - discount;
 
@@ -648,7 +688,7 @@ const CheckoutPage = () => {
                         e.target.nextElementSibling.style.display = 'flex';
                       }}
                     />
-                    <div className="w-12 h-8 bg-green-600 rounded flex items-center justify-center text-white font-bold text-xs hidden">
+                    <div className="w-12 h-8 bg-green-600 rounded flex items-center justify-center text-white font-bold text-xs">
                       eSewa
                     </div>
                     <div>
@@ -678,7 +718,7 @@ const CheckoutPage = () => {
                         e.target.nextElementSibling.style.display = 'flex';
                       }}
                     />
-                    <div className="w-12 h-8 bg-orange-500 rounded flex items-center justify-center text-white font-bold text-xs hidden">
+                    <div className="w-12 h-8 bg-orange-500 rounded flex items-center justify-center text-white font-bold text-xs">
                       COD
                     </div>
                     <div>
@@ -703,36 +743,83 @@ const CheckoutPage = () => {
 
               {/* Promo Code Section */}
               <div className="mb-6">
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={promoCode}
-                    onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
-                    placeholder="Enter promo code"
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                    disabled={applyingPromo || appliedPromo}
-                  />
-                  {appliedPromo ? (
-                    <button
-                      onClick={removePromoCode}
-                      className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
-                    >
-                      Remove
-                    </button>
-                  ) : (
-                    <button
-                      onClick={applyPromoCode}
-                      disabled={applyingPromo || !promoCode.trim()}
-                      className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    >
-                      {applyingPromo ? '...' : 'Apply'}
-                    </button>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Promo Code
+                </label>
+                <div className="relative">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={promoCode}
+                      onChange={(e) => {
+                        setPromoCode(e.target.value.toUpperCase());
+                        setShowPromoDropdown(true);
+                      }}
+                      onFocus={() => setShowPromoDropdown(true)}
+                      placeholder="Enter promo code"
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                      disabled={applyingPromo || appliedPromo}
+                    />
+                    {appliedPromo ? (
+                      <button
+                        onClick={removePromoCode}
+                        className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                      >
+                        Remove
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => applyPromoCode()}
+                        disabled={applyingPromo || !promoCode.trim()}
+                        className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        {applyingPromo ? '...' : 'Apply'}
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Promo Code Dropdown */}
+                  {showPromoDropdown && availablePromos.length > 0 && !appliedPromo && (
+                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                      <div className="p-2 border-b border-gray-100">
+                        <p className="text-xs font-medium text-gray-500">AVAILABLE PROMO CODES</p>
+                      </div>
+                      {availablePromos.map((promo, index) => (
+                        <div
+                          key={index}
+                          className="p-3 hover:bg-purple-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                          onClick={() => applyPromoCode(promo.code)}
+                        >
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-purple-600">{promo.code}</span>
+                                <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
+                                  {promo.discount_type === 'percentage' ? `${promo.discount_value}% OFF` : 
+                                   promo.discount_type === 'fixed' ? `Rs. ${promo.discount_value} OFF` : 
+                                   'FREE SHIPPING'}
+                                </span>
+                              </div>
+                              <p className="text-sm text-gray-600 mt-1">{promo.description}</p>
+                              {promo.min_order_amount > 0 && (
+                                <p className="text-xs text-gray-500 mt-1">
+                                  Min. order: Rs. {promo.min_order_amount}
+                                </p>
+                              )}
+                            </div>
+                            <button className="text-purple-600 hover:text-purple-800 text-sm font-medium">
+                              Apply
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
                 {appliedPromo && (
                   <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded-lg">
                     <p className="text-green-700 text-sm">
-                      ✅ {appliedPromo.description || `Promo code applied! Rs. ${discount} discount`}
+                      ✅ {appliedPromo.description}
                     </p>
                   </div>
                 )}
@@ -842,29 +929,74 @@ const CheckoutPage = () => {
               </p>
             </div>
 
-            {/* Support Info */}
-            <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-2xl p-6 border border-blue-200">
-              <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
-                </svg>
-                Need Help?
-              </h3>
-              <p className="text-gray-600 text-sm mb-3">
-                Our support team is here to help with any questions about your order.
-              </p>
-              <div className="flex gap-3">
-                <button className="flex-1 bg-white border border-blue-500 text-blue-600 hover:bg-blue-500 hover:text-white py-2 px-4 rounded-lg text-sm font-medium transition-colors">
-                  Contact Support
-                </button>
-                <button className="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg text-sm font-medium transition-colors">
-                  Live Chat
-                </button>
-              </div>
-            </div>
+{/* Floating Support Widget (Fixed outside layout) */}
+<div className="fixed bottom-6 right-6 z-50 group">
+  {/* Help Icon Button */}
+  <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white w-14 h-14 rounded-full flex items-center justify-center shadow-2xl cursor-pointer group-hover:scale-110 transition-all duration-300">
+    <svg
+      className="w-7 h-7"
+      fill="currentColor"
+      viewBox="0 0 20 20"
+    >
+      <path
+        fillRule="evenodd"
+        d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z"
+        clipRule="evenodd"
+      />
+    </svg>
+  </div>
+
+  {/* Expanded Info Panel */}
+  <div className="absolute bottom-20 right-0 bg-white rounded-2xl p-5 border border-blue-100 shadow-2xl w-80 opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 transform transition-all duration-300 origin-bottom-right pointer-events-none group-hover:pointer-events-auto">
+    <div className="flex items-center mb-3 gap-2">
+      <div className="bg-blue-100 p-2 rounded-full">
+        <svg
+          className="w-5 h-5 text-blue-600"
+          fill="currentColor"
+          viewBox="0 0 20 20"
+        >
+          <path
+            fillRule="evenodd"
+            d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z"
+            clipRule="evenodd"
+          />
+        </svg>
+      </div>
+      <h3 className="font-semibold text-gray-900 text-lg">Need Help?</h3>
+    </div>
+
+    <p className="text-gray-600 text-sm mb-4">
+      Our friendly team is ready to help with payments, delivery, or product info.
+    </p>
+
+    <div className="flex gap-3">
+      <button
+        onClick={() => window.open('mailto:support@6thshop.com', '_blank')}
+        className="flex-1 bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:opacity-90 py-2 px-4 rounded-lg text-sm font-medium shadow-md transition-all duration-300"
+      >
+        Email Us
+      </button>
+      <button
+        onClick={() => showToast('Live chat coming soon!', 'info')}
+        className="flex-1 bg-white border border-blue-500 text-blue-600 hover:bg-blue-50 py-2 px-4 rounded-lg text-sm font-medium transition-colors"
+      >
+        Live Chat
+      </button>
+    </div>
+  </div>
+</div>
+
           </div>
         </div>
       </div>
+
+      {/* Close dropdown when clicking outside */}
+      {showPromoDropdown && (
+        <div 
+          className="fixed inset-0 z-0" 
+          onClick={() => setShowPromoDropdown(false)}
+        />
+      )}
     </div>
   );
 };
