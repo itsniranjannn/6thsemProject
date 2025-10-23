@@ -26,10 +26,22 @@ const getProductById = async (req, res) => {
   }
 };
 
-// Create product (Admin only)
+// Create product (Admin only) with enhanced features
 const createProduct = async (req, res) => {
   try {
-    const { name, description, price, category, image_url, stock_quantity } = req.body;
+    const { 
+      name, 
+      description, 
+      price, 
+      category, 
+      image_urls, 
+      stock_quantity, 
+      tags, 
+      is_featured, 
+      is_new, 
+      discount_percentage, 
+      offer_valid_until 
+    } = req.body;
     
     // Validate required fields
     if (!name || !price || !category) {
@@ -41,8 +53,13 @@ const createProduct = async (req, res) => {
       description: description || '',
       price,
       category,
-      image_url: image_url || 'https://via.placeholder.com/300',
-      stock_quantity: stock_quantity || 0
+      image_urls: image_urls || [],
+      stock_quantity: stock_quantity || 0,
+      tags: tags || [],
+      is_featured: is_featured || false,
+      is_new: is_new || false,
+      discount_percentage: discount_percentage || 0,
+      offer_valid_until: offer_valid_until || null
     });
     
     res.status(201).json({ 

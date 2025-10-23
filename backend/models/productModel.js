@@ -172,15 +172,31 @@ class Product {
     }
   }
 
-  // Create new product
+  // Create new product with enhanced features
   static async create(productData) {
     try {
-      const { name, description, price, category, image_url, stock_quantity } = productData;
+      const { name, description, price, category, image_urls, stock_quantity, tags, is_featured, is_new, discount_percentage, offer_valid_until } = productData;
+      
+      // Handle multiple image URLs
+      const imageUrlsJson = JSON.stringify(image_urls || []);
+      const tagsJson = JSON.stringify(tags || []);
       
       const [result] = await db.execute(
-        `INSERT INTO products (name, description, price, category, image_url, stock_quantity) 
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [name, description, price, category, image_url, stock_quantity || 0]
+        `INSERT INTO products (name, description, price, category, image_urls, stock_quantity, tags, is_featured, is_new, discount_percentage, offer_valid_until) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          name, 
+          description, 
+          price, 
+          category, 
+          imageUrlsJson, 
+          stock_quantity || 0,
+          tagsJson,
+          is_featured || false,
+          is_new || false,
+          discount_percentage || 0,
+          offer_valid_until || null
+        ]
       );
       
       console.log(`✅ Created new product: ${name} (ID: ${result.insertId})`);

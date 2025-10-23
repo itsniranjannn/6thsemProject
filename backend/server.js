@@ -53,7 +53,9 @@ const routes = [
   { path: '/api/payments', file: './routes/paymentRoutes' },
   { path: '/api/reviews', file: './routes/reviewRoutes' },
   { path: '/api/promo', file: './routes/promoRoutes' },
-  { path: '/api/email', file: './routes/emailRoutes' }
+  { path: '/api/email', file: './routes/emailRoutes' },
+{ path: '/api/admin', file: './routes/adminRoutes' }
+
 ];
 
 routes.forEach(route => {
@@ -116,6 +118,7 @@ process.on('unhandledRejection', (error) => {
     process.exit(1);
   });
 });
+
 
 // Keep the process alive
 server.keepAliveTimeout = 120000;

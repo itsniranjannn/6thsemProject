@@ -30,6 +30,8 @@ const ProductPage = () => {
   const [ratingFilter, setRatingFilter] = useState(0);
   const [showFilters, setShowFilters] = useState(false);
   const [activeAlgorithm, setActiveAlgorithm] = useState('ml');
+  const [algorithmPerformance, setAlgorithmPerformance] = useState({});
+  const [showAlgorithmDetails, setShowAlgorithmDetails] = useState(false);
   
   // Modal states
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -50,7 +52,7 @@ const ProductPage = () => {
   // Show toast function
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
-    setTimeout(() => setToast({ message: '', type: 'success' }), 3000);
+    setTimeout(() => setToast({ message: '', type: 'success' }), 4000);
   };
 
   // Get unique categories from products
@@ -84,14 +86,14 @@ const ProductPage = () => {
       setLoading(true);
       setError('');
       
-      const response = await fetch('http://localhost:5000/api/products');
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/products`);
       
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       
       const data = await response.json();
       
       if (Array.isArray(data) && data.length > 0) {
-        // Calculate max price for range slider - set to 1000 or actual max, whichever is higher
+        // Calculate max price for range slider
         const prices = data.map(p => parseFloat(p.price));
         const actualMaxPrice = Math.ceil(Math.max(...prices));
         const calculatedMaxPrice = Math.max(actualMaxPrice, 1000);
@@ -139,7 +141,7 @@ const ProductPage = () => {
 
   const fetchProductReviews = async (productId) => {
     try {
-      const response = await fetch(`http://localhost:5000/api/reviews/product/${productId}`);
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/reviews/product/${productId}`);
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
@@ -183,6 +185,7 @@ const ProductPage = () => {
   const fetchRecommendations = async () => {
     try {
       setRecommendationsLoading(true);
+      const startTime = performance.now();
       
       if (filteredProducts.length > 0) {
         const firstProduct = filteredProducts[0];
@@ -191,23 +194,23 @@ const ProductPage = () => {
         
         switch (activeAlgorithm) {
           case 'ml':
-            apiUrl = `http://localhost:5000/api/recommendations/product/${firstProduct.id}?algorithm=ml&limit=4`;
+            apiUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommendations/product/${firstProduct.id}?algorithm=ml&limit=4`;
             break;
           case 'content':
-            apiUrl = `http://localhost:5000/api/recommendations/product/${firstProduct.id}?algorithm=content&limit=4`;
+            apiUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommendations/product/${firstProduct.id}?algorithm=content&limit=4`;
             break;
           case 'collaborative':
             if (user) {
-              apiUrl = `http://localhost:5000/api/recommendations/user/personalized?limit=4`;
+              apiUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommendations/user/personalized?limit=4`;
             } else {
-              apiUrl = `http://localhost:5000/api/recommendations/product/${firstProduct.id}?algorithm=content&limit=4`;
+              apiUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommendations/product/${firstProduct.id}?algorithm=content&limit=4`;
             }
             break;
           case 'popular':
-            apiUrl = `http://localhost:5000/api/recommendations/popular?limit=4`;
+            apiUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommendations/popular?limit=4`;
             break;
           default:
-            apiUrl = `http://localhost:5000/api/recommendations/product/${firstProduct.id}?algorithm=ml&limit=4`;
+            apiUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommendations/product/${firstProduct.id}?algorithm=ml&limit=4`;
         }
 
         const response = await fetch(apiUrl, {
@@ -216,11 +219,25 @@ const ProductPage = () => {
           } : {}
         });
         
+        const endTime = performance.now();
+        const responseTime = Math.round(endTime - startTime);
+        
         if (response.ok) {
           const data = await response.json();
           if (data.success && data.recommendations.length > 0) {
             console.log(`Using ${data.algorithm} recommendations algorithm`);
             setRecommendations(data.recommendations);
+            
+            // Track algorithm performance
+            setAlgorithmPerformance(prev => ({
+              ...prev,
+              [activeAlgorithm]: {
+                responseTime,
+                recommendationCount: data.recommendations.length,
+                lastUsed: new Date().toISOString(),
+                success: true
+              }
+            }));
           } else {
             throw new Error('No recommendations found');
           }
@@ -233,6 +250,18 @@ const ProductPage = () => {
       // Fallback to featured products
       const featured = products.filter(p => p.isFeatured);
       setRecommendations(featured.length >= 4 ? featured.slice(0, 4) : products.slice(0, 4));
+      
+      // Track failed performance
+      setAlgorithmPerformance(prev => ({
+        ...prev,
+        [activeAlgorithm]: {
+          responseTime: 0,
+          recommendationCount: 0,
+          lastUsed: new Date().toISOString(),
+          success: false,
+          error: error.message
+        }
+      }));
     } finally {
       setRecommendationsLoading(false);
     }
@@ -293,7 +322,7 @@ const ProductPage = () => {
     }
     
     try {
-      const response = await fetch(`http://localhost:5000/api/products/search?q=${encodeURIComponent(query)}`);
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/products/search?q=${encodeURIComponent(query)}`);
       if (response.ok) {
         const data = await response.json();
         setFilteredProducts(Array.isArray(data) ? data : []);
@@ -446,8 +475,8 @@ const ProductPage = () => {
     showToast('Filters reset successfully');
   };
 
-  const getAlgorithmInfo = () => {
-    switch (activeAlgorithm) {
+  const getAlgorithmInfo = (algorithm = activeAlgorithm) => {
+    switch (algorithm) {
       case 'ml':
         return {
           name: 'Machine Learning',
@@ -530,54 +559,75 @@ const ProductPage = () => {
           <SearchBar onSearch={handleSearch} />
         </div>
 
-        {/* Algorithm Selector */}
+        {/* Enhanced Algorithm Selector */}
         <div className="bg-white rounded-2xl shadow-xl p-6 mb-8 border border-gray-100">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">🎯 Recommendation Algorithm</h3>
-              <p className="text-gray-600 text-sm">Choose how we suggest products</p>
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+            <div className="flex-1">
+              <div className="flex items-center gap-3 mb-3">
+                <h3 className="text-xl font-bold text-gray-900">🎯 AI Recommendation Engine</h3>
+                <button
+                  onClick={() => setShowAlgorithmDetails(!showAlgorithmDetails)}
+                  className="text-blue-500 hover:text-blue-700 text-sm font-medium transition-colors"
+                >
+                  {showAlgorithmDetails ? 'Hide Details' : 'Show Performance'}
+                </button>
+              </div>
+              <p className="text-gray-600 text-sm mb-4">Choose how our AI suggests products for you</p>
+              
+              {/* Algorithm Performance Metrics */}
+              {showAlgorithmDetails && (
+                <div className="bg-gray-50 rounded-xl p-4 mb-4">
+                  <h4 className="font-semibold text-gray-900 mb-3">📊 Algorithm Performance</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {Object.entries(algorithmPerformance).map(([algo, perf]) => (
+                      <div key={algo} className={`p-3 rounded-lg border ${
+                        perf.success ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
+                      }`}>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-sm font-medium">{getAlgorithmInfo(algo).icon}</span>
+                          <span className="text-xs font-semibold capitalize">{algo}</span>
+                        </div>
+                        <div className="text-xs text-gray-600">
+                          <div>Time: {perf.responseTime}ms</div>
+                          <div>Results: {perf.recommendationCount}</div>
+                          <div className={perf.success ? 'text-green-600' : 'text-red-600'}>
+                            {perf.success ? '✓ Success' : '✗ Failed'}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
-            <div className="flex flex-wrap gap-2">
-              <button
-                onClick={() => setActiveAlgorithm('ml')}
-                className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 transform hover:scale-105 ${
-                  activeAlgorithm === 'ml'
-                    ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                🧠 ML AI
-              </button>
-              <button
-                onClick={() => setActiveAlgorithm('content')}
-                className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 transform hover:scale-105 ${
-                  activeAlgorithm === 'content'
-                    ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-lg'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                📊 Content
-              </button>
-              <button
-                onClick={() => setActiveAlgorithm('collaborative')}
-                className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 transform hover:scale-105 ${
-                  activeAlgorithm === 'collaborative'
-                    ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-lg'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                👥 Collaborative
-              </button>
-              <button
-                onClick={() => setActiveAlgorithm('popular')}
-                className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 transform hover:scale-105 ${
-                  activeAlgorithm === 'popular'
-                    ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-lg'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                🔥 Popular
-              </button>
+            
+            <div className="flex flex-wrap gap-3">
+              {[
+                { id: 'ml', name: 'ML AI', icon: '🧠', color: 'from-purple-500 to-pink-500' },
+                { id: 'content', name: 'Content', icon: '📊', color: 'from-blue-500 to-cyan-500' },
+                { id: 'collaborative', name: 'Collaborative', icon: '👥', color: 'from-green-500 to-emerald-500' },
+                { id: 'popular', name: 'Popular', icon: '🔥', color: 'from-orange-500 to-red-500' }
+              ].map(algo => (
+                <button
+                  key={algo.id}
+                  onClick={() => setActiveAlgorithm(algo.id)}
+                  className={`px-4 py-3 rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 shadow-lg ${
+                    activeAlgorithm === algo.id
+                      ? `bg-gradient-to-r ${algo.color} text-white shadow-xl`
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200 hover:shadow-md'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">{algo.icon}</span>
+                    <span>{algo.name}</span>
+                    {algorithmPerformance[algo.id]?.success && (
+                      <span className="text-xs bg-white/20 px-2 py-1 rounded-full">
+                        {algorithmPerformance[algo.id].responseTime}ms
+                      </span>
+                    )}
+                  </div>
+                </button>
+              ))}
             </div>
           </div>
         </div>
@@ -795,27 +845,44 @@ const ProductPage = () => {
                   ))}
                 </div>
 
-                {/* AI-Powered Recommendations Section */}
+                {/* Enhanced AI-Powered Recommendations Section */}
                 {recommendations.length > 0 && (
                   <div className="animate-fade-in mt-12">
                     <div className="text-center mb-8">
-                      <h3 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mb-3">
-                        {algorithmInfo.icon} {algorithmInfo.name} Recommendations
-                      </h3>
+                      <div className="flex items-center justify-center gap-3 mb-4">
+                        <h3 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+                          {algorithmInfo.icon} {algorithmInfo.name} Recommendations
+                        </h3>
+                        {algorithmPerformance[activeAlgorithm]?.success && (
+                          <div className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium">
+                            ⚡ {algorithmPerformance[activeAlgorithm].responseTime}ms
+                          </div>
+                        )}
+                      </div>
                       <p className="text-gray-600 text-lg mb-4">
                         {algorithmInfo.description}
                       </p>
-                      {recommendationsLoading ? (
-                        <div className="inline-flex items-center gap-2 bg-blue-100 text-blue-800 px-4 py-2 rounded-full text-sm font-medium">
-                          <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-800"></div>
-                          Generating smart recommendations...
+                      
+                      {/* Algorithm Status */}
+                      <div className="flex items-center justify-center gap-4 mb-6">
+                        {recommendationsLoading ? (
+                          <div className="inline-flex items-center gap-2 bg-blue-100 text-blue-800 px-4 py-2 rounded-full text-sm font-medium">
+                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-800"></div>
+                            Generating smart recommendations...
+                          </div>
+                        ) : (
+                          <div className="inline-flex items-center gap-2 bg-green-100 text-green-800 px-4 py-2 rounded-full text-sm font-medium">
+                            <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                            AI Recommendations Active
+                          </div>
+                        )}
+                        
+                        {/* Recommendation Count */}
+                        <div className="inline-flex items-center gap-2 bg-purple-100 text-purple-800 px-4 py-2 rounded-full text-sm font-medium">
+                          <span>📊</span>
+                          {recommendations.length} products suggested
                         </div>
-                      ) : (
-                        <div className="inline-flex items-center gap-2 bg-green-100 text-green-800 px-4 py-2 rounded-full text-sm font-medium">
-                          <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-                          AI Recommendations Active
-                        </div>
-                      )}
+                      </div>
                     </div>
                     
                     {recommendationsLoading ? (
