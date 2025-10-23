@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
+// frontend/src/pages/CheckoutPage.js - COMPLETELY FIXED VERSION WITH IMAGES
+import React, { useState, useEffect, useRef } from 'react';
 import { useCart } from '../context/CartContext.js';
 import { useAuth } from '../context/AuthContext.js';
 import { useNavigate } from 'react-router-dom';
 import { Toast } from '../components/Toast.js';
+import SupportWidget from '../components/SupportWidget.js';
 
 const CheckoutPage = () => {
   const { 
@@ -26,6 +28,9 @@ const CheckoutPage = () => {
   const [availablePromos, setAvailablePromos] = useState([]);
   const [showPromoDropdown, setShowPromoDropdown] = useState(false);
 
+  const promoDropdownRef = useRef(null);
+  const promoInputRef = useRef(null);
+
   // Form state
   const [formData, setFormData] = useState({
     fullName: '',
@@ -38,6 +43,21 @@ const CheckoutPage = () => {
   });
 
   const [formErrors, setFormErrors] = useState({});
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (promoDropdownRef.current && !promoDropdownRef.current.contains(event.target) &&
+          promoInputRef.current && !promoInputRef.current.contains(event.target)) {
+        setShowPromoDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   useEffect(() => {
     if (user) {
@@ -62,19 +82,32 @@ const CheckoutPage = () => {
 
   useEffect(() => {
     loadAvailablePromos();
-  }, []);
+  }, [cartItems]);
 
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
     setTimeout(() => setToast({ message: '', type: 'success' }), 4000);
   };
 
+  // Get unique categories from cart items
+  const getCartCategories = () => {
+    const categories = new Set();
+    cartItems.forEach(item => {
+      const category = item.product?.category || item.category;
+      if (category) {
+        categories.add(category);
+      }
+    });
+    return Array.from(categories);
+  };
+
   const loadAvailablePromos = async () => {
     try {
       const token = localStorage.getItem('token');
       const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const cartCategories = getCartCategories();
       
-      const response = await fetch(`${API_BASE_URL}/api/promo/available?totalAmount=${getCartTotal()}`, {
+      const response = await fetch(`${API_BASE_URL}/api/promo/available?totalAmount=${getCartTotal()}&categories=${JSON.stringify(cartCategories)}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -83,7 +116,21 @@ const CheckoutPage = () => {
       if (response.ok) {
         const result = await response.json();
         if (result.success) {
-          setAvailablePromos(result.promos || []);
+          // Filter promos that are applicable to cart categories or have no category restrictions
+          const applicablePromos = (result.promos || []).filter(promo => {
+            // If promo has no category restrictions, it's applicable to all
+            if (!promo.categories || promo.categories.length === 0) {
+              return true;
+            }
+            
+            // If promo has category restrictions, check if any cart category matches
+            const promoCategories = Array.isArray(promo.categories) ? promo.categories : JSON.parse(promo.categories || '[]');
+            return cartCategories.some(cartCategory => 
+              promoCategories.includes(cartCategory)
+            );
+          });
+          
+          setAvailablePromos(applicablePromos);
         }
       }
     } catch (error) {
@@ -141,6 +188,7 @@ const CheckoutPage = () => {
     try {
       const token = localStorage.getItem('token');
       const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const cartCategories = getCartCategories();
       
       const response = await fetch(`${API_BASE_URL}/api/promo/validate`, {
         method: 'POST',
@@ -153,7 +201,8 @@ const CheckoutPage = () => {
           totalAmount: getCartTotal(),
           cartItems: cartItems.map(item => ({
             category: item.product?.category || item.category
-          }))
+          })),
+          categories: cartCategories
         })
       });
 
@@ -183,6 +232,24 @@ const CheckoutPage = () => {
     showToast('Promo code removed', 'info');
   };
 
+  const handlePromoInputFocus = () => {
+    if (availablePromos.length > 0) {
+      setShowPromoDropdown(true);
+    }
+  };
+
+  const handlePromoInputChange = (e) => {
+    setPromoCode(e.target.value.toUpperCase());
+    if (e.target.value.length > 0 && availablePromos.length > 0) {
+      setShowPromoDropdown(true);
+    }
+  };
+
+  const handlePromoItemClick = (code) => {
+    applyPromoCode(code);
+  };
+
+  // ✅ FIXED: Payment handler with proper promo code data
   const handlePayment = async () => {
     if (!validateForm()) {
       showToast('Please fix the form errors before proceeding', 'error');
@@ -236,7 +303,8 @@ const CheckoutPage = () => {
             subtotal: orderData.subtotal,
             shipping: orderData.shipping,
             discount: orderData.discount,
-            promoCode: orderData.promoCode
+            promoCode: orderData.promoCode,
+            promoCodeId: orderData.promoCodeId
           };
           break;
 
@@ -250,6 +318,7 @@ const CheckoutPage = () => {
             shipping: orderData.shipping,
             discount: orderData.discount,
             promoCode: orderData.promoCode,
+            promoCodeId: orderData.promoCodeId,
             customer_info: {
               name: formData.fullName,
               email: formData.email,
@@ -267,7 +336,8 @@ const CheckoutPage = () => {
             subtotal: orderData.subtotal,
             shipping: orderData.shipping,
             discount: orderData.discount,
-            promoCode: orderData.promoCode
+            promoCode: orderData.promoCode,
+            promoCodeId: orderData.promoCodeId
           };
           break;
 
@@ -336,26 +406,13 @@ const CheckoutPage = () => {
         } else if (selectedPayment === 'esewa' && result.formData) {
           showToast('Redirecting to eSewa...', 'success');
           
-          // Submit eSewa form automatically after a brief delay
-          setTimeout(() => {
-            const form = document.createElement('form');
-            form.method = 'POST';
-            form.action = result.submit_url;
-            form.style.display = 'none';
-
-            Object.keys(result.formData).forEach(key => {
-              const input = document.createElement('input');
-              input.type = 'hidden';
-              input.name = key;
-              input.value = result.formData[key];
-              form.appendChild(input);
-            });
-
-            document.body.appendChild(form);
-            console.log('📤 Submitting eSewa form to:', result.submit_url);
-            console.log('📋 eSewa form data:', result.formData);
-            form.submit();
-          }, 1000);
+          // ✅ FIXED: Navigate to eSewa payment page with form data
+          navigate('/esewa-payment', {
+            state: {
+              formData: result.formData,
+              submitUrl: result.submit_url
+            }
+          });
           return;
         
         } else if (selectedPayment === 'cod' || result.redirect_url) {
@@ -417,6 +474,22 @@ const CheckoutPage = () => {
   const shipping = 50; // Fixed shipping charge
   const totalBeforeDiscount = subtotal + shipping;
   const total = totalBeforeDiscount - discount;
+
+  // Get category badge for promo codes
+  const getCategoryBadge = (promo) => {
+    if (!promo.categories || promo.categories.length === 0) {
+      return null;
+    }
+    
+    const categories = Array.isArray(promo.categories) ? promo.categories : JSON.parse(promo.categories || '[]');
+    if (categories.length === 0) return null;
+    
+    return (
+      <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full ml-2">
+        {categories[0]}{categories.length > 1 ? ` +${categories.length - 1}` : ''}
+      </span>
+    );
+  };
 
   if (isCartEmpty()) {
     return (
@@ -688,7 +761,7 @@ const CheckoutPage = () => {
                         e.target.nextElementSibling.style.display = 'flex';
                       }}
                     />
-                    <div className="w-12 h-8 bg-green-600 rounded flex items-center justify-center text-white font-bold text-xs">
+                    <div className="w-12 h-8 bg-green-600 rounded flex items-center justify-center text-white font-bold text-xs hidden">
                       eSewa
                     </div>
                     <div>
@@ -718,7 +791,7 @@ const CheckoutPage = () => {
                         e.target.nextElementSibling.style.display = 'flex';
                       }}
                     />
-                    <div className="w-12 h-8 bg-orange-500 rounded flex items-center justify-center text-white font-bold text-xs">
+                    <div className="w-12 h-8 bg-orange-500 rounded flex items-center justify-center text-white font-bold text-xs hidden">
                       COD
                     </div>
                     <div>
@@ -749,15 +822,13 @@ const CheckoutPage = () => {
                 <div className="relative">
                   <div className="flex gap-2">
                     <input
+                      ref={promoInputRef}
                       type="text"
                       value={promoCode}
-                      onChange={(e) => {
-                        setPromoCode(e.target.value.toUpperCase());
-                        setShowPromoDropdown(true);
-                      }}
-                      onFocus={() => setShowPromoDropdown(true)}
+                      onChange={handlePromoInputChange}
+                      onFocus={handlePromoInputFocus}
                       placeholder="Enter promo code"
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors"
                       disabled={applyingPromo || appliedPromo}
                     />
                     {appliedPromo ? (
@@ -780,47 +851,71 @@ const CheckoutPage = () => {
 
                   {/* Promo Code Dropdown */}
                   {showPromoDropdown && availablePromos.length > 0 && !appliedPromo && (
-                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                      <div className="p-2 border-b border-gray-100">
-                        <p className="text-xs font-medium text-gray-500">AVAILABLE PROMO CODES</p>
+                    <div 
+                      ref={promoDropdownRef}
+                      className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-2xl max-h-60 overflow-y-auto"
+                    >
+                      <div className="p-3 border-b border-gray-100 bg-gradient-to-r from-purple-50 to-blue-50 sticky top-0 overflow-hidden">
+                        <p className="text-xs font-bold text-purple-700 uppercase tracking-wide">AVAILABLE PROMO CODES</p>
+                        <p className="text-xs text-gray-600 mt-1">Applicable to your cart items      ||   Only one can be applied</p>
                       </div>
-                      {availablePromos.map((promo, index) => (
-                        <div
-                          key={index}
-                          className="p-3 hover:bg-purple-50 cursor-pointer border-b border-gray-100 last:border-b-0"
-                          onClick={() => applyPromoCode(promo.code)}
-                        >
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <span className="font-bold text-purple-600">{promo.code}</span>
-                                <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
-                                  {promo.discount_type === 'percentage' ? `${promo.discount_value}% OFF` : 
-                                   promo.discount_type === 'fixed' ? `Rs. ${promo.discount_value} OFF` : 
-                                   'FREE SHIPPING'}
-                                </span>
+                      <div className="max-h-48 overflow-y-auto">
+                        {availablePromos.map((promo, index) => (
+                          <div
+                            key={index}
+                            className="p-4 hover:bg-purple-50 cursor-pointer border-b border-gray-100 last:border-b-0 transition-colors duration-200"
+                            onClick={() => handlePromoItemClick(promo.code)}
+                          >
+                            <div className="flex justify-between items-start">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <span className="font-bold text-purple-600 text-lg">{promo.code}</span>
+                                  <span className={`text-xs px-2 py-1 rounded-full ${
+                                    promo.discount_type === 'percentage' ? 'bg-green-100 text-green-800' :
+                                    promo.discount_type === 'fixed' ? 'bg-blue-100 text-blue-800' :
+                                    'bg-orange-100 text-orange-800'
+                                  }`}>
+                                    {promo.discount_type === 'percentage' ? `${promo.discount_value}% OFF` : 
+                                     promo.discount_type === 'fixed' ? `Rs. ${promo.discount_value} OFF` : 
+                                     'FREE SHIPPING'}
+                                  </span>
+                                  {getCategoryBadge(promo)}
+                                </div>
+                                <p className="text-sm text-gray-700 mb-2">{promo.description}</p>
+                                <div className="flex flex-wrap gap-2 text-xs text-gray-500">
+                                  {promo.min_order_amount > 0 && (
+                                    <span>Min. order: Rs. {promo.min_order_amount}</span>
+                                  )}
+                                  {promo.valid_until && (
+                                    <span>Valid until: {new Date(promo.valid_until).toLocaleDateString()}</span>
+                                  )}
+                                </div>
                               </div>
-                              <p className="text-sm text-gray-600 mt-1">{promo.description}</p>
-                              {promo.min_order_amount > 0 && (
-                                <p className="text-xs text-gray-500 mt-1">
-                                  Min. order: Rs. {promo.min_order_amount}
-                                </p>
-                              )}
+                              <button className="text-purple-600 hover:text-purple-800 text-sm font-medium bg-purple-100 hover:bg-purple-200 px-3 py-1 rounded-lg transition-colors">
+                                Apply
+                              </button>
                             </div>
-                            <button className="text-purple-600 hover:text-purple-800 text-sm font-medium">
-                              Apply
-                            </button>
                           </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
                 {appliedPromo && (
-                  <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded-lg">
-                    <p className="text-green-700 text-sm">
-                      ✅ {appliedPromo.description}
-                    </p>
+                  <div className="mt-2 p-3 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-green-700 font-medium">
+                          ✅ {appliedPromo.code} Applied
+                        </p>
+                        <p className="text-green-600 text-sm mt-1">
+                          {appliedPromo.description}
+                        </p>
+                      </div>
+                      <span className="text-green-700 font-bold text-lg">
+                        - Rs. {discount.toFixed(2)}
+                      </span>
+                    </div>
                   </div>
                 )}
               </div>
@@ -872,22 +967,22 @@ const CheckoutPage = () => {
                 </div>
                 
                 {discount > 0 && (
-                  <div className="flex justify-between text-green-600">
-                    <span>Discount</span>
-                    <span>- Rs. {discount.toFixed(2)}</span>
+                  <div className="flex justify-between text-green-600 bg-green-50 p-2 rounded-lg">
+                    <span className="font-medium">Discount Applied</span>
+                    <span className="font-bold">- Rs. {discount.toFixed(2)}</span>
                   </div>
                 )}
                 
                 <div className="border-t border-gray-200 pt-3">
                   <div className="flex justify-between text-lg font-bold">
                     <span>Total Amount</span>
-                    <span className="text-purple-600">Rs. {total.toFixed(2)}</span>
+                    <span className="text-purple-600 text-xl">Rs. {total.toFixed(2)}</span>
                   </div>
                 </div>
               </div>
 
               {/* Security Badge */}
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+              <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg p-4 mb-4">
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
                     <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
@@ -905,7 +1000,7 @@ const CheckoutPage = () => {
               <button
                 onClick={handlePayment}
                 disabled={loading}
-                className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white py-4 px-6 rounded-xl font-bold text-lg transition-all duration-200 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-3 shadow-lg"
+                className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white py-4 px-6 rounded-xl font-bold text-lg transition-all duration-200 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-3 shadow-2xl"
               >
                 {loading ? (
                   <>
@@ -928,75 +1023,10 @@ const CheckoutPage = () => {
                 <a href="/privacy" className="text-blue-600 hover:underline font-medium">Privacy Policy</a>
               </p>
             </div>
-
-{/* Floating Support Widget (Fixed outside layout) */}
-<div className="fixed bottom-6 right-6 z-50 group">
-  {/* Help Icon Button */}
-  <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white w-14 h-14 rounded-full flex items-center justify-center shadow-2xl cursor-pointer group-hover:scale-110 transition-all duration-300">
-    <svg
-      className="w-7 h-7"
-      fill="currentColor"
-      viewBox="0 0 20 20"
-    >
-      <path
-        fillRule="evenodd"
-        d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z"
-        clipRule="evenodd"
-      />
-    </svg>
-  </div>
-
-  {/* Expanded Info Panel */}
-  <div className="absolute bottom-20 right-0 bg-white rounded-2xl p-5 border border-blue-100 shadow-2xl w-80 opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 transform transition-all duration-300 origin-bottom-right pointer-events-none group-hover:pointer-events-auto">
-    <div className="flex items-center mb-3 gap-2">
-      <div className="bg-blue-100 p-2 rounded-full">
-        <svg
-          className="w-5 h-5 text-blue-600"
-          fill="currentColor"
-          viewBox="0 0 20 20"
-        >
-          <path
-            fillRule="evenodd"
-            d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z"
-            clipRule="evenodd"
-          />
-        </svg>
-      </div>
-      <h3 className="font-semibold text-gray-900 text-lg">Need Help?</h3>
-    </div>
-
-    <p className="text-gray-600 text-sm mb-4">
-      Our friendly team is ready to help with payments, delivery, or product info.
-    </p>
-
-    <div className="flex gap-3">
-      <button
-        onClick={() => window.open('mailto:support@6thshop.com', '_blank')}
-        className="flex-1 bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:opacity-90 py-2 px-4 rounded-lg text-sm font-medium shadow-md transition-all duration-300"
-      >
-        Email Us
-      </button>
-      <button
-        onClick={() => showToast('Live chat coming soon!', 'info')}
-        className="flex-1 bg-white border border-blue-500 text-blue-600 hover:bg-blue-50 py-2 px-4 rounded-lg text-sm font-medium transition-colors"
-      >
-        Live Chat
-      </button>
-    </div>
-  </div>
-</div>
-
           </div>
+          <SupportWidget />
         </div>
       </div>
-
-      {/* Close dropdown when clicking outside */}
-      {showPromoDropdown && (
-        <div 
-          className="fixed inset-0 z-0" 
-          onClick={() => setShowPromoDropdown(false)}
-        />
-      )}
     </div>
   );
 };

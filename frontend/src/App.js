@@ -11,9 +11,10 @@ import CheckoutPage from './pages/CheckoutPage.js';
 import AdminDashboard from './pages/AdminDashboard.js';
 import LoginPage from './pages/LoginPage.js';
 import RegisterPage from './pages/RegisterPage.js';
+import PasswordResetPage from './pages/PasswordResetPage.js';
 import OrderSuccessPage from './pages/OrderSuccessPage.js';
-import PaymentDemoPage from './pages/PaymentDemoPage.js';
-import PaymentFailurePage from './pages/PaymentFailurePage.js';
+import PaymentFailedPage from './pages/PaymentFailedPage.js';
+import EsewaPaymentPage from './pages/EsewaPaymentPage.js'; 
 import './index.css';
 
 
@@ -22,24 +23,32 @@ function App() {
     <AuthProvider>
       <CartProvider>
         <Router>
-          <div className="App min-h-screen flex flex-col">
-            <Navbar />
-            <main className="flex-1">
-              <Routes>
-                <Route path="/" element={<HomePage />} />
-                <Route path="/products" element={<ProductPage />} />
-                <Route path="/cart" element={<CartPage />} />
-                <Route path="/checkout" element={<CheckoutPage />} />
-                <Route path="/admin" element={<AdminDashboard />} />
-                <Route path="/login" element={<LoginPage />} />
-                <Route path="/register" element={<RegisterPage />} />
-                <Route path="/order-success" element={<OrderSuccessPage />} />
-                <Route path="/payment-demo" element={<PaymentDemoPage />} />
-                <Route path="/payment-failure" element={<PaymentFailurePage />} />
-              </Routes>
-            </main>
-            <Footer />
-          </div>
+          <Routes>
+            {/* Independent auth pages without navbar/footer */}
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/register" element={<RegisterPage />} />
+            <Route path="/reset-password" element={<PasswordResetPage />} />
+            
+            {/* Main app with navbar and footer */}
+            <Route path="/*" element={
+              <div className="App min-h-screen flex flex-col">
+                <Navbar />
+                <main className="flex-1">
+                  <Routes>
+                    <Route path="/" element={<HomePage />} />
+                    <Route path="/products" element={<ProductPage />} />
+                    <Route path="/cart" element={<CartPage />} />
+                    <Route path="/checkout" element={<CheckoutPage />} />
+                    <Route path="/admin" element={<AdminDashboard />} />
+                    <Route path="/order-success" element={<OrderSuccessPage />} />
+                    <Route path="/esewa-payment" element={<EsewaPaymentPage />} />
+                    <Route path="/payment-failure" element={<PaymentFailedPage />} />
+                  </Routes>
+                </main>
+                <Footer />
+              </div>
+            } />
+          </Routes>
         </Router>
       </CartProvider>
     </AuthProvider>

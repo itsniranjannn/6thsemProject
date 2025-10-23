@@ -503,6 +503,8 @@ export const CartProvider = ({ children }) => {
     };
   };
 
+  
+
   const value = {
     // State
     cartItems,

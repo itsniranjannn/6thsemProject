@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext.js';
 import { Link, useNavigate } from 'react-router-dom';
 import { Toast } from '../components/Toast.js';
 import ConfirmationModal from '../components/ConfirmationModel.js';
+import SupportWidget from '../components/SupportWidget.js';
 
 const CartPage = () => {
   const { 
@@ -374,6 +375,9 @@ const CartPage = () => {
           </div>
         )}
       </div>
+      
+      {/* Support Widget */}
+      <SupportWidget />
     </div>
   );
 };

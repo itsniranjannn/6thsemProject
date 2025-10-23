@@ -56,7 +56,7 @@ try {
 
 console.log('5. Setting up basic routes...');
 app.get('/', (req, res) => {
-  res.json({ message: '6thShop API is running!' });
+  res.json({ message: 'Nexus Store API is running!' });
 });
 
 app.get('/api/test', (req, res) => {

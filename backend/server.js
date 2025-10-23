@@ -1,6 +1,7 @@
 const express = require('express');
 const mysql = require('mysql2');
 const cors = require('cors');
+const path = require('path');
 require('dotenv').config();
 
 const app = express();
@@ -15,8 +16,13 @@ process.on('unhandledRejection', (err) => {
   console.error('❌ Unhandled Rejection:', err);
 });
 
-// Middleware
+// ✅ FIXED: Middleware - Remove duplicates
 app.use(cors());
+
+// ✅ FIXED: Stripe webhook needs raw body - PLACE THIS BEFORE JSON MIDDLEWARE
+app.use('/api/payments/stripe/webhook', express.raw({type: 'application/json'}));
+
+// Regular JSON middleware for other routes
 app.use(express.json());
 
 // Database connection
@@ -31,7 +37,6 @@ const db = mysql.createConnection({
 db.connect((err) => {
   if (err) {
     console.error('❌ Database connection failed:', err.message);
-    // Don't return - let server continue without database
     console.log('⚠️  Server continuing without database connection');
   } else {
     console.log('✅ Connected to MySQL Database');
@@ -39,79 +44,71 @@ db.connect((err) => {
 });
 
 // Routes - with error handling
-try {
-  app.use('/api/products', require('./routes/productRoutes'));
-  console.log('✅ Products routes loaded');
-} catch (err) {
-  console.error('❌ Products routes failed:', err.message);
-}
+const routes = [
+  { path: '/api/products', file: './routes/productRoutes' },
+  { path: '/api/users', file: './routes/userRoutes' },
+  { path: '/api/orders', file: './routes/orderRoutes' },
+  { path: '/api/cart', file: './routes/cartRoutes' },
+  { path: '/api/recommendations', file: './routes/recommendationRoutes' },
+  { path: '/api/payments', file: './routes/paymentRoutes' },
+  { path: '/api/reviews', file: './routes/reviewRoutes' },
+  { path: '/api/promo', file: './routes/promoRoutes' },
+  { path: '/api/email', file: './routes/emailRoutes' }
+];
 
-try {
-  app.use('/api/users', require('./routes/userRoutes'));
-  console.log('✅ Users routes loaded');
-} catch (err) {
-  console.error('❌ Users routes failed:', err.message);
-}
-
-try {
-  app.use('/api/orders', require('./routes/orderRoutes'));
-  console.log('✅ Orders routes loaded');
-} catch (err) {
-  console.error('❌ Orders routes failed:', err.message);
-}
-
-try {
-  app.use('/api/cart', require('./routes/cartRoutes'));
-  console.log('✅ Cart routes loaded');
-} catch (err) {
-  console.error('❌ Cart routes failed:', err.message);
-}
-
-try {
-  app.use('/api/recommendations', require('./routes/recommendationRoutes'));
-  console.log('✅ Recommendations routes loaded');
-} catch (err) {
-  console.error('❌ Recommendations routes failed:', err.message);
-}
+routes.forEach(route => {
+  try {
+    app.use(route.path, require(route.file));
+    console.log(`✅ ${route.path} routes loaded`);
+  } catch (err) {
+    console.error(`❌ ${route.path} routes failed:`, err.message);
+  }
+});
 
 // Basic routes
 app.get('/', (req, res) => {
-  res.json({ message: '6thShop API is running!' });
-});
-
-app.get('/api/test', (req, res) => {
   res.json({ 
-    message: 'API is working!',
-    database: db && db.state === 'connected' ? 'connected' : 'disconnected',
+    message: 'Nexus Store API is running!',
+    version: '1.0.0',
     timestamp: new Date().toISOString()
   });
 });
 
-const paymentRoutes = require('./routes/paymentRoutes');
-app.use('/api/payments', paymentRoutes);
+app.get('/api/health', (req, res) => {
+  res.json({ 
+    status: 'healthy',
+    database: db && db.state === 'connected' ? 'connected' : 'disconnected',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development'
+  });
+});
 
-// Stripe webhook needs raw body
-app.use('/api/payments/stripe/webhook', express.raw({type: 'application/json'}));
+// ✅ FIXED: Serve static files from React build (for production)
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static(path.join(__dirname, '../frontend/build')));
+  
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../frontend/build', 'index.html'));
+  });
+}
 
-// Other middleware
-app.use(express.json());
-app.use(cors());
-
-app.use('/api/reviews', require('./routes/reviewRoutes'));
 // Start server
 console.log('🚀 Starting server...');
 const server = app.listen(PORT, () => {
   console.log(`✅ Server running on port ${PORT}`);
-  console.log(`🌐 Test: http://localhost:${PORT}/api/test`);
+  console.log(`🌐 Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:3000'}`);
+  console.log(`🔧 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`💳 Payment Methods: Stripe, Khalti, eSewa, COD`);
+  console.log(`🔔 Stripe Webhook: ${process.env.BACKEND_URL || 'http://localhost:5000'}/api/payments/stripe/webhook`);
 });
-// Global error handler for uncaught exceptions
+
+// Global error handlers
 process.on('uncaughtException', (error) => {
   console.error('❌ UNCAUGHT EXCEPTION! Shutting down...');
   console.error(error.name, error.message);
   process.exit(1);
 });
 
-// Global error handler for unhandled promise rejections
 process.on('unhandledRejection', (error) => {
   console.error('❌ UNHANDLED REJECTION! Shutting down...');
   console.error(error.name, error.message);
@@ -119,9 +116,6 @@ process.on('unhandledRejection', (error) => {
     process.exit(1);
   });
 });
-
-const promoRoutes = require('./routes/promoRoutes');
-app.use('/api/promo', promoRoutes);
 
 // Keep the process alive
 server.keepAliveTimeout = 120000;

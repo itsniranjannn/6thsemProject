@@ -1,4 +1,4 @@
-// routes/paymentRoutes.js
+// routes/paymentRoutes.js - UPDATED
 const express = require('express');
 const {
   createStripePayment,
@@ -9,13 +9,14 @@ const {
   handleEsewaSuccess,
   handleKhaltiCallback,
   handleStripeWebhook,
+  handleStripeSuccess,
   getPaymentHealth
 } = require('../controllers/paymentController');
 const { protect } = require('../middleware/authMiddleware');
 
 const router = express.Router();
 
-// Payment health check (public - should be first)
+// Payment health check
 router.get('/health', getPaymentHealth);
 
 // Payment creation routes (protected)
@@ -30,6 +31,7 @@ router.post('/khalti/verify', protect, verifyKhaltiPayment);
 // Payment callbacks (no authentication needed for callbacks)
 router.get('/esewa/success', handleEsewaSuccess);
 router.get('/khalti/callback', handleKhaltiCallback);
+router.get('/stripe/success', handleStripeSuccess);
 
 // Stripe webhook (needs raw body parser)
 router.post('/stripe/webhook', express.raw({type: 'application/json'}), handleStripeWebhook);

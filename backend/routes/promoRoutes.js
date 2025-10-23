@@ -1,7 +1,9 @@
+// routes/promoRoutes.js
 const express = require('express');
-const router = express.Router();
 const { validatePromoCode, getAvailablePromoCodes } = require('../controllers/promoController');
 const { protect } = require('../middleware/authMiddleware');
+
+const router = express.Router();
 
 router.post('/validate', protect, validatePromoCode);
 router.get('/available', protect, getAvailablePromoCodes);

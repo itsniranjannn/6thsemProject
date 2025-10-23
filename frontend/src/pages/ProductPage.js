@@ -3,6 +3,7 @@ import ProductCard from '../components/ProductCard.js';
 import SearchBar from '../components/SearchBar.js';
 import ProductModal from '../components/ProductModal.js';
 import ReviewModal from '../components/ReviewModal.js';
+import SupportWidget from '../components/SupportWidget.js';
 import { Toast } from '../components/Toast.js';
 import { useCart } from '../context/CartContext.js';
 import { useAuth } from '../context/AuthContext.js';
@@ -879,6 +880,9 @@ const ProductPage = () => {
           onReviewSubmitted={() => handleReviewSubmitted(selectedProduct.id)}
         />
       )}
+
+      {/* Support Widget */}
+      <SupportWidget />
 
       {/* Add custom animations */}
       <style jsx>{`

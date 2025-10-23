@@ -1,11 +1,12 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import SupportWidget from '../components/SupportWidget.js';
 
 const HomePage = () => {
   return (
     <div style={styles.container}>
       <section style={styles.hero}>
-        <h1 style={styles.heroTitle}>Welcome to 6thShop</h1>
+        <h1 style={styles.heroTitle}>Welcome to Nexus Store</h1>
         <p style={styles.heroSubtitle}>Your one-stop destination for amazing products</p>
         <Link to="/products" style={styles.ctaButton}>
           Shop Now
@@ -13,7 +14,7 @@ const HomePage = () => {
       </section>
       
       <section style={styles.features}>
-        <h2>Why Choose 6thShop?</h2>
+        <h2>Why Choose Nexus Store?</h2>
         <div style={styles.featureGrid}>
           <div style={styles.feature}>
             <h3>🛒 Easy Shopping</h3>
@@ -29,6 +30,9 @@ const HomePage = () => {
           </div>
         </div>
       </section>
+      
+      {/* Support Widget */}
+      <SupportWidget />
     </div>
   );
 };

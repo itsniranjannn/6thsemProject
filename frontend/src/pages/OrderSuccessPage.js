@@ -8,7 +8,7 @@ const OrderSuccessPage = () => {
   const [orderDetails, setOrderDetails] = useState(null);
   const [userDetails, setUserDetails] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [countdown, setCountdown] = useState(10);
+  const [countdown, setCountdown] = useState(20);
   const [activeTab, setActiveTab] = useState('summary');
   const [isGeneratingInvoice, setIsGeneratingInvoice] = useState(false);
   const invoiceRef = useRef();
@@ -45,6 +45,28 @@ const OrderSuccessPage = () => {
     }
   };
 
+  // ✅ FIXED: Direct API call to clear cart (no hook dependency issues)
+  const clearCartFromAPI = async (token) => {
+    try {
+      const response = await fetch(
+        `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/cart/clear`, 
+        {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        }
+      );
+      
+      const result = await response.json();
+      console.log('🧹 Cart clear API response:', result);
+      return result.success;
+    } catch (error) {
+      console.error('❌ Cart clear API error:', error);
+      return false;
+    }
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -52,6 +74,18 @@ const OrderSuccessPage = () => {
         if (!token) {
           navigate('/login');
           return;
+        }
+
+        // ✅ FIXED: Clear cart when order is successful
+        if (success && orderId) {
+          try {
+            console.log('🛒 Clearing cart for successful order:', orderId);
+            await clearCartFromAPI(token);
+            console.log('✅ Cart cleared successfully');
+          } catch (cartError) {
+            console.error('❌ Error clearing cart:', cartError);
+            // Don't block the order success page if cart clearing fails
+          }
         }
 
         // Fetch user details
@@ -135,7 +169,7 @@ const OrderSuccessPage = () => {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [orderId, navigate]);
+  }, [orderId, navigate, success]);
 
   const getFallbackOrderData = () => {
     const fallbackData = {
@@ -192,19 +226,17 @@ const OrderSuccessPage = () => {
   };
 
   const handleContactSupport = () => {
-    const email = 'support@6thshop.com';
+    const email = 'support@nexusstore.com';
     const subject = `Order Support - Order #${orderId}`;
-    const body = `Hello 6thShop Support Team,\n\nI need assistance with my order #${orderId}.\n\nOrder Details:\n- Order ID: ${orderId}\n- Customer: ${userDetails?.name || orderDetails?.shipping_address?.fullName || 'N/A'}\n- Email: ${userDetails?.email || orderDetails?.shipping_address?.email || 'N/A'}\n- Phone: ${orderDetails?.shipping_address?.phone || userDetails?.phone || 'N/A'}\n\nPlease provide assistance with the following:\n\nThank you.\n\nBest regards,\n${userDetails?.name || orderDetails?.shipping_address?.fullName || 'Customer'}`;
+    const body = `Hello Nexus Store Support Team,\n\nI need assistance with my order #${orderId}.\n\nOrder Details:\n- Order ID: ${orderId}\n- Customer: ${userDetails?.name || orderDetails?.shipping_address?.fullName || 'N/A'}\n- Email: ${userDetails?.email || orderDetails?.shipping_address?.email || 'N/A'}\n- Phone: ${orderDetails?.shipping_address?.phone || userDetails?.phone || 'N/A'}\n\nPlease provide assistance with the following:\n\nThank you.\n\nBest regards,\n${userDetails?.name || orderDetails?.shipping_address?.fullName || 'Customer'}`;
     
     window.location.href = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   };
 
   const handleTrackOrder = () => {
     const trackingNumber = orderDetails?.tracking_number;
-    if (trackingNumber && trackingNumber !== 'Will be assigned') {
-      // Simulate tracking system
-      const trackingUrl = `https://track.6thshop.com/track/${trackingNumber}`;
-      window.open(trackingUrl, '_blank');
+    if (trackingNumber && trackingNumber !== 'Will be assigned' && trackingNumber !== 'Pending') {
+      alert(`📦 Your order is being tracked!\n\nTracking Number: ${trackingNumber}\n\nYou'll receive updates via email as your order progresses.`);
     } else {
       alert('Tracking number will be available once your order is shipped. You will receive an email with tracking details.');
     }
@@ -227,14 +259,15 @@ const OrderSuccessPage = () => {
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `6thshop-invoice-${orderId}.pdf`;
+      link.download = `nexusstore-invoice-${orderId}.pdf`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
+      
+      alert('✅ Professional invoice downloaded successfully!');
     } catch (error) {
       console.error('Error generating professional invoice:', error);
-      // Fallback to enhanced text invoice
       generateEnhancedTextInvoice();
     } finally {
       setIsGeneratingInvoice(false);
@@ -246,7 +279,6 @@ const OrderSuccessPage = () => {
     const user = userDetails;
     const payment = getCurrentPaymentMethod();
     
-    // Extract shipping address details properly
     const shippingAddress = order.shipping_address || {};
     const customerName = shippingAddress.fullName || user?.name || shippingAddress.name || 'Customer';
     const customerEmail = shippingAddress.email || user?.email || 'N/A';
@@ -257,8 +289,8 @@ const OrderSuccessPage = () => {
 ║                           6thSHOP - OFFICIAL INVOICE                         ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║                                                                              ║
-║  🏪 6thShop - Your Trusted Shopping Partner                                 ║
-║  📧 Email: support@6thshop.com | 🌐 Website: www.6thshop.com                ║
+║  🏪 Nexus Store - Your Trusted Shopping Partner                                 ║
+║  📧 Email: support@nexusstore.com | 🌐 Website: www.nexusstore.com                ║
 ║  📞 Support: +977-1-4000000 | 🕒 Mon-Sun: 9:00 AM - 6:00 PM                 ║
 ║                                                                              ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
@@ -276,15 +308,13 @@ const OrderSuccessPage = () => {
 ║                            CUSTOMER INFORMATION                              ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║                                                                              ║
-║  👤 Customer ID:    ${user?.id || 'GUEST'}                                          ║
-║  📛 Full Name:      ${customerName}                                      ║
+║  👤 Customer:      ${customerName}                                      ║
 ║  📧 Email:          ${customerEmail}                                 ║
 ║  📞 Phone:          ${customerPhone}              ║
 ║  🏠 Address:        ${shippingAddress.address || 'N/A'}               ║
 ║  🏙️ City:           ${shippingAddress.city || 'N/A'}                     ║
 ║  📮 Postal Code:    ${shippingAddress.postalCode || 'N/A'}                      ║
 ║  🌍 Country:        ${shippingAddress.country || 'Nepal'}                      ║
-║  📅 Member Since:   ${user?.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'} ║
 ║                                                                              ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║                              ORDER ITEMS                                     ║
@@ -302,7 +332,6 @@ ${order?.items?.map((item, index) =>
 ║                                                                              ║
 ║  Subtotal:                                  Rs. ${parseFloat(order?.subtotal || order?.total_amount || 0).toFixed(2).padStart(12)} ║
 ║  Shipping Fee:                              Rs. ${parseFloat(order?.shipping_fee || 50).toFixed(2).padStart(12)} ║
-║  Delivery Charge:                           Rs. 50.00 (All over Nepal)       ║
 ║  ────────────────────────────────────────────────────────────────────────── ║
 ║  GRAND TOTAL:                               Rs. ${parseFloat(order?.total_amount || 0).toFixed(2).padStart(12)} ║
 ║                                                                              ║
@@ -313,34 +342,14 @@ ${order?.items?.map((item, index) =>
 ║  📦 Tracking Number: ${order?.tracking_number || 'Will be assigned upon shipment'} ║
 ║  📅 Estimated Delivery: ${order?.estimated_delivery ? new Date(order.estimated_delivery).toLocaleDateString() : 'Within 7 working days'} ║
 ║  🚚 Shipping Method: Express Delivery - Rs. 50 charge all over Nepal       ║
-║  📍 Delivery Address: ${shippingAddress.address || 'N/A'}            ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                          PAYMENT DETAILS                                     ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║  Payment Method: ${payment.name}                                            ║
-║  Payment Status: ${order?.payment_status?.toUpperCase() || 'PENDING'}                  ║
-║  Transaction ID: ${order?.id ? `TXN-${order.id}` : 'N/A'}                          ║
-║  Payment Date: ${order?.created_at ? new Date(order.created_at).toLocaleDateString() : new Date().toLocaleDateString()} ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                            TERMS & CONDITIONS                                ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║  • Delivery charge: Rs. 50 fixed for all over Nepal                        ║
-║  • Delivery within 3-7 business days                                        ║
-║  • 7-day return policy applies                                              ║
-║  • For returns, contact support@6thshop.com                                ║
-║  • This is a computer-generated invoice                                     ║
 ║                                                                              ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║                          THANK YOU FOR SHOPPING! 🎉                         ║
 ║                                                                              ║
 ║  We appreciate your business and hope you enjoy your products!              ║
 ║  For any questions or support, contact us at:                               ║
-║  📧 support@6thshop.com | 📞 +977-1-4000000                               ║
-║  🌐 www.6thshop.com                                                        ║
+║  📧 support@nexusstore.com | 📞 +977-1-4000000                               ║
+║  🌐 www.nexusstore.com                                                        ║
 ║                                                                              ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
     `.trim();
@@ -349,20 +358,22 @@ ${order?.items?.map((item, index) =>
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `6thshop-invoice-${orderId}.txt`;
+    link.download = `nexusstore-invoice-${orderId}.txt`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     window.URL.revokeObjectURL(url);
+    
+    alert('✅ Text invoice downloaded successfully!');
   };
 
   const shareOrder = async () => {
-    const shareText = `I just placed an order on 6thShop! 🛍️\n\nOrder Details:\n📦 Order ID: #${orderId}\n💰 Total: Rs. ${orderDetails?.total_amount || '0.00'}\n🚚 Status: ${orderDetails?.status || 'Processing'}\n\nCheck out 6thShop for amazing products! 🌟`;
+    const shareText = `I just placed an order on Nexus Store! 🛍️\n\nOrder Details:\n📦 Order ID: #${orderId}\n💰 Total: Rs. ${orderDetails?.total_amount || '0.00'}\n🚚 Status: ${orderDetails?.status || 'Processing'}\n\nCheck out Nexus Store for amazing products! 🌟`;
     
     if (navigator.share) {
       try {
         await navigator.share({
-          title: 'My 6thShop Order',
+          title: 'My Nexus Store Order',
           text: shareText,
           url: window.location.origin,
         });
@@ -443,7 +454,6 @@ ${order?.items?.map((item, index) =>
   const statusInfo = getStatusInfo(orderDetails?.status);
   const progress = getOrderProgress();
 
-  // Extract shipping address details properly for display
   const shippingAddress = orderDetails?.shipping_address || {};
   const displayName = shippingAddress.fullName || userDetails?.name || shippingAddress.name || 'Customer';
   const displayEmail = shippingAddress.email || userDetails?.email || 'N/A';
@@ -536,7 +546,6 @@ ${order?.items?.map((item, index) =>
                       <p><strong>Name:</strong> {displayName}</p>
                       <p><strong>Email:</strong> {displayEmail}</p>
                       <p><strong>Phone:</strong> {displayPhone}</p>
-                      <p><strong>Member Since:</strong> {userDetails?.created_at ? new Date(userDetails.created_at).toLocaleDateString() : 'N/A'}</p>
                     </div>
                   </div>
 
@@ -634,7 +643,7 @@ ${order?.items?.map((item, index) =>
                 </div>
               </div>
 
-              {/* Order Items */}
+              {/* Order Items with Images */}
               <div className="mt-8">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
                   <svg className="w-5 h-5 mr-2 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -646,8 +655,15 @@ ${order?.items?.map((item, index) =>
                   {orderDetails?.items?.map((item, index) => (
                     <div key={item.id || index} className="flex items-center justify-between p-4 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-200 hover:shadow-md transition-all duration-200">
                       <div className="flex items-center space-x-4">
-                        <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center text-white font-bold">
-                          {index + 1}
+                        <div className="w-20 h-20 bg-gradient-to-br from-blue-100 to-purple-100 rounded-lg flex items-center justify-center overflow-hidden">
+                          <img
+                            src={item.product_image || 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500'}
+                            alt={item.product_name || 'Product'}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              e.target.src = 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500';
+                            }}
+                          />
                         </div>
                         <div>
                           <p className="font-semibold text-gray-900 text-lg">{item.product_name || item.name || 'Product'}</p>
@@ -655,6 +671,11 @@ ${order?.items?.map((item, index) =>
                             <span>Quantity: {item.quantity}</span>
                             <span>Price: Rs. {parseFloat(item.price || 0).toFixed(2)}</span>
                           </div>
+                          {item.product_category && (
+                            <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full mt-1">
+                              {item.product_category}
+                            </span>
+                          )}
                         </div>
                       </div>
                       <div className="text-right">
@@ -734,7 +755,7 @@ ${order?.items?.map((item, index) =>
                   Contact Support
                 </button>
                 <div className="text-blue-600 space-y-1 text-xs">
-                  <p>📧 support@6thshop.com</p>
+                  <p>📧 support@nexusstore.com</p>
                   <p>📞 +977-1-4000000</p>
                   <p>🕒 24/7 Support</p>
                 </div>
