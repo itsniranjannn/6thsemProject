@@ -84,6 +84,40 @@ const CheckoutPage = () => {
     loadAvailablePromos();
   }, [cartItems]);
 
+  // Fallback: Load all active promo codes if the main API fails
+  useEffect(() => {
+    if (availablePromos.length === 0 && cartItems.length > 0) {
+      loadFallbackPromos();
+    }
+  }, [availablePromos.length, cartItems.length]);
+
+  const loadFallbackPromos = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      
+      
+      const response = await fetch(`${API_BASE_URL}/api/promo/active`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        const promos = await response.json();
+        
+        // Filter by minimum order amount
+        const totalAmount = getCartTotal();
+        const applicablePromos = promos.filter(promo => {
+          return promo.min_order_amount <= totalAmount;
+        });
+        
+        setAvailablePromos(applicablePromos);
+      }
+    } catch (error) {
+    }
+  };
+
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
     setTimeout(() => setToast({ message: '', type: 'success' }), 4000);
@@ -106,18 +140,24 @@ const CheckoutPage = () => {
       const token = localStorage.getItem('token');
       const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
       const cartCategories = getCartCategories();
+      const totalAmount = getCartTotal();
       
-      const response = await fetch(`${API_BASE_URL}/api/promo/available?totalAmount=${getCartTotal()}&categories=${JSON.stringify(cartCategories)}`, {
+      
+      const response = await fetch(`${API_BASE_URL}/api/promo/available?totalAmount=${totalAmount}&categories=${JSON.stringify(cartCategories)}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
 
+
       if (response.ok) {
         const result = await response.json();
+        
         if (result.success) {
+          const allPromos = result.promos || [];
+          
           // Filter promos that are applicable to cart categories or have no category restrictions
-          const applicablePromos = (result.promos || []).filter(promo => {
+          const applicablePromos = allPromos.filter(promo => {
             // If promo has no category restrictions, it's applicable to all
             if (!promo.categories || promo.categories.length === 0) {
               return true;
@@ -125,16 +165,26 @@ const CheckoutPage = () => {
             
             // If promo has category restrictions, check if any cart category matches
             const promoCategories = Array.isArray(promo.categories) ? promo.categories : JSON.parse(promo.categories || '[]');
-            return cartCategories.some(cartCategory => 
+            const isApplicable = cartCategories.some(cartCategory => 
               promoCategories.includes(cartCategory)
             );
+            
+            
+            return isApplicable;
           });
           
           setAvailablePromos(applicablePromos);
+        } else {
+          // Set empty array if API returns error
+          setAvailablePromos([]);
         }
+      } else {
+        // Set empty array if request fails
+        setAvailablePromos([]);
       }
     } catch (error) {
-      console.error('Load promos error:', error);
+      // Set empty array if error occurs
+      setAvailablePromos([]);
     }
   };
 
@@ -218,7 +268,6 @@ const CheckoutPage = () => {
         showToast(result.message || 'Invalid promo code', 'error');
       }
     } catch (error) {
-      console.error('Promo code error:', error);
       showToast('Error applying promo code', 'error');
     } finally {
       setApplyingPromo(false);
@@ -235,6 +284,7 @@ const CheckoutPage = () => {
   const handlePromoInputFocus = () => {
     if (availablePromos.length > 0) {
       setShowPromoDropdown(true);
+    } else {
     }
   };
 
@@ -285,7 +335,6 @@ const CheckoutPage = () => {
         }
       };
 
-      console.log('🛒 Processing payment with:', orderData);
 
       const token = localStorage.getItem('token');
       const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
@@ -359,7 +408,6 @@ const CheckoutPage = () => {
           throw new Error('Invalid payment method');
       }
 
-      console.log(`💰 Sending payment request to: ${paymentEndpoint}`, paymentData);
 
       const response = await fetch(`${API_BASE_URL}${paymentEndpoint}`, {
         method: 'POST',
@@ -385,7 +433,6 @@ const CheckoutPage = () => {
       }
 
       const result = await response.json();
-      console.log('✅ Payment response:', result);
 
       if (result.success) {
         // Handle different payment methods
@@ -424,7 +471,6 @@ const CheckoutPage = () => {
           // Clear cart for successful orders
           await clearCart();
           
-          console.log('🔄 Redirecting to:', redirectUrl);
           
           setTimeout(() => {
             if (redirectUrl.startsWith('http')) {
@@ -440,7 +486,6 @@ const CheckoutPage = () => {
       }
 
     } catch (error) {
-      console.error('❌ Payment error:', error);
       showToast(error.message || 'Payment processing failed. Please try again.', 'error');
     } finally {
       setLoading(false);
@@ -814,10 +859,16 @@ const CheckoutPage = () => {
                 <h2 className="text-2xl font-bold text-gray-900">Order Summary</h2>
               </div>
 
-              {/* Promo Code Section */}
+
+              {/* Promo Code Section - FIXED */}
               <div className="mb-6">
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
                   Promo Code
+                  {availablePromos.length > 0 && (
+                    <span className="text-xs text-green-600 ml-2">
+                      ({availablePromos.length} available)
+                    </span>
+                  )}
                 </label>
                 <div className="relative">
                   <div className="flex gap-2">
@@ -849,7 +900,7 @@ const CheckoutPage = () => {
                     )}
                   </div>
 
-                  {/* Promo Code Dropdown */}
+                  {/* Promo Code Dropdown - FIXED */}
                   {showPromoDropdown && availablePromos.length > 0 && !appliedPromo && (
                     <div 
                       ref={promoDropdownRef}
@@ -857,7 +908,7 @@ const CheckoutPage = () => {
                     >
                       <div className="p-3 border-b border-gray-100 bg-gradient-to-r from-purple-50 to-blue-50 sticky top-0 overflow-hidden">
                         <p className="text-xs font-bold text-purple-700 uppercase tracking-wide">AVAILABLE PROMO CODES</p>
-                        <p className="text-xs text-gray-600 mt-1">Applicable to your cart items      ||   Only one can be applied</p>
+                        <p className="text-xs text-gray-600 mt-1">Applicable to your cart items • Only one can be applied</p>
                       </div>
                       <div className="max-h-48 overflow-y-auto">
                         {availablePromos.map((promo, index) => (
@@ -885,6 +936,9 @@ const CheckoutPage = () => {
                                 <div className="flex flex-wrap gap-2 text-xs text-gray-500">
                                   {promo.min_order_amount > 0 && (
                                     <span>Min. order: Rs. {promo.min_order_amount}</span>
+                                  )}
+                                  {promo.max_discount_amount && (
+                                    <span>Max discount: Rs. {promo.max_discount_amount}</span>
                                   )}
                                   {promo.valid_until && (
                                     <span>Valid until: {new Date(promo.valid_until).toLocaleDateString()}</span>

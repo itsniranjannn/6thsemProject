@@ -6,21 +6,23 @@ const {
   updatePromoCode, 
   deletePromoCode, 
   validatePromoCode, 
-  getActivePromoCodes 
+  getActivePromoCodes,
+  getAvailablePromoCodes
 } = require('../controllers/promoController');
-const { protect, adminOnly } = require('../middleware/authMiddleware');
+const { protect, admin } = require('../middleware/authMiddleware');
 
 const router = express.Router();
 
-// Public routes
+// Public routes - FIXED: Added proper promo code endpoints
 router.get('/active', getActivePromoCodes);
+router.get('/available', getAvailablePromoCodes);
 router.post('/validate', validatePromoCode);
 
 // Admin routes
-router.get('/', protect, adminOnly, getPromoCodes);
-router.get('/:id', protect, adminOnly, getPromoCodeById);
-router.post('/', protect, adminOnly, createPromoCode);
-router.put('/:id', protect, adminOnly, updatePromoCode);
-router.delete('/:id', protect, adminOnly, deletePromoCode);
+router.get('/', protect, admin, getPromoCodes);
+router.get('/:id', protect, admin, getPromoCodeById);
+router.post('/', protect, admin, createPromoCode);
+router.put('/:id', protect, admin, updatePromoCode);
+router.delete('/:id', protect, admin, deletePromoCode);
 
 module.exports = router;

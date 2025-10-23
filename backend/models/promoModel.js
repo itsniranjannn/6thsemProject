@@ -13,12 +13,13 @@ class PromoCode {
         max_uses, 
         valid_from, 
         valid_until, 
-        is_active 
+        is_active,
+        categories
       } = promoData;
       
       const [result] = await db.execute(
-        `INSERT INTO promo_codes (code, description, discount_type, discount_value, min_order_amount, max_uses, valid_from, valid_until, is_active) 
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO promo_codes (code, description, discount_type, discount_value, min_order_amount, max_uses, valid_from, valid_until, is_active, categories) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           code,
           description,
@@ -28,7 +29,8 @@ class PromoCode {
           max_uses,
           valid_from,
           valid_until,
-          is_active !== undefined ? is_active : true
+          is_active !== undefined ? is_active : true,
+          categories ? JSON.stringify(categories) : null
         ]
       );
       
@@ -157,7 +159,7 @@ class PromoCode {
   }
 
   // Validate promo code
-  static async validatePromoCode(code, orderAmount) {
+  static async validatePromoCode(code, orderAmount, cartCategories = []) {
     try {
       const promo = await this.findByCode(code);
       
@@ -171,6 +173,26 @@ class PromoCode {
           valid: false, 
           message: `Minimum order amount of Rs. ${promo.min_order_amount} required` 
         };
+      }
+      
+      // Check category restrictions
+      if (promo.categories && promo.categories.trim() !== '') {
+        try {
+          const promoCategories = JSON.parse(promo.categories);
+          if (promoCategories.length > 0) {
+            const hasMatchingCategory = cartCategories.some(cartCategory => 
+              promoCategories.includes(cartCategory)
+            );
+            if (!hasMatchingCategory) {
+              return { 
+                valid: false, 
+                message: `This promo code is only valid for: ${promoCategories.join(', ')}` 
+              };
+            }
+          }
+        } catch (e) {
+          console.error('Error parsing promo categories:', e);
+        }
       }
       
       // Check usage limit
@@ -219,6 +241,61 @@ class PromoCode {
       return rows;
     } catch (error) {
       console.error('❌ Get active promo codes error:', error);
+      throw error;
+    }
+  }
+
+  // Get available promo codes for checkout
+  static async getAvailablePromoCodes(totalAmount, categories = []) {
+    try {
+      // First, get all active promo codes that meet the minimum order amount
+      let query = `
+        SELECT * FROM promo_codes 
+        WHERE is_active = true 
+        AND valid_from <= NOW() 
+        AND (valid_until IS NULL OR valid_until >= NOW())
+        AND min_order_amount <= ?
+        ORDER BY created_at DESC
+      `;
+      
+      const [rows] = await db.execute(query, [totalAmount]);
+      
+      // Process the results and filter by categories on the application side
+      const processedRows = rows.map(row => {
+        let promoCategories = [];
+        if (row.categories) {
+          try {
+            promoCategories = JSON.parse(row.categories);
+          } catch (e) {
+            promoCategories = [];
+          }
+        }
+        return {
+          ...row,
+          categories: promoCategories
+        };
+      });
+      
+      // Filter by categories if provided
+      let filteredRows = processedRows;
+      if (categories && categories.length > 0) {
+        filteredRows = processedRows.filter(promo => {
+          // If promo has no category restrictions, it's applicable to all
+          if (!promo.categories || promo.categories.length === 0) {
+            return true;
+          }
+          
+          // If promo has category restrictions, check if any cart category matches
+          return categories.some(cartCategory => 
+            promo.categories.includes(cartCategory)
+          );
+        });
+      }
+      
+      console.log(`✅ Retrieved ${filteredRows.length} available promo codes for amount ${totalAmount}`);
+      return filteredRows;
+    } catch (error) {
+      console.error('❌ Get available promo codes error:', error);
       throw error;
     }
   }
