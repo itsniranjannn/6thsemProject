@@ -15,6 +15,7 @@ import PasswordResetPage from './pages/PasswordResetPage.js';
 import OrderSuccessPage from './pages/OrderSuccessPage.js';
 import PaymentFailedPage from './pages/PaymentFailedPage.js';
 import EsewaPaymentPage from './pages/EsewaPaymentPage.js'; 
+
 import './index.css';
 
 
@@ -43,6 +44,7 @@ function App() {
                     <Route path="/order-success" element={<OrderSuccessPage />} />
                     <Route path="/esewa-payment" element={<EsewaPaymentPage />} />
                     <Route path="/payment-failure" element={<PaymentFailedPage />} />
+                    
                   </Routes>
                 </main>
                 <Footer />
