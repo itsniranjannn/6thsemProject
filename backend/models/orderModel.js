@@ -564,6 +564,88 @@ class Order {
     }
   }
 
+// ✅ FIXED: Add missing pagination method
+static async findAllWithPagination(limit = 10, offset = 0, status = null) {
+  try {
+    let query = `
+      SELECT 
+        o.*,
+        u.name as user_name,
+        u.email as user_email,
+        COUNT(oi.id) as item_count,
+        SUM(oi.quantity) as total_items
+      FROM orders o
+      JOIN users u ON o.user_id = u.id
+      LEFT JOIN order_items oi ON o.id = oi.order_id
+    `;
+    
+    const params = [];
+    
+    if (status) {
+      query += ` WHERE o.status = ?`;
+      params.push(status);
+    }
+    
+    query += ` GROUP BY o.id ORDER BY o.created_at DESC LIMIT ? OFFSET ?`;
+    params.push(limit, offset);
+    
+    const [rows] = await db.execute(query, params);
+    
+    // Get total count for pagination
+    let countQuery = `SELECT COUNT(*) as total FROM orders o`;
+    const countParams = [];
+    
+    if (status) {
+      countQuery += ` WHERE o.status = ?`;
+      countParams.push(status);
+    }
+    
+    const [countRows] = await db.execute(countQuery, countParams);
+    const total = countRows[0].total;
+    
+    // Parse shipping address for each order
+    const orders = rows.map(row => {
+      let shippingAddress = {};
+      try {
+        shippingAddress = row.shipping_address 
+          ? JSON.parse(row.shipping_address)
+          : {};
+      } catch (parseError) {
+        shippingAddress = { address: row.shipping_address || '' };
+      }
+      
+      return {
+        id: row.id,
+        user_id: row.user_id,
+        user_name: row.user_name,
+        user_email: row.user_email,
+        total_amount: parseFloat(row.total_amount || 0),
+        subtotal: parseFloat(row.subtotal || 0),
+        shipping_fee: parseFloat(row.shipping_fee || 0),
+        status: row.status,
+        payment_method: row.payment_method,
+        payment_status: row.payment_status,
+        tracking_number: row.tracking_number,
+        estimated_delivery: row.estimated_delivery,
+        promo_code: row.promo_code,
+        shipping_address: shippingAddress,
+        item_count: row.item_count,
+        total_items: row.total_items,
+        created_at: row.created_at
+      };
+    });
+    
+    console.log(`✅ Found ${orders.length} orders with pagination`);
+    return {
+      orders: orders,
+      total: total
+    };
+  } catch (error) {
+    console.error('❌ Find all orders with pagination error:', error);
+    throw new Error(`Failed to find orders with pagination: ${error.message}`);
+  }
+}
+
   // ✅ FIXED: Get orders by status
   static async findByStatus(status, limit = 50, offset = 0) {
     try {

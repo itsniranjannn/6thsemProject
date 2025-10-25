@@ -48,49 +48,6 @@ class Product {
     }
   }
 
-  // Bulk update stock for multiple products
-  static async bulkUpdateStock(items, action = 'deduct') {
-    try {
-      console.log(`📦 Bulk ${action} stock for ${items.length} items`);
-      
-      for (const item of items) {
-        const quantityChange = action === 'deduct' ? -item.quantity : item.quantity;
-        await this.updateStock(item.id, quantityChange);
-      }
-      
-      console.log(`✅ Bulk stock ${action} completed successfully`);
-      return true;
-    } catch (error) {
-      console.error('❌ Bulk stock update error:', error);
-      throw error;
-    }
-  }
-
-  // Check stock availability for a product
-  static async checkStock(productId, requiredQuantity) {
-    try {
-      const [rows] = await db.execute(
-        `SELECT stock_quantity, name FROM products WHERE id = ?`,
-        [productId]
-      );
-      
-      if (rows.length === 0) {
-        return { available: false, reason: 'Product not found' };
-      }
-      
-      const available = rows[0].stock_quantity >= requiredQuantity;
-      return {
-        available: available,
-        currentStock: rows[0].stock_quantity,
-        productName: rows[0].name,
-        required: requiredQuantity
-      };
-    } catch (error) {
-      console.error('❌ Check stock error:', error);
-      throw error;
-    }
-  }
-
   // Get product by ID
   static async findById(productId) {
     try {
@@ -112,89 +69,114 @@ class Product {
     }
   }
 
-  // Get all products
+  // Get all products with pagination
   static async findAll(limit = 100, offset = 0) {
     try {
       const [rows] = await db.execute(
         'SELECT * FROM products ORDER BY created_at DESC LIMIT ? OFFSET ?',
         [limit, offset]
       );
+      
+      const [countResult] = await db.execute(
+        'SELECT COUNT(*) as total FROM products'
+      );
+      
       console.log(`✅ Retrieved ${rows.length} products`);
-      return rows;
+      return {
+        products: rows,
+        total: countResult[0].total
+      };
     } catch (error) {
       console.error('❌ Product find all error:', error);
       throw error;
     }
   }
 
-  // Get products by category
+  // Get products by category with pagination
   static async findByCategory(category, limit = 50, offset = 0) {
     try {
       const [rows] = await db.execute(
         'SELECT * FROM products WHERE category = ? ORDER BY created_at DESC LIMIT ? OFFSET ?',
         [category, limit, offset]
       );
+      
+      const [countResult] = await db.execute(
+        'SELECT COUNT(*) as total FROM products WHERE category = ?',
+        [category]
+      );
+      
       console.log(`✅ Retrieved ${rows.length} products in category: ${category}`);
-      return rows;
+      return {
+        products: rows,
+        total: countResult[0].total
+      };
     } catch (error) {
       console.error('❌ Product find by category error:', error);
       throw error;
     }
   }
 
-  // Search products
+  // Search products with pagination
   static async search(query, limit = 50, offset = 0) {
     try {
       const [rows] = await db.execute(
         'SELECT * FROM products WHERE name LIKE ? OR description LIKE ? OR category LIKE ? ORDER BY created_at DESC LIMIT ? OFFSET ?',
         [`%${query}%`, `%${query}%`, `%${query}%`, limit, offset]
       );
+      
+      const [countResult] = await db.execute(
+        'SELECT COUNT(*) as total FROM products WHERE name LIKE ? OR description LIKE ? OR category LIKE ?',
+        [`%${query}%`, `%${query}%`, `%${query}%`]
+      );
+      
       console.log(`🔍 Search for "${query}" returned ${rows.length} products`);
-      return rows;
+      return {
+        products: rows,
+        total: countResult[0].total
+      };
     } catch (error) {
       console.error('❌ Product search error:', error);
       throw error;
     }
   }
 
-  // Get low stock products
-  static async getLowStock(threshold = 5) {
-    try {
-      const [rows] = await db.execute(
-        'SELECT * FROM products WHERE stock_quantity <= ? ORDER BY stock_quantity ASC',
-        [threshold]
-      );
-      console.log(`⚠️ Found ${rows.length} low stock products (threshold: ${threshold})`);
-      return rows;
-    } catch (error) {
-      console.error('❌ Get low stock products error:', error);
-      throw error;
-    }
-  }
-
-  // Create new product with enhanced features
+  // Create new product - FIXED: Enhanced to handle all fields
   static async create(productData) {
     try {
-      const { name, description, price, category, image_urls, stock_quantity, tags, is_featured, is_new, discount_percentage, offer_valid_until } = productData;
+      const { 
+        name, 
+        description, 
+        price, 
+        category, 
+        image_urls, 
+        stock_quantity,
+        tags,
+        is_featured,
+        is_new,
+        discount_percentage,
+        offer_valid_until
+      } = productData;
       
-      // Handle multiple image URLs
-      const imageUrlsJson = JSON.stringify(image_urls || []);
-      const tagsJson = JSON.stringify(tags || []);
+      // Handle image_urls - ensure it's stored as JSON string
+      const imageUrlsJson = image_urls ? JSON.stringify(image_urls) : JSON.stringify([]);
+      const tagsJson = tags ? JSON.stringify(tags) : JSON.stringify([]);
       
       const [result] = await db.execute(
-        `INSERT INTO products (name, description, price, category, image_urls, stock_quantity, tags, is_featured, is_new, discount_percentage, offer_valid_until) 
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO products (
+          name, description, price, category, image_urls, stock_quantity,
+          tags, is_featured, is_new, discount_percentage, offer_valid_until
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           name, 
-          description, 
-          price, 
+          description || '', 
+          parseFloat(price), 
           category, 
           imageUrlsJson, 
-          stock_quantity || 0,
+          parseInt(stock_quantity) || 0,
           tagsJson,
-          is_featured || false,
-          is_new || false,
-          discount_percentage || 0,
+          is_featured ? 1 : 0,
+          is_new ? 1 : 0,
+          parseFloat(discount_percentage) || 0,
           offer_valid_until || null
         ]
       );
@@ -207,16 +189,44 @@ class Product {
     }
   }
 
-  // Update product
+  // Update product - FIXED: Enhanced to handle all fields properly
   static async update(productId, updateData) {
     try {
       const fields = [];
       const values = [];
       
+      // Build dynamic update query
       Object.keys(updateData).forEach(key => {
-        fields.push(`${key} = ?`);
-        values.push(updateData[key]);
+        if (updateData[key] !== undefined && updateData[key] !== null) {
+          // Handle special fields that should be stored as JSON
+          if (key === 'image_urls' || key === 'tags') {
+            const value = Array.isArray(updateData[key]) ? 
+              JSON.stringify(updateData[key]) : 
+              updateData[key];
+            fields.push(`${key} = ?`);
+            values.push(value);
+          }
+          // Handle boolean fields
+          else if (key === 'is_featured' || key === 'is_new') {
+            fields.push(`${key} = ?`);
+            values.push(updateData[key] ? 1 : 0);
+          }
+          // Handle numeric fields
+          else if (key === 'price' || key === 'stock_quantity' || key === 'discount_percentage') {
+            fields.push(`${key} = ?`);
+            values.push(parseFloat(updateData[key]));
+          }
+          // Handle other fields
+          else {
+            fields.push(`${key} = ?`);
+            values.push(updateData[key]);
+          }
+        }
       });
+      
+      if (fields.length === 0) {
+        throw new Error('No fields to update');
+      }
       
       values.push(productId);
       
@@ -272,6 +282,21 @@ class Product {
     }
   }
 
+  // Get low stock products
+  static async getLowStock(threshold = 5) {
+    try {
+      const [rows] = await db.execute(
+        'SELECT * FROM products WHERE stock_quantity <= ? ORDER BY stock_quantity ASC',
+        [threshold]
+      );
+      console.log(`⚠️ Found ${rows.length} low stock products (threshold: ${threshold})`);
+      return rows;
+    } catch (error) {
+      console.error('❌ Get low stock products error:', error);
+      throw error;
+    }
+  }
+
   // Get popular products (based on sales/orders)
   static async getPopularProducts(limit = 10) {
     try {
@@ -288,6 +313,39 @@ class Product {
       return rows;
     } catch (error) {
       console.error('❌ Get popular products error:', error);
+      throw error;
+    }
+  }
+
+  // Get products for admin with pagination
+  static async getProductsForAdmin(page = 1, limit = 10, search = '') {
+    try {
+      const offset = (page - 1) * limit;
+      let query = 'SELECT * FROM products';
+      let countQuery = 'SELECT COUNT(*) as total FROM products';
+      const params = [];
+      const countParams = [];
+
+      if (search) {
+        query += ' WHERE name LIKE ? OR category LIKE ?';
+        countQuery += ' WHERE name LIKE ? OR category LIKE ?';
+        const searchTerm = `%${search}%`;
+        params.push(searchTerm, searchTerm);
+        countParams.push(searchTerm, searchTerm);
+      }
+
+      query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
+      params.push(limit, offset);
+
+      const [rows] = await db.execute(query, params);
+      const [countResult] = await db.execute(countQuery, countParams);
+
+      return {
+        products: rows,
+        total: countResult[0].total
+      };
+    } catch (error) {
+      console.error('❌ Get products for admin error:', error);
       throw error;
     }
   }

@@ -38,7 +38,8 @@ const createPromoCode = async (req, res) => {
       max_uses, 
       valid_from, 
       valid_until, 
-      is_active 
+      is_active,
+      categories
     } = req.body;
     
     // Validate required fields
@@ -68,6 +69,22 @@ const createPromoCode = async (req, res) => {
       });
     }
 
+    // Validate categories if provided
+    let categoriesArray = null;
+    if (categories) {
+      if (Array.isArray(categories)) {
+        categoriesArray = categories;
+      } else if (typeof categories === 'string') {
+        try {
+          categoriesArray = JSON.parse(categories);
+        } catch (e) {
+          return res.status(400).json({ 
+            message: 'Invalid categories format. Must be an array or valid JSON string.' 
+          });
+        }
+      }
+    }
+
     const result = await PromoCode.create({
       code: code.toUpperCase(),
       description: description || '',
@@ -77,7 +94,8 @@ const createPromoCode = async (req, res) => {
       max_uses: max_uses || null,
       valid_from: valid_from || new Date().toISOString(),
       valid_until: valid_until || null,
-      is_active: is_active !== undefined ? is_active : true
+      is_active: is_active !== undefined ? is_active : true,
+      categories: categoriesArray
     });
     
     res.status(201).json({ 
@@ -115,19 +133,45 @@ const deletePromoCode = async (req, res) => {
 // Validate promo code
 const validatePromoCode = async (req, res) => {
   try {
-    const { code, orderAmount } = req.body;
+    const { code, totalAmount, categories } = req.body;
     
-    if (!code || !orderAmount) {
+    if (!code || !totalAmount) {
       return res.status(400).json({ 
-        message: 'Promo code and order amount are required' 
+        success: false,
+        message: 'Promo code and total amount are required' 
       });
     }
 
-    const validation = await PromoCode.validatePromoCode(code, orderAmount);
-    res.json(validation);
+    let categoriesArray = [];
+    if (categories) {
+      try {
+        categoriesArray = Array.isArray(categories) ? categories : JSON.parse(categories);
+      } catch (e) {
+        console.error('Error parsing categories:', e);
+      }
+    }
+
+    const validation = await PromoCode.validatePromoCode(code, parseFloat(totalAmount), categoriesArray);
+    
+    if (validation.valid) {
+      res.json({
+        success: true,
+        promo: validation.promo,
+        discount: validation.discountAmount,
+        finalAmount: validation.finalAmount
+      });
+    } else {
+      res.json({
+        success: false,
+        message: validation.message
+      });
+    }
   } catch (error) {
     console.error('Validate promo code error:', error);
-    res.status(500).json({ message: 'Error validating promo code' });
+    res.status(500).json({ 
+      success: false,
+      message: 'Error validating promo code' 
+    });
   }
 };
 
@@ -142,6 +186,45 @@ const getActivePromoCodes = async (req, res) => {
   }
 };
 
+// Get available promo codes for checkout
+const getAvailablePromoCodes = async (req, res) => {
+  try {
+    const { totalAmount, categories } = req.query;
+    
+    if (!totalAmount) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Total amount is required' 
+      });
+    }
+
+    let categoriesArray = [];
+    if (categories) {
+      try {
+        categoriesArray = JSON.parse(categories);
+      } catch (e) {
+        console.error('Error parsing categories:', e);
+      }
+    }
+
+    const promoCodes = await PromoCode.getAvailablePromoCodes(
+      parseFloat(totalAmount), 
+      categoriesArray
+    );
+    
+    res.json({
+      success: true,
+      promos: promoCodes
+    });
+  } catch (error) {
+    console.error('Get available promo codes error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Error fetching available promo codes' 
+    });
+  }
+};
+
 module.exports = {
   getPromoCodes,
   getPromoCodeById,
@@ -149,5 +232,6 @@ module.exports = {
   updatePromoCode,
   deletePromoCode,
   validatePromoCode,
-  getActivePromoCodes
+  getActivePromoCodes,
+  getAvailablePromoCodes
 };

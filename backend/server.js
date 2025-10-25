@@ -54,8 +54,7 @@ const routes = [
   { path: '/api/reviews', file: './routes/reviewRoutes' },
   { path: '/api/promo', file: './routes/promoRoutes' },
   { path: '/api/email', file: './routes/emailRoutes' },
-{ path: '/api/admin', file: './routes/adminRoutes' }
-
+  { path: '/api/admin', file: './routes/adminRoutes' }
 ];
 
 routes.forEach(route => {
@@ -119,6 +118,15 @@ process.on('unhandledRejection', (error) => {
   });
 });
 
+// Add this after your middleware but before routes
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// Create uploads directory if it doesn't exist
+const fs = require('fs');
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
 
 // Keep the process alive
 server.keepAliveTimeout = 120000;

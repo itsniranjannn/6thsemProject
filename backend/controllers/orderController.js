@@ -127,10 +127,21 @@ const getOrderById = async (req, res) => {
 // Get all orders (Admin only)
 const getAllOrders = async (req, res) => {
   try {
-    const orders = await Order.findAll();
+    const { page = 1, limit = 10, status } = req.query;
+    const offset = (page - 1) * limit;
+    
+    const result = await Order.findAllWithPagination(limit, offset, status);
+    
     res.json({
       success: true,
-      orders: orders
+      orders: result.orders,
+      pagination: {
+        currentPage: parseInt(page),
+        totalPages: Math.ceil(result.total / limit),
+        totalOrders: result.total,
+        hasNext: page < Math.ceil(result.total / limit),
+        hasPrev: page > 1
+      }
     });
   } catch (error) {
     console.error('Get all orders error:', error);
@@ -141,31 +152,69 @@ const getAllOrders = async (req, res) => {
   }
 };
 
-// Update order status (Admin only)
+// Update order status (Admin only) - FIXED: Enhanced status update
 const updateOrderStatus = async (req, res) => {
   try {
     const orderId = req.params.id;
-    const { status } = req.body;
+    const { status, statusType = 'order' } = req.body;
 
-    const validStatuses = ['pending', 'confirmed', 'shipped', 'delivered', 'cancelled'];
-    if (!validStatuses.includes(status)) {
-      return res.status(400).json({ 
+    console.log(`🔄 Updating ${statusType} status for order ${orderId} to ${status}`);
+
+    if (statusType === 'order') {
+      const validStatuses = ['pending', 'confirmed', 'packed', 'shipped', 'out_for_delivery', 'delivered', 'cancelled'];
+      if (!validStatuses.includes(status)) {
+        return res.status(400).json({ 
+          success: false,
+          message: 'Invalid order status. Must be one of: ' + validStatuses.join(', ') 
+        });
+      }
+
+      const result = await Order.updateStatus(orderId, status);
+      
+      if (result.affectedRows === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'Order not found or no changes made'
+        });
+      }
+      
+      console.log(`✅ Order ${orderId} status updated to ${status}`);
+      
+    } else if (statusType === 'payment') {
+      const validStatuses = ['pending', 'completed', 'failed', 'refunded'];
+      if (!validStatuses.includes(status)) {
+        return res.status(400).json({ 
+          success: false,
+          message: 'Invalid payment status. Must be one of: ' + validStatuses.join(', ') 
+        });
+      }
+
+      const result = await Order.updatePaymentStatus(orderId, status);
+      
+      if (result.affectedRows === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'Order not found or no changes made'
+        });
+      }
+      
+      console.log(`✅ Order ${orderId} payment status updated to ${status}`);
+    } else {
+      return res.status(400).json({
         success: false,
-        message: 'Invalid status. Must be one of: ' + validStatuses.join(', ') 
+        message: 'Invalid status type. Must be "order" or "payment"'
       });
     }
-
-    await Order.updateStatus(orderId, status);
     
     res.json({ 
       success: true,
-      message: 'Order status updated successfully' 
+      message: `${statusType.charAt(0).toUpperCase() + statusType.slice(1)} status updated successfully` 
     });
   } catch (error) {
     console.error('Update order status error:', error);
     res.status(500).json({ 
       success: false,
-      message: 'Error updating order status' 
+      message: 'Error updating order status: ' + error.message 
     });
   }
 };
@@ -187,11 +236,29 @@ const getSalesStats = async (req, res) => {
   }
 };
 
+// Get order analytics for admin dashboard
+const getOrderAnalytics = async (req, res) => {
+  try {
+    const analytics = await Order.getOrderAnalytics();
+    res.json({
+      success: true,
+      analytics: analytics
+    });
+  } catch (error) {
+    console.error('Get order analytics error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching order analytics'
+    });
+  }
+};
+
 module.exports = {
   createOrder,
   getUserOrders,
   getOrderById,
   getAllOrders,
   updateOrderStatus,
-  getSalesStats
+  getSalesStats,
+  getOrderAnalytics
 };
