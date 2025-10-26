@@ -8,36 +8,179 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
   const [recommendations, setRecommendations] = useState([]);
   const [recommendationsLoading, setRecommendationsLoading] = useState(false);
   const [activeAlgorithm, setActiveAlgorithm] = useState('ml');
+  const [realTimeRating, setRealTimeRating] = useState(null);
 
-  // Enhanced images handling with multiple URLs
-  const images = product.image_urls && product.image_urls.length > 0 
-    ? product.image_urls.filter(url => url && url.trim() !== '')
-    : [product.image_url || 'https://via.placeholder.com/400x400?text=No+Image'];
+  // Enhanced images handling with multiple URLs - FIXED
+  const getProductImages = () => {
+    if (!product) return ['https://via.placeholder.com/400x400?text=No+Image'];
+    
+    let images = [];
+    
+    // Handle image_urls array
+    if (product.image_urls) {
+      if (Array.isArray(product.image_urls)) {
+        images = product.image_urls.filter(url => url && url.trim() !== '');
+      } else if (typeof product.image_urls === 'string') {
+        try {
+          const parsed = JSON.parse(product.image_urls);
+          images = Array.isArray(parsed) ? parsed.filter(url => url && url.trim() !== '') : [product.image_urls];
+        } catch {
+          images = [product.image_urls];
+        }
+      }
+    }
+    
+    // Fallback to single image_url
+    if (images.length === 0 && product.image_url) {
+      images = [product.image_url];
+    }
+    
+    // Final fallback
+    if (images.length === 0) {
+      images = ['https://via.placeholder.com/400x400?text=No+Image'];
+    }
+    
+    return images;
+  };
 
-  // Fetch recommendations when modal opens
+  const images = getProductImages();
+
+  // Fetch real-time rating - FIXED
   useEffect(() => {
-    fetchRecommendations();
-  }, [product.id, activeAlgorithm]);
+    fetchRealTimeRating();
+  }, [product?.id]);
 
-  const fetchRecommendations = async () => {
+  // Fetch recommendations when modal opens - FIXED: Enhanced ML algorithm
+  useEffect(() => {
+    if (product?.id) {
+      fetchRecommendations();
+    }
+  }, [product?.id, activeAlgorithm]);
+
+  const fetchRealTimeRating = async () => {
+    if (!product?.id) return;
+    
     try {
-      setRecommendationsLoading(true);
-      const response = await fetch(`http://localhost:5000/api/recommendations/product/${product.id}?algorithm=${activeAlgorithm}&limit=3`);
+      const response = await fetch(
+        `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/reviews/product/${product.id}`
+      );
       if (response.ok) {
         const data = await response.json();
-        if (data.success) {
-          setRecommendations(data.recommendations);
+        if (data.success && data.stats) {
+          setRealTimeRating({
+            average: parseFloat(data.stats.average_rating || product.rating || 0).toFixed(1),
+            total: data.stats.total_reviews || product.reviewCount || 0
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching real-time rating:', error);
+    }
+  };
+
+  const fetchRecommendations = async () => {
+    if (!product?.id) return;
+    
+    try {
+      setRecommendationsLoading(true);
+      const token = localStorage.getItem('token');
+      
+      let apiUrl = '';
+      const headers = {};
+      
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      switch (activeAlgorithm) {
+        case 'ml':
+          apiUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommendations/product/${product.id}?algorithm=ml&limit=3`;
+          break;
+        case 'content':
+          apiUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommendations/product/${product.id}?algorithm=content&limit=3`;
+          break;
+        case 'collaborative':
+          apiUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommendations/user/personalized?limit=3`;
+          break;
+        case 'popular':
+          apiUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommendations/popular?limit=3`;
+          break;
+        default:
+          apiUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommendations/product/${product.id}?algorithm=ml&limit=3`;
+      }
+
+      const response = await fetch(apiUrl, { headers });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.recommendations) {
+          // Process recommendations with proper image handling - FIXED for ML algorithm
+          const processedRecs = data.recommendations.map(rec => {
+            let recImages = [];
+            
+            if (rec.image_urls) {
+              if (Array.isArray(rec.image_urls)) {
+                recImages = rec.image_urls.filter(url => url && url.trim() !== '');
+              } else if (typeof rec.image_urls === 'string') {
+                try {
+                  const parsed = JSON.parse(rec.image_urls);
+                  recImages = Array.isArray(parsed) ? parsed : [rec.image_urls];
+                } catch {
+                  recImages = [rec.image_urls];
+                }
+              }
+            }
+            
+            if (recImages.length === 0 && rec.image_url) {
+              recImages = [rec.image_url];
+            }
+            
+            if (recImages.length === 0) {
+              recImages = ['https://via.placeholder.com/200x200?text=No+Image'];
+            }
+
+            return {
+              ...rec,
+              image_urls: recImages,
+              mainImage: recImages[0],
+              rating: parseFloat(rec.rating || 0).toFixed(1),
+              reviewCount: rec.reviewCount || 0
+            };
+          });
+          
+          setRecommendations(processedRecs);
         }
       }
     } catch (error) {
       console.error('Error fetching recommendations:', error);
+      // Enhanced fallback for ML algorithm
+      if (activeAlgorithm === 'ml') {
+        // Use content-based as fallback for ML
+        try {
+          const fallbackResponse = await fetch(
+            `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommendations/product/${product.id}?algorithm=content&limit=3`
+          );
+          if (fallbackResponse.ok) {
+            const fallbackData = await fallbackResponse.json();
+            if (fallbackData.success && fallbackData.recommendations) {
+              setRecommendations(fallbackData.recommendations.map(rec => ({
+                ...rec,
+                mainImage: rec.image_url || 'https://via.placeholder.com/200x200?text=No+Image',
+                rating: parseFloat(rec.rating || 0).toFixed(1)
+              })));
+            }
+          }
+        } catch (fallbackError) {
+          console.error('Fallback recommendation error:', fallbackError);
+        }
+      }
     } finally {
       setRecommendationsLoading(false);
     }
   };
 
   const handleAddToCartWithQuantity = async () => {
-    if (quantity < 1 || quantity > product.stock_quantity) {
+    if (!product || quantity < 1 || quantity > product.stock_quantity) {
       alert('Invalid quantity');
       return;
     }
@@ -70,7 +213,7 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
 
   const renderStars = (rating, size = 'text-lg') => {
     const stars = [];
-    const numericRating = parseFloat(rating);
+    const numericRating = parseFloat(rating) || 0;
     
     for (let i = 1; i <= 5; i++) {
       stars.push(
@@ -90,13 +233,15 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
   const renderReviewBars = (stats) => {
     if (!stats) return null;
     
-    const total = stats.total_reviews;
+    const total = stats.total_reviews || 0;
+    if (total === 0) return null;
+
     const bars = [
-      { stars: 5, count: stats.five_star },
-      { stars: 4, count: stats.four_star },
-      { stars: 3, count: stats.three_star },
-      { stars: 2, count: stats.two_star },
-      { stars: 1, count: stats.one_star }
+      { stars: 5, count: stats.five_star || 0 },
+      { stars: 4, count: stats.four_star || 0 },
+      { stars: 3, count: stats.three_star || 0 },
+      { stars: 2, count: stats.two_star || 0 },
+      { stars: 1, count: stats.one_star || 0 }
     ];
 
     return bars.map(bar => (
@@ -113,11 +258,29 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
     ));
   };
 
+  // FIXED: Handle empty product
+  if (!product) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50">
+        <div className="bg-white rounded-3xl max-w-2xl w-full p-8 text-center">
+          <p>Product not found</p>
+          <button onClick={onClose} className="mt-4 bg-blue-500 text-white px-4 py-2 rounded">
+            Close
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Use real-time rating if available
+  const displayRating = realTimeRating?.average || product.rating || "0.0";
+  const displayReviewCount = realTimeRating?.total || product.reviewCount || 0;
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50 animate-fade-in backdrop-blur-sm">
       <div className="bg-white rounded-3xl max-w-6xl w-full max-h-[95vh] overflow-hidden animate-scale-in shadow-2xl border border-gray-100">
         <div className="flex flex-col lg:flex-row h-full">
-          {/* Product Images */}
+          {/* Product Images - FIXED: Enhanced multiple image support */}
           <div className="lg:w-1/2 p-8">
             <div className="relative group">
               {/* Main Image */}
@@ -150,7 +313,7 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
                   </>
                 )}
 
-                {/* Product Tags */}
+                {/* Product Tags - FIXED: Proper conditional rendering */}
                 <div className="absolute top-4 left-4 flex flex-col gap-2">
                   {product.is_featured && (
                     <span className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-3 py-1 rounded-full text-sm font-semibold shadow-lg">
@@ -170,7 +333,7 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
                 </div>
               </div>
 
-              {/* Thumbnail Images */}
+              {/* Thumbnail Images - FIXED: Show only if multiple images */}
               {images.length > 1 && (
                 <div className="flex gap-3 mt-6 justify-center">
                   {images.map((img, index) => (
@@ -183,7 +346,7 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
                           : 'border-gray-300 hover:border-gray-400'
                       }`}
                     >
-                      <img src={img} alt="" className="w-full h-full object-cover" />
+                      <img src={img} alt={`${product.name} view ${index + 1}`} className="w-full h-full object-cover" />
                     </button>
                   ))}
                 </div>
@@ -199,10 +362,15 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
                 <h2 className="text-3xl font-bold text-gray-900 mb-2">{product.name}</h2>
                 <div className="flex items-center gap-4 mb-4">
                   <div className="flex items-center gap-2">
-                    {renderStars(product.rating, 'text-xl')}
-                    <span className="text-xl font-semibold text-gray-900">{product.rating}</span>
+                    {renderStars(displayRating, 'text-xl')}
+                    <span className="text-xl font-semibold text-gray-900">{displayRating}</span>
                   </div>
-                  <span className="text-gray-600 text-lg">({product.reviewCount} reviews)</span>
+                  <span className="text-gray-600 text-lg">({displayReviewCount} reviews)</span>
+                  {realTimeRating && (
+                    <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
+                      Live
+                    </span>
+                  )}
                 </div>
               </div>
               <button
@@ -217,7 +385,7 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
             <div className="mb-6">
               <div className="flex items-center gap-4 mb-2">
                 <span className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                  Rs. {parseFloat(product.price).toLocaleString()}
+                  Rs. {parseFloat(product.price || 0).toLocaleString()}
                 </span>
                 {product.stock_quantity > 0 && (
                   <span className="text-green-600 font-semibold text-lg">
@@ -368,14 +536,14 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
                                 <div className="flex items-center gap-3 mb-3">
                                   <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
                                     <span className="text-white font-semibold text-sm">
-                                      {review.user_name?.charAt(0).toUpperCase()}
+                                      {review.user_name?.charAt(0).toUpperCase() || 'U'}
                                     </span>
                                   </div>
                                   <div>
                                     <div className="flex items-center gap-2">
                                       {renderStars(review.rating, 'text-sm')}
                                     </div>
-                                    <p className="text-sm font-semibold text-gray-900">{review.user_name}</p>
+                                    <p className="text-sm font-semibold text-gray-900">{review.user_name || 'Anonymous'}</p>
                                   </div>
                                 </div>
                                 <p className="text-gray-700 text-sm leading-relaxed mb-2">{review.comment}</p>
@@ -424,7 +592,7 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
                       <h5 className="font-semibold text-purple-900 mb-2 flex items-center gap-2">
                         <span>💰</span> Price
                       </h5>
-                      <p className="text-purple-700">Rs. {parseFloat(product.price).toLocaleString()}</p>
+                      <p className="text-purple-700">Rs. {parseFloat(product.price || 0).toLocaleString()}</p>
                     </div>
                     
                     <div className="bg-gradient-to-br from-orange-50 to-orange-100 p-4 rounded-xl">
@@ -445,7 +613,7 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
                     {/* Algorithm Selector */}
                     <div className="flex gap-2">
                       {['ml', 'content', 'collaborative', 'popular'].map(algorithm => {
-                        const info = getAlgorithmInfo();
+                        const info = getAlgorithmInfo(algorithm);
                         return (
                           <button
                             key={algorithm}
@@ -473,12 +641,15 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
                       {recommendations.map(rec => (
                         <div key={rec.id} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow duration-200">
                           <img 
-                            src={rec.image_urls?.[0] || rec.image_url} 
+                            src={rec.mainImage || rec.image_urls?.[0] || rec.image_url} 
                             alt={rec.name}
                             className="w-full h-32 object-cover rounded-lg mb-3"
+                            onError={(e) => {
+                              e.target.src = 'https://via.placeholder.com/200x200?text=No+Image';
+                            }}
                           />
                           <h5 className="font-semibold text-gray-900 text-sm mb-1 line-clamp-2">{rec.name}</h5>
-                          <p className="text-blue-600 font-bold text-sm">Rs. {parseFloat(rec.price).toLocaleString()}</p>
+                          <p className="text-blue-600 font-bold text-sm">Rs. {parseFloat(rec.price || 0).toLocaleString()}</p>
                           <div className="flex items-center gap-1 mt-2">
                             {renderStars(rec.rating || '0', 'text-xs')}
                             <span className="text-xs text-gray-500">({rec.reviewCount || 0})</span>

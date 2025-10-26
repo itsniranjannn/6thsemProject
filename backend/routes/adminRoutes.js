@@ -5,11 +5,11 @@ const upload = require('../middleware/uploadMiddleware');
 
 const router = express.Router();
 
-// Get all users - FIXED: Only select existing columns
+// Get all users
 router.get('/users', protect, admin, async (req, res) => {
   try {
     const [users] = await db.execute(`
-      SELECT id, name, email, role, created_at 
+      SELECT id, username as name, email, role, created_at 
       FROM users 
       ORDER BY created_at DESC
     `);
@@ -50,7 +50,7 @@ router.delete('/users/:id', protect, admin, async (req, res) => {
 router.get('/orders', protect, admin, async (req, res) => {
   try {
     const [orders] = await db.execute(`
-      SELECT o.*, u.name as user_name, u.email as user_email 
+      SELECT o.*, u.username as user_name, u.email as user_email 
       FROM orders o 
       LEFT JOIN users u ON o.user_id = u.id 
       ORDER BY o.created_at DESC
@@ -77,7 +77,7 @@ router.get('/orders', protect, admin, async (req, res) => {
   }
 });
 
-// Update order status - FIXED: Use 'status' instead of 'order_status'
+// Update order status
 router.put('/orders/:id/status', protect, admin, async (req, res) => {
   try {
     const orderId = req.params.id;
@@ -89,7 +89,7 @@ router.put('/orders/:id/status', protect, admin, async (req, res) => {
       updateQuery = 'UPDATE orders SET payment_status = ? WHERE id = ?';
       updateValue = status;
     } else {
-      updateQuery = 'UPDATE orders SET status = ? WHERE id = ?'; // FIXED: changed order_status to status
+      updateQuery = 'UPDATE orders SET order_status = ? WHERE id = ?';
       updateValue = status;
     }
 
@@ -123,180 +123,7 @@ router.get('/products', protect, admin, async (req, res) => {
   }
 });
 
-// Create product - FIXED: Simplified to match actual schema
-router.post('/products', protect, admin, async (req, res) => {
-  try {
-    const { name, description, price, category, image_url, stock_quantity } = req.body;
-
-    if (!name || !price || !category) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Name, price, and category are required' 
-      });
-    }
-
-    const [result] = await db.execute(
-      `INSERT INTO products (name, description, price, category, image_url, stock_quantity) 
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [name, description || '', parseFloat(price), category, image_url || '', parseInt(stock_quantity) || 0]
-    );
-
-    res.status(201).json({
-      success: true,
-      message: 'Product created successfully',
-      productId: result.insertId
-    });
-  } catch (error) {
-    console.error('Create product error:', error);
-    res.status(500).json({ success: false, message: 'Error creating product' });
-  }
-});
-
-// Update product - FIXED: Simplified to match actual schema
-router.put('/products/:id', protect, admin, async (req, res) => {
-  try {
-    const productId = req.params.id;
-    const { name, description, price, category, image_url, stock_quantity } = req.body;
-
-    const [result] = await db.execute(
-      `UPDATE products SET name = ?, description = ?, price = ?, category = ?, image_url = ?, stock_quantity = ? 
-       WHERE id = ?`,
-      [name, description, parseFloat(price), category, image_url, parseInt(stock_quantity), productId]
-    );
-
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ success: false, message: 'Product not found' });
-    }
-
-    res.json({ success: true, message: 'Product updated successfully' });
-  } catch (error) {
-    console.error('Update product error:', error);
-    res.status(500).json({ success: false, message: 'Error updating product' });
-  }
-});
-
-// Delete product
-router.delete('/products/:id', protect, admin, async (req, res) => {
-  try {
-    const productId = req.params.id;
-
-    const [result] = await db.execute('DELETE FROM products WHERE id = ?', [productId]);
-
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ success: false, message: 'Product not found' });
-    }
-
-    res.json({ success: true, message: 'Product deleted successfully' });
-  } catch (error) {
-    console.error('Delete product error:', error);
-    res.status(500).json({ success: false, message: 'Error deleting product' });
-  }
-});
-
-// Dashboard statistics - FIXED: Simplified to work with existing schema
-router.get('/stats', protect, admin, async (req, res) => {
-  try {
-    // Total revenue from completed orders
-    const [revenueResult] = await db.execute(`
-      SELECT SUM(total_amount) as total_revenue 
-      FROM orders 
-      WHERE payment_status = 'completed'
-    `);
-
-    // Total orders
-    const [ordersResult] = await db.execute('SELECT COUNT(*) as total_orders FROM orders');
-
-    // Total products
-    const [productsResult] = await db.execute('SELECT COUNT(*) as total_products FROM products');
-
-    // Total users
-    const [usersResult] = await db.execute('SELECT COUNT(*) as total_users FROM users');
-
-    // Today's orders
-    const [todayOrdersResult] = await db.execute(`
-      SELECT COUNT(*) as today_orders 
-      FROM orders 
-      WHERE DATE(created_at) = CURDATE()
-    `);
-
-    // Low stock products
-    const [lowStockResult] = await db.execute(`
-      SELECT COUNT(*) as low_stock 
-      FROM products 
-      WHERE stock_quantity <= 10
-    `);
-
-    // Pending orders
-    const [pendingOrdersResult] = await db.execute(`
-      SELECT COUNT(*) as pending_orders 
-      FROM orders 
-      WHERE status = 'pending'
-    `);
-
-    // Payment method breakdown
-    const [paymentMethodStats] = await db.execute(`
-      SELECT 
-        payment_method,
-        COUNT(*) as count,
-        SUM(total_amount) as total_amount
-      FROM orders 
-      WHERE payment_status = 'completed'
-      GROUP BY payment_method
-    `);
-
-    // Order status breakdown
-    const [orderStatusStats] = await db.execute(`
-      SELECT 
-        status,
-        COUNT(*) as count,
-        SUM(total_amount) as total_amount
-      FROM orders 
-      GROUP BY status
-    `);
-
-    res.json({
-      success: true,
-      stats: {
-        totalRevenue: parseFloat(revenueResult[0]?.total_revenue) || 0,
-        totalOrders: ordersResult[0]?.total_orders || 0,
-        totalProducts: productsResult[0]?.total_products || 0,
-        totalUsers: usersResult[0]?.total_users || 0,
-        todayOrders: todayOrdersResult[0]?.today_orders || 0,
-        lowStockProducts: lowStockResult[0]?.low_stock || 0,
-        pendingOrders: pendingOrdersResult[0]?.pending_orders || 0,
-        paymentAnalytics: {
-          paymentMethodStats: paymentMethodStats || [],
-          orderStatusStats: orderStatusStats || []
-        }
-      }
-    });
-  } catch (error) {
-    console.error('Get dashboard stats error:', error);
-    res.status(500).json({ success: false, message: 'Error fetching dashboard statistics' });
-  }
-});
-
-// Upload product image
-router.post('/products/upload', protect, admin, upload.single('image'), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ success: false, message: 'No file uploaded' });
-    }
-
-    const imageUrl = `${process.env.BACKEND_URL || 'http://localhost:5000'}/uploads/${req.file.filename}`;
-    
-    res.json({
-      success: true,
-      message: 'Image uploaded successfully',
-      imageUrl: imageUrl
-    });
-  } catch (error) {
-    console.error('Upload image error:', error);
-    res.status(500).json({ success: false, message: 'Error uploading image' });
-  }
-});
-
-// Update product creation and update routes to handle images properly
+// Create product
 router.post('/products', protect, admin, async (req, res) => {
   try {
     const { 
@@ -350,6 +177,7 @@ router.post('/products', protect, admin, async (req, res) => {
   }
 });
 
+// Update product
 router.put('/products/:id', protect, admin, async (req, res) => {
   try {
     const productId = req.params.id;
@@ -399,11 +227,29 @@ router.put('/products/:id', protect, admin, async (req, res) => {
   }
 });
 
-// Update product status and featured/new flags
+// Delete product
+router.delete('/products/:id', protect, admin, async (req, res) => {
+  try {
+    const productId = req.params.id;
+
+    const [result] = await db.execute('DELETE FROM products WHERE id = ?', [productId]);
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ success: false, message: 'Product not found' });
+    }
+
+    res.json({ success: true, message: 'Product deleted successfully' });
+  } catch (error) {
+    console.error('Delete product error:', error);
+    res.status(500).json({ success: false, message: 'Error deleting product' });
+  }
+});
+
+// Update product status
 router.put('/products/:id/status', protect, admin, async (req, res) => {
   try {
     const productId = req.params.id;
-    const { is_featured, is_new, status } = req.body;
+    const { is_featured, is_new } = req.body;
 
     const updates = [];
     const values = [];
@@ -416,11 +262,6 @@ router.put('/products/:id/status', protect, admin, async (req, res) => {
     if (is_new !== undefined) {
       updates.push('is_new = ?');
       values.push(is_new ? 1 : 0);
-    }
-
-    if (status !== undefined) {
-      updates.push('status = ?');
-      values.push(status);
     }
 
     if (updates.length === 0) {
@@ -451,132 +292,110 @@ router.put('/products/:id/status', protect, admin, async (req, res) => {
   }
 });
 
-// Enhanced product update route
-router.put('/products/:id', protect, admin, async (req, res) => {
+// Dashboard statistics
+router.get('/stats', protect, admin, async (req, res) => {
   try {
-    const productId = req.params.id;
-    const { 
-      name, 
-      description, 
-      price, 
-      category, 
-      image_url, 
-      image_urls, 
-      stock_quantity, 
-      is_featured, 
-      is_new, 
-      discount_percentage, 
-      tags 
-    } = req.body;
+    // Total revenue from paid orders
+    const [revenueResult] = await db.execute(`
+      SELECT SUM(total_amount) as total_revenue 
+      FROM orders 
+      WHERE payment_status = 'paid'
+    `);
 
-    console.log('Received update data:', {
-      productId,
-      name,
-      is_featured,
-      is_new,
-      tags
-    });
+    // Total orders
+    const [ordersResult] = await db.execute('SELECT COUNT(*) as total_orders FROM orders');
 
-    // Prepare update fields
-    const updates = [];
-    const values = [];
+    // Total products
+    const [productsResult] = await db.execute('SELECT COUNT(*) as total_products FROM products');
 
-    if (name !== undefined) {
-      updates.push('name = ?');
-      values.push(name);
-    }
+    // Total users
+    const [usersResult] = await db.execute('SELECT COUNT(*) as total_users FROM users');
 
-    if (description !== undefined) {
-      updates.push('description = ?');
-      values.push(description);
-    }
+    // Today's orders
+    const [todayOrdersResult] = await db.execute(`
+      SELECT COUNT(*) as today_orders 
+      FROM orders 
+      WHERE DATE(created_at) = CURDATE()
+    `);
 
-    if (price !== undefined) {
-      updates.push('price = ?');
-      values.push(parseFloat(price));
-    }
+    // Low stock products
+    const [lowStockResult] = await db.execute(`
+      SELECT COUNT(*) as low_stock 
+      FROM products 
+      WHERE stock_quantity <= 10
+    `);
 
-    if (category !== undefined) {
-      updates.push('category = ?');
-      values.push(category);
-    }
+    // Pending orders
+    const [pendingOrdersResult] = await db.execute(`
+      SELECT COUNT(*) as pending_orders 
+      FROM orders 
+      WHERE order_status = 'pending'
+    `);
 
-    if (image_url !== undefined) {
-      updates.push('image_url = ?');
-      values.push(image_url || '');
-    }
+    // Payment method breakdown
+    const [paymentMethodStats] = await db.execute(`
+      SELECT 
+        payment_method,
+        COUNT(*) as count,
+        SUM(total_amount) as total_amount
+      FROM orders 
+      WHERE payment_status = 'paid'
+      GROUP BY payment_method
+    `);
 
-    if (image_urls !== undefined) {
-      updates.push('image_urls = ?');
-      values.push(image_urls ? JSON.stringify(image_urls) : null);
-    }
+    // Order status breakdown
+    const [orderStatusStats] = await db.execute(`
+      SELECT 
+        order_status as status,
+        COUNT(*) as count,
+        SUM(total_amount) as total_amount
+      FROM orders 
+      GROUP BY order_status
+    `);
 
-    if (stock_quantity !== undefined) {
-      updates.push('stock_quantity = ?');
-      values.push(parseInt(stock_quantity) || 0);
-    }
-
-    if (is_featured !== undefined) {
-      updates.push('is_featured = ?');
-      values.push(is_featured ? 1 : 0);
-    }
-
-    if (is_new !== undefined) {
-      updates.push('is_new = ?');
-      values.push(is_new ? 1 : 0);
-    }
-
-    if (discount_percentage !== undefined) {
-      updates.push('discount_percentage = ?');
-      values.push(parseFloat(discount_percentage) || 0);
-    }
-
-    if (tags !== undefined) {
-      updates.push('tags = ?');
-      // Handle both array and string formats
-      if (Array.isArray(tags)) {
-        values.push(tags.length > 0 ? JSON.stringify(tags) : null);
-      } else if (typeof tags === 'string') {
-        values.push(tags.trim() ? JSON.stringify(tags.split(',').map(tag => tag.trim()).filter(tag => tag)) : null);
-      } else {
-        values.push(null);
+    res.json({
+      success: true,
+      stats: {
+        totalRevenue: parseFloat(revenueResult[0]?.total_revenue) || 0,
+        totalOrders: ordersResult[0]?.total_orders || 0,
+        totalProducts: productsResult[0]?.total_products || 0,
+        totalUsers: usersResult[0]?.total_users || 0,
+        todayOrders: todayOrdersResult[0]?.today_orders || 0,
+        lowStockProducts: lowStockResult[0]?.low_stock || 0,
+        pendingOrders: pendingOrdersResult[0]?.pending_orders || 0,
+        paymentAnalytics: {
+          paymentMethodStats: paymentMethodStats || [],
+          orderStatusStats: orderStatusStats || []
+        }
       }
-    }
-
-    if (updates.length === 0) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'No fields to update' 
-      });
-    }
-
-    values.push(productId);
-
-    const query = `UPDATE products SET ${updates.join(', ')} WHERE id = ?`;
-    console.log('Executing query:', query);
-    console.log('With values:', values);
-
-    const [result] = await db.execute(query, values);
-
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ success: false, message: 'Product not found' });
-    }
-
-    res.json({ 
-      success: true, 
-      message: 'Product updated successfully',
-      updatedFields: updates
     });
   } catch (error) {
-    console.error('Update product error:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Error updating product: ' + error.message 
-    });
+    console.error('Get dashboard stats error:', error);
+    res.status(500).json({ success: false, message: 'Error fetching dashboard statistics' });
   }
 });
 
-// Promo Code Management (keep existing)
+// Upload product image
+router.post('/products/upload', protect, admin, upload.single('image'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'No file uploaded' });
+    }
+
+    const imageUrl = `${process.env.BACKEND_URL || 'http://localhost:5000'}/uploads/${req.file.filename}`;
+    
+    res.json({
+      success: true,
+      message: 'Image uploaded successfully',
+      imageUrl: imageUrl
+    });
+  } catch (error) {
+    console.error('Upload image error:', error);
+    res.status(500).json({ success: false, message: 'Error uploading image' });
+  }
+});
+
+// Promo Code Management
 router.get('/promo-codes', protect, admin, async (req, res) => {
   try {
     const [promoCodes] = await db.execute(`
@@ -602,7 +421,8 @@ router.post('/promo-codes', protect, admin, async (req, res) => {
       discount_type,
       discount_value,
       min_order_amount,
-      max_uses,
+      usage_limit,
+      max_discount_amount,
       valid_from,
       valid_until,
       is_active = true,
@@ -627,19 +447,20 @@ router.post('/promo-codes', protect, admin, async (req, res) => {
 
     const [result] = await db.execute(
       `INSERT INTO promo_codes 
-       (code, description, discount_type, discount_value, min_order_amount, max_uses, valid_from, valid_until, is_active, categories) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (code, description, discount_type, discount_value, min_order_amount, usage_limit, max_discount_amount, valid_from, valid_until, is_active, categories) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         code.toUpperCase(),
-        description,
+        description || '',
         discount_type,
         parseFloat(discount_value),
         parseFloat(min_order_amount || 0),
-        max_uses ? parseInt(max_uses) : null,
+        usage_limit ? parseInt(usage_limit) : null,
+        max_discount_amount ? parseFloat(max_discount_amount) : null,
         valid_from || new Date(),
         valid_until,
         is_active,
-        categories ? JSON.stringify(categories) : null
+        categories && categories.length > 0 ? JSON.stringify(categories) : null
       ]
     );
 
@@ -651,6 +472,56 @@ router.post('/promo-codes', protect, admin, async (req, res) => {
   } catch (error) {
     console.error('Create promo code error:', error);
     res.status(500).json({ success: false, message: 'Error creating promo code' });
+  }
+});
+
+// Update promo code
+router.put('/promo-codes/:id', protect, admin, async (req, res) => {
+  try {
+    const promoId = req.params.id;
+    const {
+      code,
+      description,
+      discount_type,
+      discount_value,
+      min_order_amount,
+      usage_limit,
+      max_discount_amount,
+      valid_from,
+      valid_until,
+      is_active,
+      categories
+    } = req.body;
+
+    const [result] = await db.execute(
+      `UPDATE promo_codes SET 
+        code = ?, description = ?, discount_type = ?, discount_value = ?, min_order_amount = ?, 
+        usage_limit = ?, max_discount_amount = ?, valid_from = ?, valid_until = ?, is_active = ?, categories = ?
+       WHERE id = ?`,
+      [
+        code.toUpperCase(),
+        description || '',
+        discount_type,
+        parseFloat(discount_value),
+        parseFloat(min_order_amount || 0),
+        usage_limit ? parseInt(usage_limit) : null,
+        max_discount_amount ? parseFloat(max_discount_amount) : null,
+        valid_from,
+        valid_until,
+        is_active,
+        categories && categories.length > 0 ? JSON.stringify(categories) : null,
+        promoId
+      ]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ success: false, message: 'Promo code not found' });
+    }
+
+    res.json({ success: true, message: 'Promo code updated successfully' });
+  } catch (error) {
+    console.error('Update promo code error:', error);
+    res.status(500).json({ success: false, message: 'Error updating promo code' });
   }
 });
 
@@ -672,7 +543,7 @@ router.delete('/promo-codes/:id', protect, admin, async (req, res) => {
   }
 });
 
-// Offer Management - FIXED: Check if table exists first
+// Offer Management
 router.get('/offers', protect, admin, async (req, res) => {
   try {
     // Check if product_offers table exists
@@ -709,7 +580,7 @@ router.get('/offers', protect, admin, async (req, res) => {
   }
 });
 
-// Create offer - FIXED: Check if table exists
+// Create offer
 router.post('/offers', protect, admin, async (req, res) => {
   try {
     const {
@@ -730,33 +601,6 @@ router.post('/offers', protect, admin, async (req, res) => {
         success: false, 
         message: 'Product ID and offer type are required' 
       });
-    }
-
-    // Check if product_offers table exists, create if not
-    const [tableCheck] = await db.execute(`
-      SELECT COUNT(*) as table_exists 
-      FROM information_schema.tables 
-      WHERE table_schema = DATABASE() AND table_name = 'product_offers'
-    `);
-
-    if (tableCheck[0].table_exists === 0) {
-      await db.execute(`
-        CREATE TABLE product_offers (
-          id INT PRIMARY KEY AUTO_INCREMENT,
-          product_id INT,
-          offer_type VARCHAR(50),
-          discount_percentage DECIMAL(5,2),
-          discount_amount DECIMAL(10,2),
-          min_quantity INT DEFAULT 1,
-          max_quantity INT,
-          valid_from DATETIME DEFAULT CURRENT_TIMESTAMP,
-          valid_until DATETIME,
-          is_active BOOLEAN DEFAULT TRUE,
-          description TEXT,
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
-        )
-      `);
     }
 
     const [result] = await db.execute(
@@ -788,84 +632,52 @@ router.post('/offers', protect, admin, async (req, res) => {
   }
 });
 
-// Notifications Management
-router.get('/notifications', protect, admin, async (req, res) => {
+// Update offer
+router.put('/offers/:id', protect, admin, async (req, res) => {
   try {
-    const [notifications] = await db.execute(`
-      SELECT * FROM notifications 
-      ORDER BY created_at DESC
-    `);
-
-    res.json({
-      success: true,
-      notifications: notifications || []
-    });
-  } catch (error) {
-    console.error('Get notifications error:', error);
-    res.status(500).json({ success: false, message: 'Error fetching notifications' });
-  }
-});
-
-router.post('/notifications', protect, admin, async (req, res) => {
-  try {
+    const offerId = req.params.id;
     const {
-      title,
-      message,
-      type,
-      target_users,
-      user_ids,
-      expires_at,
-      image_url
+      product_id,
+      offer_type,
+      discount_percentage,
+      discount_amount,
+      min_quantity,
+      max_quantity,
+      valid_from,
+      valid_until,
+      is_active,
+      description
     } = req.body;
 
-    if (!title || !message) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Title and message are required' 
-      });
-    }
-
     const [result] = await db.execute(
-      `INSERT INTO notifications 
-       (title, message, type, target_users, user_ids, expires_at, image_url, created_by) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `UPDATE product_offers SET 
+        product_id = ?, offer_type = ?, discount_percentage = ?, discount_amount = ?, 
+        min_quantity = ?, max_quantity = ?, valid_from = ?, valid_until = ?, 
+        is_active = ?, description = ?
+       WHERE id = ?`,
       [
-        title,
-        message,
-        type,
-        target_users,
-        user_ids ? JSON.stringify(user_ids) : null,
-        expires_at,
-        image_url,
-        req.user.id
+        product_id,
+        offer_type,
+        discount_percentage,
+        discount_amount,
+        min_quantity,
+        max_quantity,
+        valid_from,
+        valid_until,
+        is_active,
+        description,
+        offerId
       ]
     );
 
-    res.status(201).json({
-      success: true,
-      message: 'Notification created successfully',
-      notificationId: result.insertId
-    });
-  } catch (error) {
-    console.error('Create notification error:', error);
-    res.status(500).json({ success: false, message: 'Error creating notification' });
-  }
-});
-
-router.delete('/notifications/:id', protect, admin, async (req, res) => {
-  try {
-    const notificationId = req.params.id;
-
-    const [result] = await db.execute('DELETE FROM notifications WHERE id = ?', [notificationId]);
-
     if (result.affectedRows === 0) {
-      return res.status(404).json({ success: false, message: 'Notification not found' });
+      return res.status(404).json({ success: false, message: 'Offer not found' });
     }
 
-    res.json({ success: true, message: 'Notification deleted successfully' });
+    res.json({ success: true, message: 'Offer updated successfully' });
   } catch (error) {
-    console.error('Delete notification error:', error);
-    res.status(500).json({ success: false, message: 'Error deleting notification' });
+    console.error('Update offer error:', error);
+    res.status(500).json({ success: false, message: 'Error updating offer' });
   }
 });
 
@@ -884,6 +696,85 @@ router.delete('/offers/:id', protect, admin, async (req, res) => {
   } catch (error) {
     console.error('Delete offer error:', error);
     res.status(500).json({ success: false, message: 'Error deleting offer' });
+  }
+});
+
+// Notifications Management
+router.get('/notifications', protect, admin, async (req, res) => {
+  try {
+    const [notifications] = await db.execute(`
+      SELECT * FROM notifications 
+      ORDER BY created_at DESC
+    `);
+
+    res.json({
+      success: true,
+      notifications: notifications || []
+    });
+  } catch (error) {
+    console.error('Get notifications error:', error);
+    res.status(500).json({ success: false, message: 'Error fetching notifications' });
+  }
+});
+
+// Create notification
+router.post('/notifications', protect, admin, async (req, res) => {
+  try {
+    const {
+      title,
+      message,
+      type = 'system',
+      image_url,
+      expires_at
+    } = req.body;
+
+    if (!title || !message) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Title and message are required' 
+      });
+    }
+
+    const [result] = await db.execute(
+      `INSERT INTO notifications 
+       (title, message, type, image_url, expires_at, created_by) 
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [
+        title,
+        message,
+        type,
+        image_url,
+        expires_at,
+        req.user.id
+      ]
+    );
+
+    res.status(201).json({
+      success: true,
+      message: 'Notification created successfully',
+      notificationId: result.insertId
+    });
+  } catch (error) {
+    console.error('Create notification error:', error);
+    res.status(500).json({ success: false, message: 'Error creating notification' });
+  }
+});
+
+// Delete notification
+router.delete('/notifications/:id', protect, admin, async (req, res) => {
+  try {
+    const notificationId = req.params.id;
+
+    const [result] = await db.execute('DELETE FROM notifications WHERE id = ?', [notificationId]);
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ success: false, message: 'Notification not found' });
+    }
+
+    res.json({ success: true, message: 'Notification deleted successfully' });
+  } catch (error) {
+    console.error('Delete notification error:', error);
+    res.status(500).json({ success: false, message: 'Error deleting notification' });
   }
 });
 

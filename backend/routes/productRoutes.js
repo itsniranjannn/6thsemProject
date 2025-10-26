@@ -6,16 +6,21 @@ const {
   updateProduct,
   deleteProduct,
   searchProducts,
-  getProductsByCategory
+  getProductsByCategory,
+  uploadProductImage
 } = require('../controllers/productController');
 const { protect, admin } = require('../middleware/authMiddleware');
 
 const router = express.Router();
 
+// Public routes
 router.get('/', getProducts);
 router.get('/search', searchProducts);
 router.get('/category/:category', getProductsByCategory);
 router.get('/:id', getProductById);
+
+// Image upload route
+router.post('/upload-image', protect, admin, uploadProductImage);
 
 // Admin routes
 router.post('/', protect, admin, createProduct);
