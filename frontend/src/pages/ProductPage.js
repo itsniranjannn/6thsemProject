@@ -94,29 +94,72 @@ const ProductPage = () => {
       
       if (Array.isArray(data) && data.length > 0) {
         // Calculate max price for range slider
-        const prices = data.map(p => parseFloat(p.price));
+        const prices = data.map(p => parseFloat(p.price || 0));
         const actualMaxPrice = Math.ceil(Math.max(...prices));
         const calculatedMaxPrice = Math.max(actualMaxPrice, 1000);
         
         setCurrentMaxPrice(calculatedMaxPrice);
         setMaxPrice(calculatedMaxPrice);
 
-        // Fetch reviews for each product
-        const productsWithRealReviews = await Promise.all(
-          data.map(async (product) => {
-            const reviewsData = await fetchProductReviews(product.id);
-            return {
-              ...product,
-              // Use real review data from database
-              rating: reviewsData.average_rating || "0.0",
-              reviewCount: reviewsData.total_reviews || 0,
-              isFeatured: product.is_featured || product.featured || false,
-              isNew: checkIfProductIsNew(product.created_at),
-              reviews: reviewsData.reviews || []
-            };
-          })
-        );
-        setProducts(productsWithRealReviews);
+        // Process products with proper defaults - FIXED: Enhanced data processing
+        const processedProducts = data.map(product => {
+          // Handle image URLs - convert single image_url to array if needed
+          let imageUrls = [];
+          if (product.image_urls) {
+            if (Array.isArray(product.image_urls)) {
+              imageUrls = product.image_urls.filter(url => url && url.trim() !== '');
+            } else if (typeof product.image_urls === 'string') {
+              try {
+                const parsed = JSON.parse(product.image_urls);
+                imageUrls = Array.isArray(parsed) ? parsed.filter(url => url && url.trim() !== '') : [product.image_urls];
+              } catch {
+                imageUrls = [product.image_urls];
+              }
+            }
+          }
+          
+          // Fallback to single image_url
+          if (imageUrls.length === 0 && product.image_url) {
+            imageUrls = [product.image_url];
+          }
+          
+          // Final fallback
+          if (imageUrls.length === 0) {
+            imageUrls = ['https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500'];
+          }
+
+          // Handle tags - FIXED: Proper tag processing
+          let tags = [];
+          if (product.tags) {
+            if (Array.isArray(product.tags)) {
+              tags = product.tags.filter(tag => tag && tag.trim() !== '');
+            } else if (typeof product.tags === 'string') {
+              try {
+                const parsed = JSON.parse(product.tags);
+                tags = Array.isArray(parsed) ? parsed.filter(tag => tag && tag.trim() !== '') : product.tags.split(',').map(tag => tag.trim()).filter(tag => tag);
+              } catch {
+                tags = product.tags.split(',').map(tag => tag.trim()).filter(tag => tag);
+              }
+            }
+          }
+
+          // FIXED: Proper rating handling with fallbacks
+          const rating = product.rating ? parseFloat(product.rating).toFixed(1) : "0.0";
+          const reviewCount = product.reviewCount || 0;
+
+          return {
+            ...product,
+            image_urls: imageUrls,
+            tags: tags,
+            rating: rating,
+            reviewCount: reviewCount,
+            isFeatured: product.is_featured || product.featured || false,
+            isNew: checkIfProductIsNew(product.created_at),
+            stock_quantity: product.stock_quantity || 0
+          };
+        });
+
+        setProducts(processedProducts);
       } else {
         setError('No products found');
         setProducts(getSampleProducts());
@@ -191,6 +234,12 @@ const ProductPage = () => {
         const firstProduct = filteredProducts[0];
         
         let apiUrl = '';
+        const headers = {};
+        const token = localStorage.getItem('token');
+        
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
         
         switch (activeAlgorithm) {
           case 'ml':
@@ -213,27 +262,58 @@ const ProductPage = () => {
             apiUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommendations/product/${firstProduct.id}?algorithm=ml&limit=4`;
         }
 
-        const response = await fetch(apiUrl, {
-          headers: user && activeAlgorithm === 'collaborative' ? {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          } : {}
-        });
+        const response = await fetch(apiUrl, { headers });
         
         const endTime = performance.now();
         const responseTime = Math.round(endTime - startTime);
         
         if (response.ok) {
           const data = await response.json();
-          if (data.success && data.recommendations.length > 0) {
+          if (data.success && data.recommendations && data.recommendations.length > 0) {
             console.log(`Using ${data.algorithm} recommendations algorithm`);
-            setRecommendations(data.recommendations);
+            
+            // Process recommendation images properly - FIXED for ML algorithm
+            const processedRecommendations = data.recommendations.map(rec => {
+              let imageUrls = [];
+              
+              if (rec.image_urls) {
+                if (Array.isArray(rec.image_urls)) {
+                  imageUrls = rec.image_urls.filter(url => url && url.trim() !== '');
+                } else if (typeof rec.image_urls === 'string') {
+                  try {
+                    const parsed = JSON.parse(rec.image_urls);
+                    imageUrls = Array.isArray(parsed) ? parsed : [rec.image_urls];
+                  } catch {
+                    imageUrls = [rec.image_urls];
+                  }
+                }
+              }
+              
+              if (imageUrls.length === 0 && rec.image_url) {
+                imageUrls = [rec.image_url];
+              }
+              
+              if (imageUrls.length === 0) {
+                imageUrls = ['https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500'];
+              }
+
+              return {
+                ...rec,
+                image_urls: imageUrls,
+                mainImage: imageUrls[0],
+                rating: parseFloat(rec.rating || 0).toFixed(1),
+                reviewCount: rec.reviewCount || 0
+              };
+            });
+
+            setRecommendations(processedRecommendations);
             
             // Track algorithm performance
             setAlgorithmPerformance(prev => ({
               ...prev,
               [activeAlgorithm]: {
                 responseTime,
-                recommendationCount: data.recommendations.length,
+                recommendationCount: processedRecommendations.length,
                 lastUsed: new Date().toISOString(),
                 success: true
               }
@@ -247,9 +327,16 @@ const ProductPage = () => {
       }
     } catch (error) {
       console.error('Error fetching recommendations:', error);
-      // Fallback to featured products
-      const featured = products.filter(p => p.isFeatured);
-      setRecommendations(featured.length >= 4 ? featured.slice(0, 4) : products.slice(0, 4));
+      // Enhanced fallback with proper image handling
+      const featured = products
+        .filter(p => p.isFeatured)
+        .slice(0, 4)
+        .map(p => ({
+          ...p,
+          mainImage: Array.isArray(p.image_urls) && p.image_urls.length > 0 ? p.image_urls[0] : p.image_url
+        }));
+      
+      setRecommendations(featured);
       
       // Track failed performance
       setAlgorithmPerformance(prev => ({
@@ -279,27 +366,27 @@ const ProductPage = () => {
 
     // Price range filter
     filtered = filtered.filter(product => 
-      parseFloat(product.price) >= minPrice && parseFloat(product.price) <= maxPrice
+      parseFloat(product.price || 0) >= minPrice && parseFloat(product.price || 0) <= maxPrice
     );
 
     // Rating filter
     if (ratingFilter > 0) {
-      filtered = filtered.filter(product => parseFloat(product.rating) >= ratingFilter);
+      filtered = filtered.filter(product => parseFloat(product.rating || 0) >= ratingFilter);
     }
 
     // Sort products
     switch (sortBy) {
       case 'price-low':
-        filtered.sort((a, b) => parseFloat(a.price) - parseFloat(b.price));
+        filtered.sort((a, b) => parseFloat(a.price || 0) - parseFloat(b.price || 0));
         break;
       case 'price-high':
-        filtered.sort((a, b) => parseFloat(b.price) - parseFloat(a.price));
+        filtered.sort((a, b) => parseFloat(b.price || 0) - parseFloat(a.price || 0));
         break;
       case 'rating':
-        filtered.sort((a, b) => parseFloat(b.rating) - parseFloat(a.rating));
+        filtered.sort((a, b) => parseFloat(b.rating || 0) - parseFloat(a.rating || 0));
         break;
       case 'newest':
-        filtered.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        filtered.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
         break;
       case 'featured':
         filtered.sort((a, b) => (b.isFeatured === a.isFeatured) ? 0 : b.isFeatured ? 1 : -1);
@@ -307,7 +394,7 @@ const ProductPage = () => {
       default:
         filtered.sort((a, b) => {
           if (b.isFeatured !== a.isFeatured) return b.isFeatured ? 1 : -1;
-          return parseFloat(b.rating) - parseFloat(a.rating);
+          return parseFloat(b.rating || 0) - parseFloat(a.rating || 0);
         });
         break;
     }
@@ -325,7 +412,28 @@ const ProductPage = () => {
       const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/products/search?q=${encodeURIComponent(query)}`);
       if (response.ok) {
         const data = await response.json();
-        setFilteredProducts(Array.isArray(data) ? data : []);
+        // Process search results with proper image handling
+        const processedResults = Array.isArray(data) ? data.map(product => {
+          let imageUrls = [];
+          if (product.image_urls) {
+            if (Array.isArray(product.image_urls)) {
+              imageUrls = product.image_urls;
+            } else if (typeof product.image_urls === 'string') {
+              try {
+                imageUrls = JSON.parse(product.image_urls);
+              } catch {
+                imageUrls = [product.image_urls];
+              }
+            }
+          }
+          
+          return {
+            ...product,
+            image_urls: imageUrls.length > 0 ? imageUrls : [product.image_url || 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500'],
+            rating: parseFloat(product.rating || 0).toFixed(1)
+          };
+        }) : [];
+        setFilteredProducts(processedResults);
       }
     } catch (error) {
       console.error('Search error:', error);
@@ -418,10 +526,10 @@ const ProductPage = () => {
       description: "High-quality wireless headphones with noise cancellation technology",
       price: 99.99,
       category: "Electronics",
-      image_url: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500",
+      image_urls: ["https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500"],
       stock_quantity: 50,
-      rating: "0.0",
-      reviewCount: 0,
+      rating: "4.5",
+      reviewCount: 23,
       isFeatured: true,
       isNew: false,
       created_at: new Date().toISOString()
@@ -432,10 +540,10 @@ const ProductPage = () => {
       description: "Latest smartphone with advanced camera and 5G connectivity",
       price: 699.99,
       category: "Electronics",
-      image_url: "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=500",
+      image_urls: ["https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=500"],
       stock_quantity: 30,
-      rating: "0.0",
-      reviewCount: 0,
+      rating: "4.2",
+      reviewCount: 15,
       isFeatured: true,
       isNew: true,
       created_at: new Date().toISOString()
@@ -446,10 +554,10 @@ const ProductPage = () => {
       description: "Professional running shoes with advanced cushion technology",
       price: 129.99,
       category: "Footwear",
-      image_url: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=500",
+      image_urls: ["https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=500"],
       stock_quantity: 40,
-      rating: "0.0",
-      reviewCount: 0,
+      rating: "4.7",
+      reviewCount: 8,
       isFeatured: false,
       isNew: false,
       created_at: new Date('2023-01-15').toISOString()
@@ -649,32 +757,32 @@ const ProductPage = () => {
                 </button>
               </div>
 
-             <div className="space-y-2 max-h-60 overflow-y-auto scrollbar-hide">
-  {categories.map(category => {
-    const categoryCount = products.filter(p => 
-      category === 'all' || p.category === category
-    ).length;
-    
-    return (
-      <button
-        key={category}
-        onClick={() => setSelectedCategory(category)}
-        className={`block w-full text-left px-3 py-2 rounded-lg transition-all duration-200 transform hover:scale-105 ${
-          selectedCategory === category
-            ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg'
-            : 'text-gray-700 hover:bg-blue-50 hover:border-blue-200 border border-transparent'
-        }`}
-      >
-        <span className="font-medium">
-          {category.charAt(0).toUpperCase() + category.slice(1)}
-        </span>
-        <span className="text-sm opacity-70 ml-2">
-          ({categoryCount})
-        </span>
-      </button>
-    );
-  })}
-</div>
+              <div className="space-y-2 max-h-60 overflow-y-auto scrollbar-hide">
+                {categories.map(category => {
+                  const categoryCount = products.filter(p => 
+                    category === 'all' || p.category === category
+                  ).length;
+                  
+                  return (
+                    <button
+                      key={category}
+                      onClick={() => setSelectedCategory(category)}
+                      className={`block w-full text-left px-3 py-2 rounded-lg transition-all duration-200 transform hover:scale-105 ${
+                        selectedCategory === category
+                          ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg'
+                          : 'text-gray-700 hover:bg-blue-50 hover:border-blue-200 border border-transparent'
+                      }`}
+                    >
+                      <span className="font-medium">
+                        {category.charAt(0).toUpperCase() + category.slice(1)}
+                      </span>
+                      <span className="text-sm opacity-70 ml-2">
+                        ({categoryCount})
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
 
               {/* Price Range */}
               <div className="mb-6">
