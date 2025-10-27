@@ -5,11 +5,11 @@ const upload = require('../middleware/uploadMiddleware');
 
 const router = express.Router();
 
-// Get all users
+// Get all users - FIXED: Using 'name' instead of 'username'
 router.get('/users', protect, admin, async (req, res) => {
   try {
     const [users] = await db.execute(`
-      SELECT id, username as name, email, role, created_at 
+      SELECT id, name, email, role, created_at 
       FROM users 
       ORDER BY created_at DESC
     `);
@@ -46,11 +46,11 @@ router.delete('/users/:id', protect, admin, async (req, res) => {
   }
 });
 
-// Get all orders with user details
+// Get all orders with user details - FIXED: Using 'name' instead of 'username'
 router.get('/orders', protect, admin, async (req, res) => {
   try {
     const [orders] = await db.execute(`
-      SELECT o.*, u.username as user_name, u.email as user_email 
+      SELECT o.*, u.name as user_name, u.email as user_email 
       FROM orders o 
       LEFT JOIN users u ON o.user_id = u.id 
       ORDER BY o.created_at DESC
@@ -77,29 +77,66 @@ router.get('/orders', protect, admin, async (req, res) => {
   }
 });
 
-// Update order status
+// Update order status with automatic synchronization
 router.put('/orders/:id/status', protect, admin, async (req, res) => {
   try {
     const orderId = req.params.id;
     const { status, statusType } = req.body;
 
     let updateQuery, updateValue;
+    let additionalUpdates = [];
+    let additionalValues = [];
     
     if (statusType === 'payment') {
-      updateQuery = 'UPDATE orders SET payment_status = ? WHERE id = ?';
+      updateQuery = 'UPDATE orders SET payment_status = ?';
       updateValue = status;
+      
+      // Automatic order status synchronization based on payment status
+      if (status === 'completed') {
+        additionalUpdates.push('status = ?');
+        additionalValues.push('confirmed');
+      } else if (status === 'failed') {
+        additionalUpdates.push('status = ?');
+        additionalValues.push('pending');
+      } else if (status === 'refunded') {
+        additionalUpdates.push('status = ?');
+        additionalValues.push('cancelled');
+      } else if (status === 'pending') {
+        additionalUpdates.push('status = ?');
+        additionalValues.push('pending');
+      }
     } else {
-      updateQuery = 'UPDATE orders SET order_status = ? WHERE id = ?';
+      updateQuery = 'UPDATE orders SET status = ?';
       updateValue = status;
     }
 
-    const [result] = await db.execute(updateQuery, [updateValue, orderId]);
+    // Build the final query
+    if (additionalUpdates.length > 0) {
+      updateQuery += ', ' + additionalUpdates.join(', ');
+    }
+    
+    updateQuery += ' WHERE id = ?';
+    
+    const allValues = [updateValue, ...additionalValues, orderId];
+    const [result] = await db.execute(updateQuery, allValues);
 
     if (result.affectedRows === 0) {
       return res.status(404).json({ success: false, message: 'Order not found' });
     }
 
-    res.json({ success: true, message: `${statusType === 'payment' ? 'Payment' : 'Order'} status updated successfully` });
+    // Get updated order for response
+    const [updatedOrder] = await db.execute(`
+      SELECT o.*, u.name as user_name, u.email as user_email 
+      FROM orders o 
+      LEFT JOIN users u ON o.user_id = u.id 
+      WHERE o.id = ?
+    `, [orderId]);
+
+    res.json({ 
+      success: true, 
+      message: `${statusType === 'payment' ? 'Payment' : 'Order'} status updated successfully`,
+      order: updatedOrder[0] 
+    });
   } catch (error) {
     console.error('Update order status error:', error);
     res.status(500).json({ success: false, message: 'Error updating order status' });
@@ -295,11 +332,11 @@ router.put('/products/:id/status', protect, admin, async (req, res) => {
 // Dashboard statistics
 router.get('/stats', protect, admin, async (req, res) => {
   try {
-    // Total revenue from paid orders
+    // Total revenue from completed orders
     const [revenueResult] = await db.execute(`
       SELECT SUM(total_amount) as total_revenue 
       FROM orders 
-      WHERE payment_status = 'paid'
+      WHERE payment_status = 'completed'
     `);
 
     // Total orders
@@ -329,7 +366,7 @@ router.get('/stats', protect, admin, async (req, res) => {
     const [pendingOrdersResult] = await db.execute(`
       SELECT COUNT(*) as pending_orders 
       FROM orders 
-      WHERE order_status = 'pending'
+      WHERE status = 'pending'
     `);
 
     // Payment method breakdown
@@ -339,18 +376,18 @@ router.get('/stats', protect, admin, async (req, res) => {
         COUNT(*) as count,
         SUM(total_amount) as total_amount
       FROM orders 
-      WHERE payment_status = 'paid'
+      WHERE payment_status = 'completed'
       GROUP BY payment_method
     `);
 
     // Order status breakdown
     const [orderStatusStats] = await db.execute(`
       SELECT 
-        order_status as status,
+        status,
         COUNT(*) as count,
         SUM(total_amount) as total_amount
       FROM orders 
-      GROUP BY order_status
+      GROUP BY status
     `);
 
     res.json({
@@ -546,20 +583,6 @@ router.delete('/promo-codes/:id', protect, admin, async (req, res) => {
 // Offer Management
 router.get('/offers', protect, admin, async (req, res) => {
   try {
-    // Check if product_offers table exists
-    const [tableCheck] = await db.execute(`
-      SELECT COUNT(*) as table_exists 
-      FROM information_schema.tables 
-      WHERE table_schema = DATABASE() AND table_name = 'product_offers'
-    `);
-
-    if (tableCheck[0].table_exists === 0) {
-      return res.json({
-        success: true,
-        offers: []
-      });
-    }
-
     const [offers] = await db.execute(`
       SELECT o.*, p.name as product_name 
       FROM product_offers o 
@@ -573,10 +596,7 @@ router.get('/offers', protect, admin, async (req, res) => {
     });
   } catch (error) {
     console.error('Get offers error:', error);
-    res.json({
-      success: true,
-      offers: []
-    });
+    res.status(500).json({ success: false, message: 'Error fetching offers' });
   }
 });
 
@@ -775,6 +795,27 @@ router.delete('/notifications/:id', protect, admin, async (req, res) => {
   } catch (error) {
     console.error('Delete notification error:', error);
     res.status(500).json({ success: false, message: 'Error deleting notification' });
+  }
+});
+
+// Get notifications for users (public endpoint)
+router.get('/user-notifications', protect, async (req, res) => {
+  try {
+    const [notifications] = await db.execute(`
+      SELECT * FROM notifications 
+      WHERE (target_users = 'all' OR JSON_CONTAINS(user_ids, ?))
+      AND (expires_at IS NULL OR expires_at > NOW())
+      ORDER BY created_at DESC
+      LIMIT 20
+    `, [JSON.stringify([req.user.id])]);
+
+    res.json({
+      success: true,
+      notifications: notifications || []
+    });
+  } catch (error) {
+    console.error('Get user notifications error:', error);
+    res.status(500).json({ success: false, message: 'Error fetching notifications' });
   }
 });
 
