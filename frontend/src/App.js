@@ -52,6 +52,7 @@ function App() {
             } />
           </Routes>
         </Router>
+        
       </CartProvider>
     </AuthProvider>
   );
