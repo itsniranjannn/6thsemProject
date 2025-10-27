@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import Toast from '../Toast.js';
 
 const AdminProductModal = ({ product, onClose, onSave }) => {
   const [formData, setFormData] = useState({
@@ -19,6 +20,7 @@ const AdminProductModal = ({ product, onClose, onSave }) => {
   const [imageUrls, setImageUrls] = useState(['', '', '', '']);
   const [uploadedImages, setUploadedImages] = useState([]);
   const [activeTab, setActiveTab] = useState('url'); // 'url' or 'upload'
+  const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
 
   useEffect(() => {
     if (product) {
@@ -78,6 +80,11 @@ const AdminProductModal = ({ product, onClose, onSave }) => {
     }
   }, [product]);
 
+  const showToast = (message, type = 'success') => {
+    setToast({ show: true, message, type });
+    setTimeout(() => setToast({ show: false, message: '', type: 'success' }), 3000);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -127,11 +134,11 @@ const AdminProductModal = ({ product, onClose, onSave }) => {
       if (response.ok && result.success) {
         onSave();
       } else {
-        alert(result.message || `Error ${product ? 'updating' : 'creating'} product`);
+        showToast(result.message || `Error ${product ? 'updating' : 'creating'} product`, 'error');
       }
     } catch (error) {
       console.error('Error saving product:', error);
-      alert(`Error ${product ? 'updating' : 'creating'} product`);
+      showToast(`Error ${product ? 'updating' : 'creating'} product`, 'error');
     } finally {
       setLoading(false);
     }
@@ -166,13 +173,13 @@ const AdminProductModal = ({ product, onClose, onSave }) => {
           // Add new image
           setUploadedImages(prev => [...prev, result.imageUrl]);
         }
-        alert('Image uploaded successfully!');
+        showToast('Image uploaded successfully!');
       } else {
-        alert(result.message || 'Error uploading image');
+        showToast(result.message || 'Error uploading image', 'error');
       }
     } catch (error) {
       console.error('Error uploading image:', error);
-      alert('Error uploading image');
+      showToast('Error uploading image', 'error');
     } finally {
       setUploadLoading(false);
     }
@@ -217,6 +224,15 @@ const AdminProductModal = ({ product, onClose, onSave }) => {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      {/* Toast Notification */}
+      {toast.show && (
+        <Toast 
+          message={toast.message} 
+          type={toast.type} 
+          onClose={() => setToast({ show: false, message: '', type: 'success' })} 
+        />
+      )}
+
       <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
         <div className="p-8">
           <div className="flex justify-between items-center mb-6">

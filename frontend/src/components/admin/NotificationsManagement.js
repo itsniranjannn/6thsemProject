@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import Toast from '../Toast.js';
 
 const NotificationsManagement = () => {
   const [notifications, setNotifications] = useState([]);
@@ -12,10 +13,16 @@ const NotificationsManagement = () => {
     image_url: '',
     expires_at: ''
   });
+  const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
 
   useEffect(() => {
     fetchNotifications();
   }, []);
+
+  const showToast = (message, type = 'success') => {
+    setToast({ show: true, message, type });
+    setTimeout(() => setToast({ show: false, message: '', type: 'success' }), 3000);
+  };
 
   const fetchNotifications = async () => {
     setLoading(true);
@@ -30,9 +37,12 @@ const NotificationsManagement = () => {
       if (response.ok) {
         const data = await response.json();
         setNotifications(data.notifications || []);
+      } else {
+        showToast('Failed to fetch notifications', 'error');
       }
     } catch (error) {
       console.error('Error fetching notifications:', error);
+      showToast('Error fetching notifications', 'error');
     } finally {
       setLoading(false);
     }
@@ -81,13 +91,13 @@ const NotificationsManagement = () => {
           expires_at: ''
         });
         fetchNotifications();
-        alert('Notification created successfully!');
+        showToast('Notification created successfully!');
       } else {
-        alert(result.message || 'Error creating notification');
+        showToast(result.message || 'Error creating notification', 'error');
       }
     } catch (error) {
       console.error('Error creating notification:', error);
-      alert('Error creating notification: ' + error.message);
+      showToast('Error creating notification: ' + error.message, 'error');
     } finally {
       setLoading(false);
     }
@@ -107,13 +117,13 @@ const NotificationsManagement = () => {
 
       if (response.ok) {
         fetchNotifications();
-        alert('Notification deleted successfully!');
+        showToast('Notification deleted successfully!');
       } else {
-        alert('Error deleting notification');
+        showToast('Error deleting notification', 'error');
       }
     } catch (error) {
       console.error('Error deleting notification:', error);
-      alert('Error deleting notification');
+      showToast('Error deleting notification', 'error');
     }
   };
 
@@ -148,7 +158,7 @@ const NotificationsManagement = () => {
 
   const handlePreview = () => {
     if (!formData.title || !formData.message) {
-      alert('Please fill in title and message to preview');
+      showToast('Please fill in title and message to preview', 'warning');
       return;
     }
     setPreviewNotification({
@@ -226,6 +236,15 @@ const NotificationsManagement = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
+      {/* Toast Notification */}
+      {toast.show && (
+        <Toast 
+          message={toast.message} 
+          type={toast.type} 
+          onClose={() => setToast({ show: false, message: '', type: 'success' })} 
+        />
+      )}
+
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-8">
@@ -475,15 +494,16 @@ const NotificationsManagement = () => {
                         </div>
 
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Expires At</label>
-                          <input
-                            type="datetime-local"
-                            value={formData.expires_at}
-                            onChange={(e) => setFormData({...formData, expires_at: e.target.value})}
-                            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                          />
-                          <p className="text-xs text-gray-500 mt-2">Leave empty for no expiration</p>
-                        </div>
+  <label className="block text-sm font-medium text-gray-700 mb-2">Expires At</label>
+  <input
+    type="datetime-local"
+    min={new Date().toISOString().slice(0, 16)}
+    value={formData.expires_at}
+    onChange={(e) => setFormData({...formData, expires_at: e.target.value})}
+    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+  />
+  <p className="text-xs text-gray-500 mt-2">Leave empty for no expiration</p>
+</div>
                       </div>
 
                       {/* Preview Section */}

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import AdminProductModal from './AdminProductModal.js';
+import Toast from '../Toast.js';
 
 const ProductsManagement = () => {
   const [products, setProducts] = useState([]);
@@ -10,10 +11,16 @@ const ProductsManagement = () => {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [stockFilter, setStockFilter] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
+  const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
 
   useEffect(() => {
     fetchProducts();
   }, []);
+
+  const showToast = (message, type = 'success') => {
+    setToast({ show: true, message, type });
+    setTimeout(() => setToast({ show: false, message: '', type: 'success' }), 3000);
+  };
 
   const fetchProducts = async () => {
     setLoading(true);
@@ -31,9 +38,11 @@ const ProductsManagement = () => {
         setProducts(data.products || []);
       } else {
         console.error('Failed to fetch products');
+        showToast('Failed to fetch products', 'error');
       }
     } catch (error) {
       console.error('Error fetching products:', error);
+      showToast('Error fetching products', 'error');
     } finally {
       setLoading(false);
     }
@@ -53,13 +62,13 @@ const ProductsManagement = () => {
 
       if (response.ok) {
         fetchProducts();
-        alert('Product deleted successfully!');
+        showToast('Product deleted successfully!');
       } else {
-        alert('Error deleting product');
+        showToast('Error deleting product', 'error');
       }
     } catch (error) {
       console.error('Error deleting product:', error);
-      alert('Error deleting product');
+      showToast('Error deleting product', 'error');
     }
   };
 
@@ -94,13 +103,13 @@ const ProductsManagement = () => {
 
       if (response.ok && result.success) {
         fetchProducts(); // Refresh the list
-        alert(`Product ${statusType} status ${newStatus ? 'enabled' : 'disabled'}!`);
+        showToast(`Product ${statusType} status ${newStatus ? 'enabled' : 'disabled'}!`);
       } else {
-        alert(result.message || `Error updating ${statusType} status`);
+        showToast(result.message || `Error updating ${statusType} status`, 'error');
       }
     } catch (error) {
       console.error('Error updating product status:', error);
-      alert(`Error updating ${statusType} status`);
+      showToast(`Error updating ${statusType} status`, 'error');
     }
   };
 
@@ -123,6 +132,7 @@ const ProductsManagement = () => {
   const handleProductSave = () => {
     fetchProducts();
     handleModalClose();
+    showToast(`Product ${editingProduct ? 'updated' : 'created'} successfully!`);
   };
 
   const categories = [...new Set(products.map(p => p.category).filter(Boolean))];
@@ -190,8 +200,32 @@ const ProductsManagement = () => {
     }
   };
 
+  // Parse image URLs for display
+  const parseImageUrls = (imageUrls) => {
+    if (!imageUrls) return [];
+    try {
+      if (Array.isArray(imageUrls)) return imageUrls;
+      if (typeof imageUrls === 'string') {
+        const parsed = JSON.parse(imageUrls);
+        return Array.isArray(parsed) ? parsed : [imageUrls];
+      }
+      return [];
+    } catch {
+      return typeof imageUrls === 'string' ? [imageUrls] : [];
+    }
+  };
+
   return (
     <div className="p-8">
+      {/* Toast Notification */}
+      {toast.show && (
+        <Toast 
+          message={toast.message} 
+          type={toast.type} 
+          onClose={() => setToast({ show: false, message: '', type: 'success' })} 
+        />
+      )}
+
       {/* Header */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-8">
         <div>
@@ -342,13 +376,15 @@ const ProductsManagement = () => {
                 {filteredProducts.map(product => {
                   const stockStatus = getStockStatus(product.stock_quantity);
                   const productTags = parseTags(product.tags);
+                  const productImages = parseImageUrls(product.image_urls);
+                  const mainImage = product.image_url || productImages[0] || '/api/placeholder/80/80';
                   
                   return (
                     <tr key={product.id} className="hover:bg-gray-50 transition-colors group">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
                           <img 
-                            src={product.image_url || product.image_urls?.[0] || '/api/placeholder/80/80'} 
+                            src={mainImage} 
                             alt={product.name}
                             className="h-14 w-14 rounded-xl object-cover border border-gray-200 shadow-sm"
                             onError={(e) => {
@@ -363,6 +399,11 @@ const ProductsManagement = () => {
                             {product.description && (
                               <div className="text-xs text-gray-400 mt-1 truncate max-w-xs">
                                 {product.description}
+                              </div>
+                            )}
+                            {productImages.length > 1 && (
+                              <div className="text-xs text-blue-600 mt-1">
+                                +{productImages.length - 1} more images
                               </div>
                             )}
                           </div>

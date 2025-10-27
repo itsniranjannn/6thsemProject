@@ -33,6 +33,14 @@ const ProductPage = () => {
   const [algorithmPerformance, setAlgorithmPerformance] = useState({});
   const [showAlgorithmDetails, setShowAlgorithmDetails] = useState(false);
   
+  // New states for enhanced features
+  const [offers, setOffers] = useState([]);
+  const [featuredProducts, setFeaturedProducts] = useState([]);
+  const [newArrivals, setNewArrivals] = useState([]);
+  const [bestSellers, setBestSellers] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [activeSection, setActiveSection] = useState('all');
+  
   // Modal states
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [showProductModal, setShowProductModal] = useState(false);
@@ -55,11 +63,10 @@ const ProductPage = () => {
     setTimeout(() => setToast({ message: '', type: 'success' }), 4000);
   };
 
-  // Get unique categories from products
-  const categories = ['all', ...new Set(products.map(p => p?.category).filter(Boolean))];
-
   useEffect(() => {
     fetchProducts();
+    fetchOffers();
+    fetchCategories();
   }, []);
 
   useEffect(() => {
@@ -69,6 +76,7 @@ const ProductPage = () => {
   useEffect(() => {
     if (filteredProducts.length > 0) {
       fetchRecommendations();
+      organizeProducts();
     }
   }, [filteredProducts, activeAlgorithm]);
 
@@ -101,7 +109,7 @@ const ProductPage = () => {
         setCurrentMaxPrice(calculatedMaxPrice);
         setMaxPrice(calculatedMaxPrice);
 
-        // Process products with proper defaults - FIXED: Enhanced data processing
+        // Process products with proper defaults
         const processedProducts = data.map(product => {
           // Handle image URLs - convert single image_url to array if needed
           let imageUrls = [];
@@ -128,7 +136,7 @@ const ProductPage = () => {
             imageUrls = ['https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500'];
           }
 
-          // Handle tags - FIXED: Proper tag processing
+          // Handle tags
           let tags = [];
           if (product.tags) {
             if (Array.isArray(product.tags)) {
@@ -143,7 +151,7 @@ const ProductPage = () => {
             }
           }
 
-          // FIXED: Proper rating handling with fallbacks
+          // Proper rating handling with fallbacks
           const rating = product.rating ? parseFloat(product.rating).toFixed(1) : "0.0";
           const reviewCount = product.reviewCount || 0;
 
@@ -153,8 +161,8 @@ const ProductPage = () => {
             tags: tags,
             rating: rating,
             reviewCount: reviewCount,
-            isFeatured: product.is_featured || product.featured || false,
-            isNew: checkIfProductIsNew(product.created_at),
+            is_featured: product.is_featured || false,
+            is_new: checkIfProductIsNew(product.created_at),
             stock_quantity: product.stock_quantity || 0
           };
         });
@@ -171,6 +179,71 @@ const ProductPage = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchOffers = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+      
+      const response = await fetch(
+        `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/admin/offers`,
+        { headers }
+      );
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.offers) {
+          // Filter active offers
+          const activeOffers = data.offers.filter(offer => {
+            const now = new Date();
+            const validFrom = new Date(offer.valid_from);
+            const validUntil = new Date(offer.valid_until);
+            return offer.is_active && now >= validFrom && now <= validUntil;
+          });
+          setOffers(activeOffers);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching offers:', error);
+    }
+  };
+
+  const fetchCategories = async () => {
+    try {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/products/categories`);
+      if (response.ok) {
+        const data = await response.json();
+        if (Array.isArray(data)) {
+          setCategories(['all', ...data]);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+      // Fallback: extract categories from products
+      const uniqueCategories = ['all', ...new Set(products.map(p => p?.category).filter(Boolean))];
+      setCategories(uniqueCategories);
+    }
+  };
+
+  const organizeProducts = () => {
+    // Featured products
+    const featured = products.filter(p => p.is_featured).slice(0, 8);
+    setFeaturedProducts(featured);
+
+    // New arrivals (products created in last 30 days)
+    const newProducts = products.filter(p => p.is_new).slice(0, 8);
+    setNewArrivals(newProducts);
+
+    // Best sellers (based on review count and rating)
+    const bestSellersList = [...products]
+      .sort((a, b) => {
+        const aScore = (parseFloat(a.rating) || 0) * (a.reviewCount || 0);
+        const bScore = (parseFloat(b.rating) || 0) * (b.reviewCount || 0);
+        return bScore - aScore;
+      })
+      .slice(0, 8);
+    setBestSellers(bestSellersList);
   };
 
   // Helper function to check if product is new (within 30 days)
@@ -272,7 +345,7 @@ const ProductPage = () => {
           if (data.success && data.recommendations && data.recommendations.length > 0) {
             console.log(`Using ${data.algorithm} recommendations algorithm`);
             
-            // Process recommendation images properly - FIXED for ML algorithm
+            // Process recommendation images properly
             const processedRecommendations = data.recommendations.map(rec => {
               let imageUrls = [];
               
@@ -329,7 +402,7 @@ const ProductPage = () => {
       console.error('Error fetching recommendations:', error);
       // Enhanced fallback with proper image handling
       const featured = products
-        .filter(p => p.isFeatured)
+        .filter(p => p.is_featured)
         .slice(0, 4)
         .map(p => ({
           ...p,
@@ -389,11 +462,11 @@ const ProductPage = () => {
         filtered.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
         break;
       case 'featured':
-        filtered.sort((a, b) => (b.isFeatured === a.isFeatured) ? 0 : b.isFeatured ? 1 : -1);
+        filtered.sort((a, b) => (b.is_featured === a.is_featured) ? 0 : b.is_featured ? 1 : -1);
         break;
       default:
         filtered.sort((a, b) => {
-          if (b.isFeatured !== a.isFeatured) return b.isFeatured ? 1 : -1;
+          if (b.is_featured !== a.is_featured) return b.is_featured ? 1 : -1;
           return parseFloat(b.rating || 0) - parseFloat(a.rating || 0);
         });
         break;
@@ -530,8 +603,8 @@ const ProductPage = () => {
       stock_quantity: 50,
       rating: "4.5",
       reviewCount: 23,
-      isFeatured: true,
-      isNew: false,
+      is_featured: true,
+      is_new: false,
       created_at: new Date().toISOString()
     },
     {
@@ -544,8 +617,8 @@ const ProductPage = () => {
       stock_quantity: 30,
       rating: "4.2",
       reviewCount: 15,
-      isFeatured: true,
-      isNew: true,
+      is_featured: true,
+      is_new: true,
       created_at: new Date().toISOString()
     },
     {
@@ -558,8 +631,8 @@ const ProductPage = () => {
       stock_quantity: 40,
       rating: "4.7",
       reviewCount: 8,
-      isFeatured: false,
-      isNew: false,
+      is_featured: false,
+      is_new: false,
       created_at: new Date('2023-01-15').toISOString()
     }
   ];
@@ -624,6 +697,120 @@ const ProductPage = () => {
   };
 
   const algorithmInfo = getAlgorithmInfo();
+
+  // Render special offers section
+  const renderOffersSection = () => {
+    if (offers.length === 0) return null;
+
+    return (
+      <section className="mb-12">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-3xl font-bold text-gray-900">🔥 Special Offers</h2>
+          <span className="text-sm text-gray-500 bg-yellow-100 px-3 py-1 rounded-full">
+            Limited Time Deals
+          </span>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {offers.slice(0, 4).map((offer, index) => (
+            <div key={offer.id} className="bg-gradient-to-br from-orange-500 to-red-500 rounded-2xl p-6 text-white shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:scale-105">
+              <div className="flex items-center justify-between mb-3">
+                <span className="bg-white/20 px-3 py-1 rounded-full text-sm font-bold">
+                  {offer.offer_type?.replace(/_/g, ' ').toUpperCase()}
+                </span>
+                <span className="text-2xl">🎁</span>
+              </div>
+              
+              <h3 className="text-lg font-bold mb-2 line-clamp-2">
+                {offer.description || getOfferDescription(offer)}
+              </h3>
+              
+              <div className="space-y-2 mb-4">
+                {offer.discount_percentage && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-2xl font-bold">{offer.discount_percentage}% OFF</span>
+                  </div>
+                )}
+                {offer.discount_amount && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl font-bold">Rs. {offer.discount_amount} OFF</span>
+                  </div>
+                )}
+              </div>
+              
+              <div className="text-xs opacity-80">
+                Valid until: {new Date(offer.valid_until).toLocaleDateString()}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+    );
+  };
+
+  const getOfferDescription = (offer) => {
+    if (offer.description) return offer.description;
+    
+    switch (offer.offer_type) {
+      case 'discount':
+      case 'percentage_off':
+        return offer.discount_percentage 
+          ? `${offer.discount_percentage}% off`
+          : `Rs. ${offer.discount_amount} off`;
+      case 'flat_discount':
+        return `Flat Rs. ${offer.discount_amount} off`;
+      case 'buy_one_get_one':
+      case 'bogo':
+        return 'Buy One Get One';
+      case 'bulk_discount':
+        return `Bulk discount (min ${offer.min_quantity})`;
+      case 'free_shipping':
+        return 'Free Shipping';
+      default:
+        return offer.offer_type?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Special Offer';
+    }
+  };
+
+  // Render product sections
+  const renderProductSection = (title, products, icon, viewAllAction = null) => {
+    if (products.length === 0) return null;
+
+    return (
+      <section className="mb-12">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">{icon}</span>
+            <h2 className="text-3xl font-bold text-gray-900">{title}</h2>
+          </div>
+          {viewAllAction && (
+            <button
+              onClick={viewAllAction}
+              className="text-blue-600 hover:text-blue-800 font-semibold transition-colors"
+            >
+              View All →
+            </button>
+          )}
+        </div>
+        
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {products.map((product, index) => (
+            <div 
+              key={product.id}
+              className="transform transition-all duration-300 hover:scale-105"
+              style={{ animationDelay: `${index * 100}ms` }}
+            >
+              <ProductCard 
+                product={product}
+                onAddToCart={handleAddToCart}
+                onViewDetails={() => loadProductDetails(product)}
+                onAddReview={() => handleAddReview(product)}
+              />
+            </div>
+          ))}
+        </div>
+      </section>
+    );
+  };
 
   if (loading) {
     return (
@@ -739,6 +926,33 @@ const ProductPage = () => {
             </div>
           </div>
         </div>
+
+        {/* Special Offers Section */}
+        {renderOffersSection()}
+
+        {/* Featured Products Section */}
+        {renderProductSection(
+          "⭐ Featured Products", 
+          featuredProducts, 
+          "⭐",
+          () => setActiveSection('featured')
+        )}
+
+        {/* New Arrivals Section */}
+        {renderProductSection(
+          "🆕 New Arrivals", 
+          newArrivals, 
+          "🆕",
+          () => setActiveSection('new')
+        )}
+
+        {/* Best Sellers Section */}
+        {renderProductSection(
+          "🔥 Best Sellers", 
+          bestSellers, 
+          "🔥",
+          () => setActiveSection('bestsellers')
+        )}
 
         {/* Main Content Grid */}
         <div className="flex flex-col lg:flex-row gap-8">
