@@ -9,6 +9,7 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
   const [recommendationsLoading, setRecommendationsLoading] = useState(false);
   const [activeAlgorithm, setActiveAlgorithm] = useState('ml');
   const [realTimeRating, setRealTimeRating] = useState(null);
+  const [realTimeReviews, setRealTimeReviews] = useState(null);
 
   // Enhanced images handling with multiple URLs - FIXED
   const getProductImages = () => {
@@ -45,19 +46,21 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
 
   const images = getProductImages();
 
-  // Fetch real-time rating - FIXED
+  // Fetch real-time rating and reviews when product changes
   useEffect(() => {
-    fetchRealTimeRating();
+    if (product?.id) {
+      fetchRealTimeData();
+    }
   }, [product?.id]);
 
-  // Fetch recommendations when modal opens - FIXED: Enhanced ML algorithm
+  // Fetch recommendations when modal opens
   useEffect(() => {
     if (product?.id) {
       fetchRecommendations();
     }
   }, [product?.id, activeAlgorithm]);
 
-  const fetchRealTimeRating = async () => {
+  const fetchRealTimeData = async () => {
     if (!product?.id) return;
     
     try {
@@ -66,15 +69,16 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
       );
       if (response.ok) {
         const data = await response.json();
-        if (data.success && data.stats) {
+        if (data.success) {
           setRealTimeRating({
-            average: parseFloat(data.stats.average_rating || product.rating || 0).toFixed(1),
-            total: data.stats.total_reviews || product.reviewCount || 0
+            average: parseFloat(data.stats?.average_rating || product.rating || 0).toFixed(1),
+            total: data.stats?.total_reviews || product.reviewCount || 0
           });
+          setRealTimeReviews(data);
         }
       }
     } catch (error) {
-      console.error('Error fetching real-time rating:', error);
+      console.error('Error fetching real-time data:', error);
     }
   };
 
@@ -94,19 +98,19 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
 
       switch (activeAlgorithm) {
         case 'ml':
-          apiUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommendations/product/${product.id}?algorithm=ml&limit=3`;
+          apiUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommendations/product/${product.id}?algorithm=ml&limit=4`;
           break;
         case 'content':
-          apiUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommendations/product/${product.id}?algorithm=content&limit=3`;
+          apiUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommendations/product/${product.id}?algorithm=content&limit=4`;
           break;
         case 'collaborative':
-          apiUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommendations/user/personalized?limit=3`;
+          apiUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommendations/user/personalized?limit=4`;
           break;
         case 'popular':
-          apiUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommendations/popular?limit=3`;
+          apiUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommendations/popular?limit=4`;
           break;
         default:
-          apiUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommendations/product/${product.id}?algorithm=ml&limit=3`;
+          apiUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommendations/product/${product.id}?algorithm=ml&limit=4`;
       }
 
       const response = await fetch(apiUrl, { headers });
@@ -114,7 +118,7 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
       if (response.ok) {
         const data = await response.json();
         if (data.success && data.recommendations) {
-          // Process recommendations with proper image handling - FIXED for ML algorithm
+          // Process recommendations with proper image handling
           const processedRecs = data.recommendations.map(rec => {
             let recImages = [];
             
@@ -153,27 +157,6 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
       }
     } catch (error) {
       console.error('Error fetching recommendations:', error);
-      // Enhanced fallback for ML algorithm
-      if (activeAlgorithm === 'ml') {
-        // Use content-based as fallback for ML
-        try {
-          const fallbackResponse = await fetch(
-            `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommendations/product/${product.id}?algorithm=content&limit=3`
-          );
-          if (fallbackResponse.ok) {
-            const fallbackData = await fallbackResponse.json();
-            if (fallbackData.success && fallbackData.recommendations) {
-              setRecommendations(fallbackData.recommendations.map(rec => ({
-                ...rec,
-                mainImage: rec.image_url || 'https://via.placeholder.com/200x200?text=No+Image',
-                rating: parseFloat(rec.rating || 0).toFixed(1)
-              })));
-            }
-          }
-        } catch (fallbackError) {
-          console.error('Fallback recommendation error:', fallbackError);
-        }
-      }
     } finally {
       setRecommendationsLoading(false);
     }
@@ -249,14 +232,22 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
         <span className="text-sm text-gray-600 w-8">{bar.stars}★</span>
         <div className="flex-1 bg-gray-200 rounded-full h-2">
           <div 
-            className="bg-yellow-400 h-2 rounded-full" 
+            className="bg-yellow-400 h-2 rounded-full transition-all duration-500" 
             style={{ width: total ? `${(bar.count / total) * 100}%` : '0%' }}
           ></div>
         </div>
         <span className="text-sm text-gray-600 w-12">{bar.count}</span>
+        <span className="text-xs text-gray-500 w-16">
+          {total ? `${Math.round((bar.count / total) * 100)}%` : '0%'}
+        </span>
       </div>
     ));
   };
+
+  // Use real-time data if available
+  const displayRating = realTimeRating?.average || product.rating || "0.0";
+  const displayReviewCount = realTimeRating?.total || product.reviewCount || 0;
+  const displayReviews = realTimeReviews || reviews;
 
   // FIXED: Handle empty product
   if (!product) {
@@ -272,15 +263,11 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
     );
   }
 
-  // Use real-time rating if available
-  const displayRating = realTimeRating?.average || product.rating || "0.0";
-  const displayReviewCount = realTimeRating?.total || product.reviewCount || 0;
-
   return (
     <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50 animate-fade-in backdrop-blur-sm">
       <div className="bg-white rounded-3xl max-w-6xl w-full max-h-[95vh] overflow-hidden animate-scale-in shadow-2xl border border-gray-100">
         <div className="flex flex-col lg:flex-row h-full">
-          {/* Product Images - FIXED: Enhanced multiple image support */}
+          {/* Product Images - Enhanced multiple image support */}
           <div className="lg:w-1/2 p-8">
             <div className="relative group">
               {/* Main Image */}
@@ -296,7 +283,7 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
                   <>
                     <button
                       onClick={() => setSelectedImage(selectedImage > 0 ? selectedImage - 1 : images.length - 1)}
-                      className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-white/80 hover:bg-white text-gray-800 rounded-full p-2 shadow-lg transition-all duration-200 hover:scale-110"
+                      className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-white/90 hover:bg-white text-gray-800 rounded-full p-3 shadow-lg transition-all duration-200 hover:scale-110"
                     >
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -304,7 +291,7 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
                     </button>
                     <button
                       onClick={() => setSelectedImage(selectedImage < images.length - 1 ? selectedImage + 1 : 0)}
-                      className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-white/80 hover:bg-white text-gray-800 rounded-full p-2 shadow-lg transition-all duration-200 hover:scale-110"
+                      className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-white/90 hover:bg-white text-gray-800 rounded-full p-3 shadow-lg transition-all duration-200 hover:scale-110"
                     >
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -313,27 +300,32 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
                   </>
                 )}
 
-                {/* Product Tags - FIXED: Proper conditional rendering */}
+                {/* Product Tags */}
                 <div className="absolute top-4 left-4 flex flex-col gap-2">
                   {product.is_featured && (
-                    <span className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-3 py-1 rounded-full text-sm font-semibold shadow-lg">
+                    <span className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-3 py-2 rounded-full text-sm font-semibold shadow-lg">
                       ⭐ Featured
                     </span>
                   )}
                   {product.is_new && (
-                    <span className="bg-gradient-to-r from-green-500 to-emerald-500 text-white px-3 py-1 rounded-full text-sm font-semibold shadow-lg">
+                    <span className="bg-gradient-to-r from-green-500 to-emerald-500 text-white px-3 py-2 rounded-full text-sm font-semibold shadow-lg">
                       🆕 New Arrival
                     </span>
                   )}
                   {product.stock_quantity < 10 && product.stock_quantity > 0 && (
-                    <span className="bg-gradient-to-r from-orange-500 to-red-500 text-white px-3 py-1 rounded-full text-sm font-semibold shadow-lg animate-pulse">
+                    <span className="bg-gradient-to-r from-orange-500 to-red-500 text-white px-3 py-2 rounded-full text-sm font-semibold shadow-lg animate-pulse">
                       ⚠️ Only {product.stock_quantity} left!
+                    </span>
+                  )}
+                  {product.discount_percentage > 0 && (
+                    <span className="bg-gradient-to-r from-red-500 to-orange-500 text-white px-3 py-2 rounded-full text-sm font-semibold shadow-lg">
+                      {product.discount_percentage}% OFF
                     </span>
                   )}
                 </div>
               </div>
 
-              {/* Thumbnail Images - FIXED: Show only if multiple images */}
+              {/* Thumbnail Images */}
               {images.length > 1 && (
                 <div className="flex gap-3 mt-6 justify-center">
                   {images.map((img, index) => (
@@ -361,21 +353,21 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
               <div className="flex-1">
                 <h2 className="text-3xl font-bold text-gray-900 mb-2">{product.name}</h2>
                 <div className="flex items-center gap-4 mb-4">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 bg-yellow-50 px-3 py-2 rounded-xl">
                     {renderStars(displayRating, 'text-xl')}
                     <span className="text-xl font-semibold text-gray-900">{displayRating}</span>
                   </div>
                   <span className="text-gray-600 text-lg">({displayReviewCount} reviews)</span>
                   {realTimeRating && (
                     <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
-                      Live
+                      Live Rating
                     </span>
                   )}
                 </div>
               </div>
               <button
                 onClick={onClose}
-                className="text-gray-500 hover:text-gray-700 text-3xl transition-colors duration-200 hover:scale-110"
+                className="text-gray-500 hover:text-gray-700 text-3xl transition-colors duration-200 hover:scale-110 bg-gray-100 hover:bg-gray-200 rounded-full w-10 h-10 flex items-center justify-center"
               >
                 ×
               </button>
@@ -387,14 +379,20 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
                 <span className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
                   Rs. {parseFloat(product.price || 0).toLocaleString()}
                 </span>
-                {product.stock_quantity > 0 && (
-                  <span className="text-green-600 font-semibold text-lg">
+                {product.stock_quantity > 0 ? (
+                  <span className="text-green-600 font-semibold text-lg bg-green-50 px-3 py-1 rounded-full">
                     ✓ In Stock ({product.stock_quantity} available)
+                  </span>
+                ) : (
+                  <span className="text-red-500 font-semibold text-lg bg-red-50 px-3 py-1 rounded-full">
+                    ❌ Out of Stock
                   </span>
                 )}
               </div>
-              {product.stock_quantity === 0 && (
-                <span className="text-red-500 font-semibold text-lg">❌ Out of Stock</span>
+              {product.discount_percentage > 0 && (
+                <div className="text-green-600 font-semibold text-lg">
+                  🎉 You save {product.discount_percentage}% on this product!
+                </div>
               )}
             </div>
 
@@ -405,9 +403,9 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
                 <div className="flex items-center gap-3">
                   <button
                     onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                    className="w-10 h-10 bg-gray-200 hover:bg-gray-300 rounded-lg flex items-center justify-center transition-colors duration-200"
+                    className="w-12 h-12 bg-gray-200 hover:bg-gray-300 rounded-lg flex items-center justify-center transition-all duration-200 transform hover:scale-110"
                   >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
                     </svg>
                   </button>
@@ -415,15 +413,15 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
                     type="number"
                     value={quantity}
                     onChange={(e) => setQuantity(Math.max(1, Math.min(product.stock_quantity, parseInt(e.target.value) || 1)))}
-                    className="w-20 h-10 text-center border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-20 h-12 text-center border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg font-semibold"
                     min="1"
                     max={product.stock_quantity}
                   />
                   <button
                     onClick={() => setQuantity(Math.min(product.stock_quantity, quantity + 1))}
-                    className="w-10 h-10 bg-gray-200 hover:bg-gray-300 rounded-lg flex items-center justify-center transition-colors duration-200"
+                    className="w-12 h-12 bg-gray-200 hover:bg-gray-300 rounded-lg flex items-center justify-center transition-all duration-200 transform hover:scale-110"
                   >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                     </svg>
                   </button>
@@ -439,20 +437,20 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
                 className={`flex-1 py-4 px-6 rounded-xl font-semibold text-lg transition-all duration-300 transform hover:scale-105 shadow-lg ${
                   product.stock_quantity === 0 || isAddingToCart
                     ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                    : 'bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white'
+                    : 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white'
                 }`}
               >
                 {isAddingToCart ? (
                   <div className="flex items-center justify-center gap-2">
-                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                    Adding...
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+                    Adding to Cart...
                   </div>
                 ) : (
                   <div className="flex items-center justify-center gap-2">
                     <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L7 13m0 0l-2.5 5M7 13l2.5 5m6-5v6a2 2 0 01-2 2H9a2 2 0 01-2-2v-6m8 0V9a2 2 0 00-2-2H9a2 2 0 00-2 2v4.01" />
                     </svg>
-                    Add to Cart
+                    Add to Cart ({quantity})
                   </div>
                 )}
               </button>
@@ -493,16 +491,20 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
               {activeTab === 'description' && (
                 <div className="space-y-4">
                   <h4 className="text-lg font-semibold text-gray-900">Product Description</h4>
-                  <p className="text-gray-700 leading-relaxed">{product.description}</p>
+                  <p className="text-gray-700 leading-relaxed">{product.description || 'No description available for this product.'}</p>
                   
                   {/* Product Features */}
                   <div className="grid grid-cols-2 gap-4 mt-6">
-                    <div className="bg-blue-50 p-4 rounded-xl">
-                      <h5 className="font-semibold text-blue-900 mb-2">📦 Category</h5>
+                    <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-xl">
+                      <h5 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
+                        <span>📂</span> Category
+                      </h5>
                       <p className="text-blue-700">{product.category}</p>
                     </div>
-                    <div className="bg-green-50 p-4 rounded-xl">
-                      <h5 className="font-semibold text-green-900 mb-2">📊 Stock Status</h5>
+                    <div className="bg-gradient-to-br from-green-50 to-green-100 p-4 rounded-xl">
+                      <h5 className="font-semibold text-green-900 mb-2 flex items-center gap-2">
+                        <span>📊</span> Stock Status
+                      </h5>
                       <p className="text-green-700">{product.stock_quantity} units available</p>
                     </div>
                   </div>
@@ -516,23 +518,31 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
                       <p className="text-gray-600 mt-2">Loading reviews...</p>
                     </div>
-                  ) : reviews && reviews.stats ? (
+                  ) : displayReviews && displayReviews.stats ? (
                     <div className="space-y-6">
-                      {/* Rating Distribution */}
-                      <div>
-                        <h4 className="text-lg font-semibold text-gray-900 mb-4">Rating Distribution</h4>
-                        <div className="bg-gray-50 p-4 rounded-xl">
-                          {renderReviewBars(reviews.stats)}
+                      {/* Overall Rating Summary */}
+                      <div className="bg-gradient-to-br from-yellow-50 to-orange-50 p-6 rounded-xl">
+                        <div className="flex items-center justify-between">
+                          <div className="text-center">
+                            <div className="text-4xl font-bold text-gray-900">{displayRating}</div>
+                            <div className="flex items-center justify-center mt-1">
+                              {renderStars(displayRating)}
+                            </div>
+                            <div className="text-sm text-gray-600 mt-1">{displayReviewCount} reviews</div>
+                          </div>
+                          <div className="flex-1 ml-6">
+                            {renderReviewBars(displayReviews.stats)}
+                          </div>
                         </div>
                       </div>
 
                       {/* Reviews List */}
                       <div>
                         <h4 className="text-lg font-semibold text-gray-900 mb-4">Customer Reviews</h4>
-                        {reviews.reviews && reviews.reviews.length > 0 ? (
+                        {displayReviews.reviews && displayReviews.reviews.length > 0 ? (
                           <div className="space-y-4">
-                            {reviews.reviews.slice(0, 5).map(review => (
-                              <div key={review.id} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                            {displayReviews.reviews.slice(0, 5).map(review => (
+                              <div key={review.id} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow">
                                 <div className="flex items-center gap-3 mb-3">
                                   <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
                                     <span className="text-white font-semibold text-sm">
@@ -542,13 +552,18 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
                                   <div>
                                     <div className="flex items-center gap-2">
                                       {renderStars(review.rating, 'text-sm')}
+                                      <span className="text-sm font-semibold text-gray-900">{review.rating}.0</span>
                                     </div>
                                     <p className="text-sm font-semibold text-gray-900">{review.user_name || 'Anonymous'}</p>
                                   </div>
                                 </div>
                                 <p className="text-gray-700 text-sm leading-relaxed mb-2">{review.comment}</p>
                                 <span className="text-xs text-gray-500">
-                                  {new Date(review.created_at).toLocaleDateString()}
+                                  {new Date(review.created_at).toLocaleDateString('en-US', {
+                                    year: 'numeric',
+                                    month: 'long',
+                                    day: 'numeric'
+                                  })}
                                 </span>
                               </div>
                             ))}
@@ -556,7 +571,13 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
                         ) : (
                           <div className="text-center py-8 bg-gray-50 rounded-xl">
                             <div className="text-4xl mb-2">⭐</div>
-                            <p className="text-gray-500">No reviews yet. Be the first to review!</p>
+                            <p className="text-gray-500 mb-4">No reviews yet. Be the first to review!</p>
+                            <button
+                              onClick={onAddReview}
+                              className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg transition-colors"
+                            >
+                              Write First Review
+                            </button>
                           </div>
                         )}
                       </div>
@@ -618,13 +639,13 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
                           <button
                             key={algorithm}
                             onClick={() => setActiveAlgorithm(algorithm)}
-                            className={`px-3 py-1 rounded-lg text-xs font-medium transition-all duration-200 ${
+                            className={`px-3 py-2 rounded-lg text-xs font-medium transition-all duration-200 ${
                               activeAlgorithm === algorithm
                                 ? `bg-gradient-to-r ${info.color} text-white shadow-lg`
                                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                             }`}
                           >
-                            {info.icon}
+                            {info.icon} {info.name}
                           </button>
                         );
                       })}
@@ -637,9 +658,10 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
                       <p className="text-gray-600 mt-2">Generating AI recommendations...</p>
                     </div>
                   ) : recommendations.length > 0 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {recommendations.map(rec => (
-                        <div key={rec.id} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow duration-200">
+                        <div key={rec.id} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm hover:shadow-md transition-all duration-300 hover:scale-105 cursor-pointer"
+                             onClick={() => window.location.href = `/product/${rec.id}`}>
                           <img 
                             src={rec.mainImage || rec.image_urls?.[0] || rec.image_url} 
                             alt={rec.name}
@@ -669,30 +691,6 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
           </div>
         </div>
       </div>
-
-      {/* Custom Animations */}
-      <style jsx>{`
-        @keyframes fade-in {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        @keyframes scale-in {
-          from { transform: scale(0.9); opacity: 0; }
-          to { transform: scale(1); opacity: 1; }
-        }
-        .animate-fade-in {
-          animation: fade-in 0.3s ease-out;
-        }
-        .animate-scale-in {
-          animation: scale-in 0.3s ease-out;
-        }
-        .line-clamp-2 {
-          display: -webkit-box;
-          -webkit-line-clamp: 2;
-          -webkit-box-orient: vertical;
-          overflow: hidden;
-        }
-      `}</style>
     </div>
   );
 };

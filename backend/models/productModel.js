@@ -1,12 +1,205 @@
 const db = require('../config/db');
 
 class Product {
-  // Update product stock with proper validation
+  // Get all products with proper error handling
+  static async findAll(limit = 100, offset = 0) {
+    try {
+      const [rows] = await db.execute(
+        `SELECT p.*, 
+                COALESCE(AVG(r.rating), 0) as average_rating,
+                COUNT(r.id) as review_count
+         FROM products p
+         LEFT JOIN reviews r ON p.id = r.product_id
+         GROUP BY p.id
+         ORDER BY p.created_at DESC 
+         LIMIT ? OFFSET ?`,
+        [limit, offset]
+      );
+      
+      console.log(`✅ Retrieved ${rows.length} products with reviews`);
+      return rows;
+    } catch (error) {
+      console.error('❌ Product find all error:', error);
+      throw error;
+    }
+  }
+
+  // Get products by category
+  static async findByCategory(category, limit = 50, offset = 0) {
+    try {
+      const [rows] = await db.execute(
+        `SELECT p.*, 
+                COALESCE(AVG(r.rating), 0) as average_rating,
+                COUNT(r.id) as review_count
+         FROM products p
+         LEFT JOIN reviews r ON p.id = r.product_id
+         WHERE p.category = ? 
+         GROUP BY p.id
+         ORDER BY p.created_at DESC 
+         LIMIT ? OFFSET ?`,
+        [category, limit, offset]
+      );
+      
+      console.log(`✅ Retrieved ${rows.length} products in category: ${category}`);
+      return rows;
+    } catch (error) {
+      console.error('❌ Product find by category error:', error);
+      throw error;
+    }
+  }
+
+  // Search products
+  static async search(query, limit = 50, offset = 0) {
+    try {
+      const [rows] = await db.execute(
+        `SELECT p.*, 
+                COALESCE(AVG(r.rating), 0) as average_rating,
+                COUNT(r.id) as review_count
+         FROM products p
+         LEFT JOIN reviews r ON p.id = r.product_id
+         WHERE p.name LIKE ? OR p.description LIKE ? OR p.category LIKE ?
+         GROUP BY p.id
+         ORDER BY p.created_at DESC 
+         LIMIT ? OFFSET ?`,
+        [`%${query}%`, `%${query}%`, `%${query}%`, limit, offset]
+      );
+      
+      console.log(`🔍 Search for "${query}" returned ${rows.length} products`);
+      return rows;
+    } catch (error) {
+      console.error('❌ Product search error:', error);
+      throw error;
+    }
+  }
+
+  // Get product categories
+  static async getCategories() {
+    try {
+      const [rows] = await db.execute(
+        'SELECT DISTINCT category FROM products WHERE category IS NOT NULL AND category != "" ORDER BY category'
+      );
+      const categories = rows.map(row => row.category);
+      console.log(`📂 Found ${categories.length} product categories`);
+      return categories;
+    } catch (error) {
+      console.error('❌ Get categories error:', error);
+      throw error;
+    }
+  }
+
+  // Get product by ID
+  static async findById(productId) {
+    try {
+      const [rows] = await db.execute(
+        `SELECT p.*, 
+                COALESCE(AVG(r.rating), 0) as average_rating,
+                COUNT(r.id) as review_count
+         FROM products p
+         LEFT JOIN reviews r ON p.id = r.product_id
+         WHERE p.id = ?
+         GROUP BY p.id`,
+        [productId]
+      );
+      
+      if (rows.length === 0) {
+        console.log(`❌ Product not found: ${productId}`);
+        return null;
+      }
+      
+      console.log(`✅ Found product: ${rows[0].name}`);
+      return rows[0];
+    } catch (error) {
+      console.error('❌ Product find by ID error:', error);
+      throw error;
+    }
+  }
+
+  // Get product reviews
+  static async getProductReviews(productId) {
+    try {
+      // Get reviews with user names
+      const [reviews] = await db.execute(
+        `SELECT r.*, u.name as user_name 
+         FROM reviews r 
+         LEFT JOIN users u ON r.user_id = u.id 
+         WHERE r.product_id = ? 
+         ORDER BY r.created_at DESC`,
+        [productId]
+      );
+
+      // Get review statistics
+      const [stats] = await db.execute(
+        `SELECT 
+           COUNT(*) as total_reviews,
+           COALESCE(AVG(rating), 0) as average_rating,
+           SUM(CASE WHEN rating = 5 THEN 1 ELSE 0 END) as five_star,
+           SUM(CASE WHEN rating = 4 THEN 1 ELSE 0 END) as four_star,
+           SUM(CASE WHEN rating = 3 THEN 1 ELSE 0 END) as three_star,
+           SUM(CASE WHEN rating = 2 THEN 1 ELSE 0 END) as two_star,
+           SUM(CASE WHEN rating = 1 THEN 1 ELSE 0 END) as one_star
+         FROM reviews 
+         WHERE product_id = ?`,
+        [productId]
+      );
+
+      return {
+        success: true,
+        reviews: reviews,
+        stats: {
+          total_reviews: stats[0]?.total_reviews || 0,
+          average_rating: stats[0]?.average_rating || 0,
+          five_star: stats[0]?.five_star || 0,
+          four_star: stats[0]?.four_star || 0,
+          three_star: stats[0]?.three_star || 0,
+          two_star: stats[0]?.two_star || 0,
+          one_star: stats[0]?.one_star || 0
+        }
+      };
+    } catch (error) {
+      console.error('❌ Get product reviews error:', error);
+      return {
+        success: false,
+        reviews: [],
+        stats: {
+          total_reviews: 0,
+          average_rating: 0,
+          five_star: 0,
+          four_star: 0,
+          three_star: 0,
+          two_star: 0,
+          one_star: 0
+        }
+      };
+    }
+  }
+
+  // Get active product offers
+  static async getActiveOffers(limit = 10) {
+    try {
+      const [rows] = await db.execute(
+        `SELECT po.*, p.name as product_name, p.image_urls, p.price, p.discount_percentage
+         FROM product_offers po
+         JOIN products p ON po.product_id = p.id
+         WHERE po.is_active = 1 
+         AND (po.valid_until IS NULL OR po.valid_until > NOW())
+         ORDER BY po.created_at DESC
+         LIMIT ?`,
+        [limit]
+      );
+      
+      console.log(`🎁 Retrieved ${rows.length} active offers`);
+      return rows;
+    } catch (error) {
+      console.error('❌ Get active offers error:', error);
+      throw error;
+    }
+  }
+
+  // Update product stock
   static async updateStock(productId, quantityChange) {
     try {
       console.log(`📦 Updating stock for product ${productId} by ${quantityChange}`);
       
-      // First check current stock
       const [current] = await db.execute(
         'SELECT stock_quantity, name FROM products WHERE id = ?',
         [productId]
@@ -24,7 +217,6 @@ class Product {
         throw new Error(`Insufficient stock for ${productName}. Available: ${currentStock}, Requested: ${-quantityChange}`);
       }
       
-      // Update stock
       const [result] = await db.execute(
         `UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?`,
         [quantityChange, productId]
@@ -34,7 +226,6 @@ class Product {
         throw new Error('Failed to update product stock');
       }
       
-      // Get updated product
       const [products] = await db.execute(
         'SELECT * FROM products WHERE id = ?',
         [productId]
@@ -48,99 +239,7 @@ class Product {
     }
   }
 
-  // Get product by ID
-  static async findById(productId) {
-    try {
-      const [rows] = await db.execute(
-        'SELECT * FROM products WHERE id = ?',
-        [productId]
-      );
-      
-      if (rows.length === 0) {
-        console.log(`❌ Product not found: ${productId}`);
-        return null;
-      }
-      
-      console.log(`✅ Found product: ${rows[0].name}`);
-      return rows[0];
-    } catch (error) {
-      console.error('❌ Product find by ID error:', error);
-      throw error;
-    }
-  }
-
-  // Get all products with pagination
-  static async findAll(limit = 100, offset = 0) {
-    try {
-      const [rows] = await db.execute(
-        'SELECT * FROM products ORDER BY created_at DESC LIMIT ? OFFSET ?',
-        [limit, offset]
-      );
-      
-      const [countResult] = await db.execute(
-        'SELECT COUNT(*) as total FROM products'
-      );
-      
-      console.log(`✅ Retrieved ${rows.length} products`);
-      return {
-        products: rows,
-        total: countResult[0].total
-      };
-    } catch (error) {
-      console.error('❌ Product find all error:', error);
-      throw error;
-    }
-  }
-
-  // Get products by category with pagination
-  static async findByCategory(category, limit = 50, offset = 0) {
-    try {
-      const [rows] = await db.execute(
-        'SELECT * FROM products WHERE category = ? ORDER BY created_at DESC LIMIT ? OFFSET ?',
-        [category, limit, offset]
-      );
-      
-      const [countResult] = await db.execute(
-        'SELECT COUNT(*) as total FROM products WHERE category = ?',
-        [category]
-      );
-      
-      console.log(`✅ Retrieved ${rows.length} products in category: ${category}`);
-      return {
-        products: rows,
-        total: countResult[0].total
-      };
-    } catch (error) {
-      console.error('❌ Product find by category error:', error);
-      throw error;
-    }
-  }
-
-  // Search products with pagination
-  static async search(query, limit = 50, offset = 0) {
-    try {
-      const [rows] = await db.execute(
-        'SELECT * FROM products WHERE name LIKE ? OR description LIKE ? OR category LIKE ? ORDER BY created_at DESC LIMIT ? OFFSET ?',
-        [`%${query}%`, `%${query}%`, `%${query}%`, limit, offset]
-      );
-      
-      const [countResult] = await db.execute(
-        'SELECT COUNT(*) as total FROM products WHERE name LIKE ? OR description LIKE ? OR category LIKE ?',
-        [`%${query}%`, `%${query}%`, `%${query}%`]
-      );
-      
-      console.log(`🔍 Search for "${query}" returned ${rows.length} products`);
-      return {
-        products: rows,
-        total: countResult[0].total
-      };
-    } catch (error) {
-      console.error('❌ Product search error:', error);
-      throw error;
-    }
-  }
-
-  // Create new product - FIXED: Enhanced to handle all fields
+  // Create new product
   static async create(productData) {
     try {
       const { 
@@ -153,19 +252,17 @@ class Product {
         tags,
         is_featured,
         is_new,
-        discount_percentage,
-        offer_valid_until
+        discount_percentage
       } = productData;
       
-      // Handle image_urls - ensure it's stored as JSON string
       const imageUrlsJson = image_urls ? JSON.stringify(image_urls) : JSON.stringify([]);
       const tagsJson = tags ? JSON.stringify(tags) : JSON.stringify([]);
       
       const [result] = await db.execute(
         `INSERT INTO products (
           name, description, price, category, image_urls, stock_quantity,
-          tags, is_featured, is_new, discount_percentage, offer_valid_until
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          tags, is_featured, is_new, discount_percentage
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           name, 
           description || '', 
@@ -176,8 +273,7 @@ class Product {
           tagsJson,
           is_featured ? 1 : 0,
           is_new ? 1 : 0,
-          parseFloat(discount_percentage) || 0,
-          offer_valid_until || null
+          parseFloat(discount_percentage) || 0
         ]
       );
       
@@ -189,16 +285,14 @@ class Product {
     }
   }
 
-  // Update product - FIXED: Enhanced to handle all fields properly
+  // Update product
   static async update(productId, updateData) {
     try {
       const fields = [];
       const values = [];
       
-      // Build dynamic update query
       Object.keys(updateData).forEach(key => {
         if (updateData[key] !== undefined && updateData[key] !== null) {
-          // Handle special fields that should be stored as JSON
           if (key === 'image_urls' || key === 'tags') {
             const value = Array.isArray(updateData[key]) ? 
               JSON.stringify(updateData[key]) : 
@@ -206,17 +300,14 @@ class Product {
             fields.push(`${key} = ?`);
             values.push(value);
           }
-          // Handle boolean fields
           else if (key === 'is_featured' || key === 'is_new') {
             fields.push(`${key} = ?`);
             values.push(updateData[key] ? 1 : 0);
           }
-          // Handle numeric fields
           else if (key === 'price' || key === 'stock_quantity' || key === 'discount_percentage') {
             fields.push(`${key} = ?`);
             values.push(parseFloat(updateData[key]));
           }
-          // Handle other fields
           else {
             fields.push(`${key} = ?`);
             values.push(updateData[key]);
@@ -267,43 +358,17 @@ class Product {
     }
   }
 
-  // Get product categories
-  static async getCategories() {
-    try {
-      const [rows] = await db.execute(
-        'SELECT DISTINCT category FROM products ORDER BY category'
-      );
-      const categories = rows.map(row => row.category);
-      console.log(`📂 Found ${categories.length} product categories`);
-      return categories;
-    } catch (error) {
-      console.error('❌ Get categories error:', error);
-      throw error;
-    }
-  }
-
-  // Get low stock products
-  static async getLowStock(threshold = 5) {
-    try {
-      const [rows] = await db.execute(
-        'SELECT * FROM products WHERE stock_quantity <= ? ORDER BY stock_quantity ASC',
-        [threshold]
-      );
-      console.log(`⚠️ Found ${rows.length} low stock products (threshold: ${threshold})`);
-      return rows;
-    } catch (error) {
-      console.error('❌ Get low stock products error:', error);
-      throw error;
-    }
-  }
-
-  // Get popular products (based on sales/orders)
+  // Get popular products
   static async getPopularProducts(limit = 10) {
     try {
       const [rows] = await db.execute(
-        `SELECT p.*, COUNT(oi.product_id) as order_count
+        `SELECT p.*, 
+                COUNT(oi.product_id) as order_count,
+                COALESCE(AVG(r.rating), 0) as average_rating,
+                COUNT(r.id) as review_count
          FROM products p
          LEFT JOIN order_items oi ON p.id = oi.product_id
+         LEFT JOIN reviews r ON p.id = r.product_id
          GROUP BY p.id
          ORDER BY order_count DESC, p.created_at DESC
          LIMIT ?`,
@@ -317,35 +382,48 @@ class Product {
     }
   }
 
-  // Get products for admin with pagination
-  static async getProductsForAdmin(page = 1, limit = 10, search = '') {
+  // Get featured products
+  static async getFeaturedProducts(limit = 8) {
     try {
-      const offset = (page - 1) * limit;
-      let query = 'SELECT * FROM products';
-      let countQuery = 'SELECT COUNT(*) as total FROM products';
-      const params = [];
-      const countParams = [];
-
-      if (search) {
-        query += ' WHERE name LIKE ? OR category LIKE ?';
-        countQuery += ' WHERE name LIKE ? OR category LIKE ?';
-        const searchTerm = `%${search}%`;
-        params.push(searchTerm, searchTerm);
-        countParams.push(searchTerm, searchTerm);
-      }
-
-      query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
-      params.push(limit, offset);
-
-      const [rows] = await db.execute(query, params);
-      const [countResult] = await db.execute(countQuery, countParams);
-
-      return {
-        products: rows,
-        total: countResult[0].total
-      };
+      const [rows] = await db.execute(
+        `SELECT p.*,
+                COALESCE(AVG(r.rating), 0) as average_rating,
+                COUNT(r.id) as review_count
+         FROM products p
+         LEFT JOIN reviews r ON p.id = r.product_id
+         WHERE p.is_featured = 1 AND p.stock_quantity > 0 
+         GROUP BY p.id
+         ORDER BY p.created_at DESC 
+         LIMIT ?`,
+        [limit]
+      );
+      console.log(`⭐ Retrieved ${rows.length} featured products`);
+      return rows;
     } catch (error) {
-      console.error('❌ Get products for admin error:', error);
+      console.error('❌ Get featured products error:', error);
+      throw error;
+    }
+  }
+
+  // Get new arrival products
+  static async getNewArrivals(limit = 8) {
+    try {
+      const [rows] = await db.execute(
+        `SELECT p.*,
+                COALESCE(AVG(r.rating), 0) as average_rating,
+                COUNT(r.id) as review_count
+         FROM products p
+         LEFT JOIN reviews r ON p.id = r.product_id
+         WHERE p.is_new = 1 AND p.stock_quantity > 0 
+         GROUP BY p.id
+         ORDER BY p.created_at DESC 
+         LIMIT ?`,
+        [limit]
+      );
+      console.log(`🆕 Retrieved ${rows.length} new arrival products`);
+      return rows;
+    } catch (error) {
+      console.error('❌ Get new arrivals error:', error);
       throw error;
     }
   }
