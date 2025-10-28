@@ -2,6 +2,10 @@ const express = require('express');
 const {
   getProducts,
   getProductById,
+  getProductCategories,
+  getFeaturedProducts,
+  getNewArrivals,
+  getProductOffers,
   createProduct,
   updateProduct,
   deleteProduct,
@@ -15,6 +19,10 @@ const router = express.Router();
 
 // Public routes
 router.get('/', getProducts);
+router.get('/categories', getProductCategories);
+router.get('/featured', getFeaturedProducts);
+router.get('/new-arrivals', getNewArrivals);
+router.get('/offers', getProductOffers);
 router.get('/search', searchProducts);
 router.get('/category/:category', getProductsByCategory);
 router.get('/:id', getProductById);
@@ -26,5 +34,6 @@ router.post('/upload-image', protect, admin, uploadProductImage);
 router.post('/', protect, admin, createProduct);
 router.put('/:id', protect, admin, updateProduct);
 router.delete('/:id', protect, admin, deleteProduct);
+
 
 module.exports = router;

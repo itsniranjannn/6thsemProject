@@ -28,10 +28,24 @@ const upload = multer({
   }
 });
 
-// Get all products
+// Get all products - FIXED: Proper error handling and array validation
 const getProducts = async (req, res) => {
   try {
+    console.log('🔄 Fetching products from database...');
     const products = await Product.findAll();
+    
+    console.log('📦 Raw products data:', products);
+    
+    // FIXED: Ensure products is always an array
+    if (!products || !Array.isArray(products)) {
+      console.log('⚠️ Products is not an array, returning empty array');
+      return res.json([]);
+    }
+    
+    if (products.length === 0) {
+      console.log('ℹ️ No products found in database');
+      return res.json([]);
+    }
     
     // Process products to ensure proper data format
     const processedProducts = products.map(product => {
@@ -40,7 +54,8 @@ const getProducts = async (req, res) => {
       if (product.image_urls) {
         if (typeof product.image_urls === 'string') {
           try {
-            imageUrls = JSON.parse(product.image_urls);
+            const parsed = JSON.parse(product.image_urls);
+            imageUrls = Array.isArray(parsed) ? parsed : [parsed];
           } catch {
             imageUrls = [product.image_urls];
           }
@@ -52,6 +67,11 @@ const getProducts = async (req, res) => {
       // Fallback to single image_url
       if (imageUrls.length === 0 && product.image_url) {
         imageUrls = [product.image_url];
+      }
+      
+      // Final fallback
+      if (imageUrls.length === 0) {
+        imageUrls = ['https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500'];
       }
       
       // Handle tags format
@@ -68,23 +88,33 @@ const getProducts = async (req, res) => {
         }
       }
       
+      // Get real reviews data
+      const rating = product.average_rating ? parseFloat(product.average_rating).toFixed(1) : "0.0";
+      const reviewCount = product.review_count || 0;
+      
       return {
         ...product,
         image_urls: imageUrls,
         tags: tags,
-        rating: parseFloat(product.rating || 0).toFixed(1),
-        reviewCount: product.reviewCount || 0
+        rating: rating,
+        reviewCount: reviewCount,
+        is_featured: Boolean(product.is_featured),
+        is_new: Boolean(product.is_new)
       };
     });
     
+    console.log(`✅ Successfully processed ${processedProducts.length} products`);
     res.json(processedProducts);
   } catch (error) {
-    console.error('Get products error:', error);
-    res.status(500).json({ message: 'Error fetching products' });
+    console.error('❌ Get products error:', error);
+    res.status(500).json({ 
+      message: 'Error fetching products',
+      error: error.message 
+    });
   }
 };
 
-// Get single product
+// Get single product with reviews
 const getProductById = async (req, res) => {
   try {
     const product = await Product.findById(req.params.id);
@@ -107,6 +137,11 @@ const getProductById = async (req, res) => {
         imageUrls = [product.image_url];
       }
       
+      // Final fallback
+      if (imageUrls.length === 0) {
+        imageUrls = ['https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500'];
+      }
+      
       let tags = [];
       if (product.tags) {
         if (typeof product.tags === 'string') {
@@ -120,12 +155,16 @@ const getProductById = async (req, res) => {
         }
       }
       
+      // Get product reviews stats
+      const reviews = await Product.getProductReviews(req.params.id);
+      
       const processedProduct = {
         ...product,
         image_urls: imageUrls,
         tags: tags,
-        rating: parseFloat(product.rating || 0).toFixed(1),
-        reviewCount: product.reviewCount || 0
+        rating: reviews.average_rating || "0.0",
+        reviewCount: reviews.total_reviews || 0,
+        reviews: reviews.reviews || []
       };
       
       res.json(processedProduct);
@@ -138,7 +177,121 @@ const getProductById = async (req, res) => {
   }
 };
 
-// Create product (Admin only) with enhanced features and file upload
+// Get product categories - FIXED
+const getProductCategories = async (req, res) => {
+  try {
+    const categories = await Product.getCategories();
+    res.json(categories);
+  } catch (error) {
+    console.error('Get categories error:', error);
+    res.status(500).json({ message: 'Error fetching categories' });
+  }
+};
+
+// Get featured products with reviews
+const getFeaturedProducts = async (req, res) => {
+  try {
+    const { limit = 8 } = req.query;
+    const products = await Product.getFeaturedProducts(parseInt(limit));
+    
+    const processedProducts = await Promise.all(products.map(async (product) => {
+      let imageUrls = [];
+      if (product.image_urls) {
+        if (typeof product.image_urls === 'string') {
+          try {
+            imageUrls = JSON.parse(product.image_urls);
+          } catch {
+            imageUrls = [product.image_urls];
+          }
+        } else if (Array.isArray(product.image_urls)) {
+          imageUrls = product.image_urls;
+        }
+      }
+      
+      if (imageUrls.length === 0 && product.image_url) {
+        imageUrls = [product.image_url];
+      }
+      
+      if (imageUrls.length === 0) {
+        imageUrls = ['https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500'];
+      }
+      
+      // Get real reviews data for each product
+      const reviews = await Product.getProductReviews(product.id);
+      
+      return {
+        ...product,
+        image_urls: imageUrls,
+        rating: reviews.average_rating || "0.0",
+        reviewCount: reviews.total_reviews || 0
+      };
+    }));
+    
+    res.json(processedProducts);
+  } catch (error) {
+    console.error('Get featured products error:', error);
+    res.status(500).json({ message: 'Error fetching featured products' });
+  }
+};
+
+// Get new arrivals with reviews
+const getNewArrivals = async (req, res) => {
+  try {
+    const { limit = 8 } = req.query;
+    const products = await Product.getNewArrivals(parseInt(limit));
+    
+    const processedProducts = await Promise.all(products.map(async (product) => {
+      let imageUrls = [];
+      if (product.image_urls) {
+        if (typeof product.image_urls === 'string') {
+          try {
+            imageUrls = JSON.parse(product.image_urls);
+          } catch {
+            imageUrls = [product.image_urls];
+          }
+        } else if (Array.isArray(product.image_urls)) {
+          imageUrls = product.image_urls;
+        }
+      }
+      
+      if (imageUrls.length === 0 && product.image_url) {
+        imageUrls = [product.image_url];
+      }
+      
+      if (imageUrls.length === 0) {
+        imageUrls = ['https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500'];
+      }
+      
+      // Get real reviews data for each product
+      const reviews = await Product.getProductReviews(product.id);
+      
+      return {
+        ...product,
+        image_urls: imageUrls,
+        rating: reviews.average_rating || "0.0",
+        reviewCount: reviews.total_reviews || 0
+      };
+    }));
+    
+    res.json(processedProducts);
+  } catch (error) {
+    console.error('Get new arrivals error:', error);
+    res.status(500).json({ message: 'Error fetching new arrivals' });
+  }
+};
+
+// Get product offers
+const getProductOffers = async (req, res) => {
+  try {
+    const offers = await Product.getActiveOffers();
+    res.json(offers);
+  } catch (error) {
+    console.error('Get product offers error:', error);
+    res.status(500).json({ message: 'Error fetching product offers' });
+  }
+};
+
+// Create product (Admin only)
 const createProduct = async (req, res) => {
   try {
     const { 
@@ -151,8 +304,7 @@ const createProduct = async (req, res) => {
       tags, 
       is_featured, 
       is_new, 
-      discount_percentage, 
-      offer_valid_until 
+      discount_percentage
     } = req.body;
     
     // Validate required fields
@@ -160,7 +312,7 @@ const createProduct = async (req, res) => {
       return res.status(400).json({ message: 'Name, price, and category are required' });
     }
 
-    // Handle image URLs - support both file uploads and URLs
+    // Handle image URLs
     let finalImageUrls = [];
     
     // Handle uploaded files
@@ -209,13 +361,12 @@ const createProduct = async (req, res) => {
       description: description || '',
       price: parseFloat(price),
       category,
-      image_urls: JSON.stringify(finalImageUrls), // Store as JSON string
+      image_urls: finalImageUrls,
       stock_quantity: parseInt(stock_quantity) || 0,
-      tags: JSON.stringify(finalTags), // Store as JSON string
+      tags: finalTags,
       is_featured: is_featured === 'true' || is_featured === true,
       is_new: is_new === 'true' || is_new === true,
-      discount_percentage: parseFloat(discount_percentage) || 0,
-      offer_valid_until: offer_valid_until || null
+      discount_percentage: parseFloat(discount_percentage) || 0
     });
     
     res.status(201).json({ 
@@ -247,24 +398,24 @@ const updateProduct = async (req, res) => {
       } else if (Array.isArray(updateData.image_urls)) {
         imageUrls = updateData.image_urls;
       }
-      updateData.image_urls = JSON.stringify(imageUrls);
+      updateData.image_urls = imageUrls;
     }
     
     // Handle uploaded files
     if (req.files && req.files.length > 0) {
       const fileUrls = req.files.map(file => `${req.protocol}://${req.get('host')}/uploads/${file.filename}`);
-      let existingImages = [];
+      let existingImages = updateData.image_urls || [];
       
-      if (updateData.image_urls) {
+      if (typeof existingImages === 'string') {
         try {
-          existingImages = JSON.parse(updateData.image_urls);
+          existingImages = JSON.parse(existingImages);
         } catch {
-          existingImages = [updateData.image_urls];
+          existingImages = [existingImages];
         }
       }
       
       const allImages = [...existingImages, ...fileUrls];
-      updateData.image_urls = JSON.stringify([...new Set(allImages)]);
+      updateData.image_urls = [...new Set(allImages)];
     }
     
     // Handle tags
@@ -279,7 +430,7 @@ const updateProduct = async (req, res) => {
       } else if (Array.isArray(updateData.tags)) {
         tags = updateData.tags;
       }
-      updateData.tags = JSON.stringify(tags);
+      updateData.tags = tags;
     }
     
     // Convert boolean strings to actual booleans
@@ -328,10 +479,14 @@ const searchProducts = async (req, res) => {
       return res.status(400).json({ message: 'Search query is required' });
     }
     
-    const products = await Product.searchProducts(q);
+    const products = await Product.search(q);
+    
+    if (!Array.isArray(products)) {
+      return res.json([]);
+    }
     
     // Process products for consistent format
-    const processedProducts = products.map(product => {
+    const processedProducts = await Promise.all(products.map(async (product) => {
       let imageUrls = [];
       if (product.image_urls) {
         if (typeof product.image_urls === 'string') {
@@ -349,12 +504,20 @@ const searchProducts = async (req, res) => {
         imageUrls = [product.image_url];
       }
       
+      if (imageUrls.length === 0) {
+        imageUrls = ['https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500'];
+      }
+      
+      // Get real reviews data
+      const reviews = await Product.getProductReviews(product.id);
+      
       return {
         ...product,
         image_urls: imageUrls,
-        rating: parseFloat(product.rating || 0).toFixed(1)
+        rating: reviews.average_rating || "0.0",
+        reviewCount: reviews.total_reviews || 0
       };
-    });
+    }));
     
     res.json(processedProducts);
   } catch (error) {
@@ -369,8 +532,12 @@ const getProductsByCategory = async (req, res) => {
     const { category } = req.params;
     const products = await Product.findByCategory(category);
     
+    if (!Array.isArray(products)) {
+      return res.json([]);
+    }
+    
     // Process products for consistent format
-    const processedProducts = products.map(product => {
+    const processedProducts = await Promise.all(products.map(async (product) => {
       let imageUrls = [];
       if (product.image_urls) {
         if (typeof product.image_urls === 'string') {
@@ -388,12 +555,20 @@ const getProductsByCategory = async (req, res) => {
         imageUrls = [product.image_url];
       }
       
+      if (imageUrls.length === 0) {
+        imageUrls = ['https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500'];
+      }
+      
+      // Get real reviews data
+      const reviews = await Product.getProductReviews(product.id);
+      
       return {
         ...product,
         image_urls: imageUrls,
-        rating: parseFloat(product.rating || 0).toFixed(1)
+        rating: reviews.average_rating || "0.0",
+        reviewCount: reviews.total_reviews || 0
       };
-    });
+    }));
     
     res.json(processedProducts);
   } catch (error) {
@@ -401,6 +576,7 @@ const getProductsByCategory = async (req, res) => {
     res.status(500).json({ message: 'Error fetching category products' });
   }
 };
+
 
 // Upload product image
 const uploadProductImage = async (req, res) => {
@@ -425,6 +601,10 @@ const uploadProductImage = async (req, res) => {
 module.exports = {
   getProducts,
   getProductById,
+  getProductCategories,
+  getFeaturedProducts,
+  getNewArrivals,
+  getProductOffers,
   createProduct: [upload.array('images', 5), createProduct],
   updateProduct: [upload.array('images', 5), updateProduct],
   deleteProduct,

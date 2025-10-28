@@ -1,9 +1,12 @@
+// frontend/src/pages/ProductPage.js - COMPLETE FIXED VERSION
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import ProductCard from '../components/ProductCard.js';
 import SearchBar from '../components/SearchBar.js';
 import ProductModal from '../components/ProductModal.js';
 import ReviewModal from '../components/ReviewModal.js';
 import SupportWidget from '../components/SupportWidget.js';
+import CategoryNavbar from '../components/CategoryNavbar.js';
 import { Toast } from '../components/Toast.js';
 import { useCart } from '../context/CartContext.js';
 import { useAuth } from '../context/AuthContext.js';
@@ -11,12 +14,19 @@ import { useAuth } from '../context/AuthContext.js';
 const ProductPage = () => {
   const [products, setProducts] = useState([]);
   const [filteredProducts, setFilteredProducts] = useState([]);
+  const [featuredProducts, setFeaturedProducts] = useState([]);
+  const [newArrivals, setNewArrivals] = useState([]);
+  const [offers, setOffers] = useState([]);
   const [recommendations, setRecommendations] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [featuredLoading, setFeaturedLoading] = useState(false);
+  const [newArrivalsLoading, setNewArrivalsLoading] = useState(false);
+  const [offersLoading, setOffersLoading] = useState(false);
   const [recommendationsLoading, setRecommendationsLoading] = useState(false);
   const [error, setError] = useState('');
   const { addToCart, getCartItemsCount } = useCart();
   const { user } = useAuth();
+  const navigate = useNavigate();
 
   // Toast state
   const [toast, setToast] = useState({ message: '', type: 'success' });
@@ -32,14 +42,6 @@ const ProductPage = () => {
   const [activeAlgorithm, setActiveAlgorithm] = useState('ml');
   const [algorithmPerformance, setAlgorithmPerformance] = useState({});
   const [showAlgorithmDetails, setShowAlgorithmDetails] = useState(false);
-  
-  // New states for enhanced features
-  const [offers, setOffers] = useState([]);
-  const [featuredProducts, setFeaturedProducts] = useState([]);
-  const [newArrivals, setNewArrivals] = useState([]);
-  const [bestSellers, setBestSellers] = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [activeSection, setActiveSection] = useState('all');
   
   // Modal states
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -63,10 +65,11 @@ const ProductPage = () => {
     setTimeout(() => setToast({ message: '', type: 'success' }), 4000);
   };
 
+  // Get unique categories from products
+  const categories = ['all', ...new Set(products.map(p => p?.category).filter(Boolean))];
+
   useEffect(() => {
-    fetchProducts();
-    fetchOffers();
-    fetchCategories();
+    fetchAllData();
   }, []);
 
   useEffect(() => {
@@ -76,7 +79,6 @@ const ProductPage = () => {
   useEffect(() => {
     if (filteredProducts.length > 0) {
       fetchRecommendations();
-      organizeProducts();
     }
   }, [filteredProducts, activeAlgorithm]);
 
@@ -89,11 +91,28 @@ const ProductPage = () => {
     }
   }, [loading, filteredProducts]);
 
-  const fetchProducts = async () => {
+  const fetchAllData = async () => {
     try {
       setLoading(true);
       setError('');
       
+      // Fetch all data in parallel
+      await Promise.all([
+        fetchProducts(),
+        fetchFeaturedProducts(),
+        fetchNewArrivals(),
+        fetchOffers()
+      ]);
+    } catch (error) {
+      console.error('Error fetching all data:', error);
+      setError('Failed to load some data. Please refresh the page.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchProducts = async () => {
+    try {
       const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/products`);
       
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
@@ -110,62 +129,16 @@ const ProductPage = () => {
         setMaxPrice(calculatedMaxPrice);
 
         // Process products with proper defaults
-        const processedProducts = data.map(product => {
-          // Handle image URLs - convert single image_url to array if needed
-          let imageUrls = [];
-          if (product.image_urls) {
-            if (Array.isArray(product.image_urls)) {
-              imageUrls = product.image_urls.filter(url => url && url.trim() !== '');
-            } else if (typeof product.image_urls === 'string') {
-              try {
-                const parsed = JSON.parse(product.image_urls);
-                imageUrls = Array.isArray(parsed) ? parsed.filter(url => url && url.trim() !== '') : [product.image_urls];
-              } catch {
-                imageUrls = [product.image_urls];
-              }
-            }
-          }
-          
-          // Fallback to single image_url
-          if (imageUrls.length === 0 && product.image_url) {
-            imageUrls = [product.image_url];
-          }
-          
-          // Final fallback
-          if (imageUrls.length === 0) {
-            imageUrls = ['https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500'];
-          }
-
-          // Handle tags
-          let tags = [];
-          if (product.tags) {
-            if (Array.isArray(product.tags)) {
-              tags = product.tags.filter(tag => tag && tag.trim() !== '');
-            } else if (typeof product.tags === 'string') {
-              try {
-                const parsed = JSON.parse(product.tags);
-                tags = Array.isArray(parsed) ? parsed.filter(tag => tag && tag.trim() !== '') : product.tags.split(',').map(tag => tag.trim()).filter(tag => tag);
-              } catch {
-                tags = product.tags.split(',').map(tag => tag.trim()).filter(tag => tag);
-              }
-            }
-          }
-
-          // Proper rating handling with fallbacks
-          const rating = product.rating ? parseFloat(product.rating).toFixed(1) : "0.0";
-          const reviewCount = product.reviewCount || 0;
-
-          return {
-            ...product,
-            image_urls: imageUrls,
-            tags: tags,
-            rating: rating,
-            reviewCount: reviewCount,
-            is_featured: product.is_featured || false,
-            is_new: checkIfProductIsNew(product.created_at),
-            stock_quantity: product.stock_quantity || 0
-          };
-        });
+        const processedProducts = data.map(product => ({
+          ...product,
+          image_urls: processImageUrls(product.image_urls, product.image_url),
+          tags: processTags(product.tags),
+          rating: product.rating ? parseFloat(product.rating).toFixed(1) : "0.0",
+          reviewCount: product.reviewCount || 0,
+          is_featured: Boolean(product.is_featured || product.featured || false),
+          is_new: checkIfProductIsNew(product.created_at),
+          stock_quantity: product.stock_quantity || 0
+        }));
 
         setProducts(processedProducts);
       } else {
@@ -176,74 +149,129 @@ const ProductPage = () => {
       console.error('Error fetching products:', error);
       setError('Failed to load products. Using sample data.');
       setProducts(getSampleProducts());
+    }
+  };
+
+  const fetchFeaturedProducts = async () => {
+    try {
+      setFeaturedLoading(true);
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/products/featured?limit=8`);
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (Array.isArray(data)) {
+          const processedProducts = data.map(product => ({
+            ...product,
+            image_urls: processImageUrls(product.image_urls, product.image_url),
+            rating: product.rating ? parseFloat(product.rating).toFixed(1) : "0.0",
+            reviewCount: product.reviewCount || 0
+          }));
+          setFeaturedProducts(processedProducts);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching featured products:', error);
     } finally {
-      setLoading(false);
+      setFeaturedLoading(false);
+    }
+  };
+
+  const fetchNewArrivals = async () => {
+    try {
+      setNewArrivalsLoading(true);
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/products/new-arrivals?limit=8`);
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (Array.isArray(data)) {
+          const processedProducts = data.map(product => ({
+            ...product,
+            image_urls: processImageUrls(product.image_urls, product.image_url),
+            rating: product.rating ? parseFloat(product.rating).toFixed(1) : "0.0",
+            reviewCount: product.reviewCount || 0
+          }));
+          setNewArrivals(processedProducts);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching new arrivals:', error);
+    } finally {
+      setNewArrivalsLoading(false);
     }
   };
 
   const fetchOffers = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
-      
-      const response = await fetch(
-        `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/admin/offers`,
-        { headers }
-      );
+      setOffersLoading(true);
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/products/offers`);
       
       if (response.ok) {
         const data = await response.json();
-        if (data.offers) {
-          // Filter active offers
-          const activeOffers = data.offers.filter(offer => {
-            const now = new Date();
-            const validFrom = new Date(offer.valid_from);
-            const validUntil = new Date(offer.valid_until);
-            return offer.is_active && now >= validFrom && now <= validUntil;
-          });
-          setOffers(activeOffers);
-        }
+        // Process offers with proper product data
+        const processedOffers = Array.isArray(data) ? data.map(offer => ({
+          ...offer,
+          product: {
+            ...offer,
+            image_urls: processImageUrls(offer.image_urls, offer.image_url),
+            price: parseFloat(offer.price || 0),
+            discount_percentage: offer.discount_percentage || 0
+          }
+        })) : [];
+        setOffers(processedOffers);
       }
     } catch (error) {
       console.error('Error fetching offers:', error);
+    } finally {
+      setOffersLoading(false);
     }
   };
 
-  const fetchCategories = async () => {
-    try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/products/categories`);
-      if (response.ok) {
-        const data = await response.json();
-        if (Array.isArray(data)) {
-          setCategories(['all', ...data]);
+  // Helper function to process image URLs - FIXED for ML algorithm
+  const processImageUrls = (image_urls, fallback_image_url) => {
+    let imageUrls = [];
+    
+    if (image_urls) {
+      if (Array.isArray(image_urls)) {
+        imageUrls = image_urls.filter(url => url && url.trim() !== '');
+      } else if (typeof image_urls === 'string') {
+        try {
+          const parsed = JSON.parse(image_urls);
+          imageUrls = Array.isArray(parsed) ? parsed.filter(url => url && url.trim() !== '') : [image_urls];
+        } catch {
+          imageUrls = [image_urls];
         }
       }
-    } catch (error) {
-      console.error('Error fetching categories:', error);
-      // Fallback: extract categories from products
-      const uniqueCategories = ['all', ...new Set(products.map(p => p?.category).filter(Boolean))];
-      setCategories(uniqueCategories);
     }
+    
+    if (imageUrls.length === 0 && fallback_image_url) {
+      imageUrls = [fallback_image_url];
+    }
+    
+    if (imageUrls.length === 0) {
+      imageUrls = ['https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500'];
+    }
+    
+    return imageUrls;
   };
 
-  const organizeProducts = () => {
-    // Featured products
-    const featured = products.filter(p => p.is_featured).slice(0, 8);
-    setFeaturedProducts(featured);
-
-    // New arrivals (products created in last 30 days)
-    const newProducts = products.filter(p => p.is_new).slice(0, 8);
-    setNewArrivals(newProducts);
-
-    // Best sellers (based on review count and rating)
-    const bestSellersList = [...products]
-      .sort((a, b) => {
-        const aScore = (parseFloat(a.rating) || 0) * (a.reviewCount || 0);
-        const bScore = (parseFloat(b.rating) || 0) * (b.reviewCount || 0);
-        return bScore - aScore;
-      })
-      .slice(0, 8);
-    setBestSellers(bestSellersList);
+  // Helper function to process tags - FIXED to avoid "0" or "00" icons
+  const processTags = (tags) => {
+    let processedTags = [];
+    
+    if (tags) {
+      if (Array.isArray(tags)) {
+        processedTags = tags.filter(tag => tag && tag.trim() !== '');
+      } else if (typeof tags === 'string') {
+        try {
+          const parsed = JSON.parse(tags);
+          processedTags = Array.isArray(parsed) ? parsed.filter(tag => tag && tag.trim() !== '') : tags.split(',').map(tag => tag.trim()).filter(tag => tag);
+        } catch {
+          processedTags = tags.split(',').map(tag => tag.trim()).filter(tag => tag);
+        }
+      }
+    }
+    
+    return processedTags;
   };
 
   // Helper function to check if product is new (within 30 days)
@@ -345,39 +373,14 @@ const ProductPage = () => {
           if (data.success && data.recommendations && data.recommendations.length > 0) {
             console.log(`Using ${data.algorithm} recommendations algorithm`);
             
-            // Process recommendation images properly
-            const processedRecommendations = data.recommendations.map(rec => {
-              let imageUrls = [];
-              
-              if (rec.image_urls) {
-                if (Array.isArray(rec.image_urls)) {
-                  imageUrls = rec.image_urls.filter(url => url && url.trim() !== '');
-                } else if (typeof rec.image_urls === 'string') {
-                  try {
-                    const parsed = JSON.parse(rec.image_urls);
-                    imageUrls = Array.isArray(parsed) ? parsed : [rec.image_urls];
-                  } catch {
-                    imageUrls = [rec.image_urls];
-                  }
-                }
-              }
-              
-              if (imageUrls.length === 0 && rec.image_url) {
-                imageUrls = [rec.image_url];
-              }
-              
-              if (imageUrls.length === 0) {
-                imageUrls = ['https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500'];
-              }
-
-              return {
-                ...rec,
-                image_urls: imageUrls,
-                mainImage: imageUrls[0],
-                rating: parseFloat(rec.rating || 0).toFixed(1),
-                reviewCount: rec.reviewCount || 0
-              };
-            });
+            // Process recommendation images properly - FIXED for ML algorithm
+            const processedRecommendations = data.recommendations.map(rec => ({
+              ...rec,
+              image_urls: processImageUrls(rec.image_urls, rec.image_url),
+              mainImage: processImageUrls(rec.image_urls, rec.image_url)[0],
+              rating: parseFloat(rec.rating || 0).toFixed(1),
+              reviewCount: rec.reviewCount || 0
+            }));
 
             setRecommendations(processedRecommendations);
             
@@ -406,7 +409,7 @@ const ProductPage = () => {
         .slice(0, 4)
         .map(p => ({
           ...p,
-          mainImage: Array.isArray(p.image_urls) && p.image_urls.length > 0 ? p.image_urls[0] : p.image_url
+          mainImage: p.image_urls[0]
         }));
       
       setRecommendations(featured);
@@ -486,26 +489,11 @@ const ProductPage = () => {
       if (response.ok) {
         const data = await response.json();
         // Process search results with proper image handling
-        const processedResults = Array.isArray(data) ? data.map(product => {
-          let imageUrls = [];
-          if (product.image_urls) {
-            if (Array.isArray(product.image_urls)) {
-              imageUrls = product.image_urls;
-            } else if (typeof product.image_urls === 'string') {
-              try {
-                imageUrls = JSON.parse(product.image_urls);
-              } catch {
-                imageUrls = [product.image_urls];
-              }
-            }
-          }
-          
-          return {
-            ...product,
-            image_urls: imageUrls.length > 0 ? imageUrls : [product.image_url || 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500'],
-            rating: parseFloat(product.rating || 0).toFixed(1)
-          };
-        }) : [];
+        const processedResults = Array.isArray(data) ? data.map(product => ({
+          ...product,
+          image_urls: processImageUrls(product.image_urls, product.image_url),
+          rating: parseFloat(product.rating || 0).toFixed(1)
+        })) : [];
         setFilteredProducts(processedResults);
       }
     } catch (error) {
@@ -591,6 +579,63 @@ const ProductPage = () => {
     }
   };
 
+  // Special function to handle offer products with automatic discount application
+  const handleOfferProductAdd = async (offerProduct) => {
+    try {
+      if (!user) {
+        showToast('Please login to purchase offer products', 'error');
+        navigate('/login');
+        return;
+      }
+
+      // Check if offer is still valid
+      const now = new Date();
+      const validFrom = new Date(offerProduct.valid_from);
+      const validUntil = new Date(offerProduct.valid_until);
+      
+      if (now < validFrom || now > validUntil) {
+        showToast('This offer has expired', 'error');
+        return;
+      }
+
+      // Calculate offer price
+      const calculateOfferPrice = (offer) => {
+        const originalPrice = parseFloat(offer.product.price);
+        
+        if (offer.discount_percentage) {
+          return originalPrice * (1 - offer.discount_percentage / 100);
+        }
+        if (offer.discount_amount) {
+          return Math.max(0, originalPrice - offer.discount_amount);
+        }
+        return originalPrice;
+      };
+
+      // Add the product to cart with offer details
+      const productWithOffer = {
+        ...offerProduct.product,
+        offer_id: offerProduct.id,
+        offer_type: offerProduct.offer_type,
+        discount_percentage: offerProduct.discount_percentage,
+        original_price: offerProduct.product.price,
+        price: calculateOfferPrice(offerProduct)
+      };
+
+      const result = await addToCart(productWithOffer);
+      
+      if (result && result.success) {
+        showToast(`🎉 ${offerProduct.product.name} added with special offer!`, 'success');
+        setCartPulse(true);
+        setTimeout(() => setCartPulse(false), 600);
+      } else {
+        showToast(result?.error || 'Failed to add offer product', 'error');
+      }
+    } catch (error) {
+      console.error('Error adding offer product:', error);
+      showToast('Error adding offer product. Please try again.', 'error');
+    }
+  };
+
   // Enhanced sample products with proper structure
   const getSampleProducts = () => [
     {
@@ -620,20 +665,6 @@ const ProductPage = () => {
       is_featured: true,
       is_new: true,
       created_at: new Date().toISOString()
-    },
-    {
-      id: 3,
-      name: "Running Shoes",
-      description: "Professional running shoes with advanced cushion technology",
-      price: 129.99,
-      category: "Footwear",
-      image_urls: ["https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=500"],
-      stock_quantity: 40,
-      rating: "4.7",
-      reviewCount: 8,
-      is_featured: false,
-      is_new: false,
-      created_at: new Date('2023-01-15').toISOString()
     }
   ];
 
@@ -698,118 +729,15 @@ const ProductPage = () => {
 
   const algorithmInfo = getAlgorithmInfo();
 
-  // Render special offers section
-  const renderOffersSection = () => {
-    if (offers.length === 0) return null;
-
-    return (
-      <section className="mb-12">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-3xl font-bold text-gray-900">🔥 Special Offers</h2>
-          <span className="text-sm text-gray-500 bg-yellow-100 px-3 py-1 rounded-full">
-            Limited Time Deals
-          </span>
-        </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {offers.slice(0, 4).map((offer, index) => (
-            <div key={offer.id} className="bg-gradient-to-br from-orange-500 to-red-500 rounded-2xl p-6 text-white shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:scale-105">
-              <div className="flex items-center justify-between mb-3">
-                <span className="bg-white/20 px-3 py-1 rounded-full text-sm font-bold">
-                  {offer.offer_type?.replace(/_/g, ' ').toUpperCase()}
-                </span>
-                <span className="text-2xl">🎁</span>
-              </div>
-              
-              <h3 className="text-lg font-bold mb-2 line-clamp-2">
-                {offer.description || getOfferDescription(offer)}
-              </h3>
-              
-              <div className="space-y-2 mb-4">
-                {offer.discount_percentage && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-2xl font-bold">{offer.discount_percentage}% OFF</span>
-                  </div>
-                )}
-                {offer.discount_amount && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-xl font-bold">Rs. {offer.discount_amount} OFF</span>
-                  </div>
-                )}
-              </div>
-              
-              <div className="text-xs opacity-80">
-                Valid until: {new Date(offer.valid_until).toLocaleDateString()}
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-    );
+  // Navigate to cart page
+  const handleCartClick = () => {
+    navigate('/cart');
   };
 
-  const getOfferDescription = (offer) => {
-    if (offer.description) return offer.description;
-    
-    switch (offer.offer_type) {
-      case 'discount':
-      case 'percentage_off':
-        return offer.discount_percentage 
-          ? `${offer.discount_percentage}% off`
-          : `Rs. ${offer.discount_amount} off`;
-      case 'flat_discount':
-        return `Flat Rs. ${offer.discount_amount} off`;
-      case 'buy_one_get_one':
-      case 'bogo':
-        return 'Buy One Get One';
-      case 'bulk_discount':
-        return `Bulk discount (min ${offer.min_quantity})`;
-      case 'free_shipping':
-        return 'Free Shipping';
-      default:
-        return offer.offer_type?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Special Offer';
-    }
-  };
-
-  // Render product sections
-  const renderProductSection = (title, products, icon, viewAllAction = null) => {
-    if (products.length === 0) return null;
-
-    return (
-      <section className="mb-12">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <span className="text-2xl">{icon}</span>
-            <h2 className="text-3xl font-bold text-gray-900">{title}</h2>
-          </div>
-          {viewAllAction && (
-            <button
-              onClick={viewAllAction}
-              className="text-blue-600 hover:text-blue-800 font-semibold transition-colors"
-            >
-              View All →
-            </button>
-          )}
-        </div>
-        
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {products.map((product, index) => (
-            <div 
-              key={product.id}
-              className="transform transition-all duration-300 hover:scale-105"
-              style={{ animationDelay: `${index * 100}ms` }}
-            >
-              <ProductCard 
-                product={product}
-                onAddToCart={handleAddToCart}
-                onViewDetails={() => loadProductDetails(product)}
-                onAddReview={() => handleAddReview(product)}
-              />
-            </div>
-          ))}
-        </div>
-      </section>
-    );
+  // Handle category selection from navbar
+  const handleCategorySelect = (category) => {
+    setSelectedCategory(category);
+    showToast(`Showing ${category === 'all' ? 'all products' : category}`, 'info');
   };
 
   if (loading) {
@@ -826,8 +754,14 @@ const ProductPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 py-8">
-      <div className="max-w-7xl mx-auto px-4">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+      {/* Category Navigation Bar */}
+      <CategoryNavbar 
+        onCategorySelect={handleCategorySelect}
+        selectedCategory={selectedCategory}
+      />
+
+      <div className="max-w-7xl mx-auto px-4 py-8">
         {/* Header with Cart Badge */}
         <div className="text-center mb-12 relative">
           <h1 className="text-5xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-4">
@@ -837,16 +771,22 @@ const ProductPage = () => {
             Powered by advanced AI recommendation algorithms
           </p>
           
-          {/* Cart Badge */}
-          {cartCount > 0 && (
-            <div className={`absolute top-0 right-0 ${
-              cartPulse ? 'animate-ping' : ''
-            }`}>
-              <div className="bg-red-500 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold shadow-lg transform hover:scale-110 transition-transform">
-                {cartCount}
-              </div>
-            </div>
-          )}
+          {/* Cart Icon with Badge */}
+          <div className="absolute top-0 right-0">
+            <button
+              onClick={handleCartClick}
+              className="relative bg-white rounded-full p-3 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-110"
+            >
+              <svg className="w-8 h-8 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L7 13m0 0l-2.5 5M7 13l2.5 5m6-5v6a2 2 0 01-2 2H9a2 2 0 01-2-2v-6m8 0V9a2 2 0 00-2-2H9a2 2 0 00-2 2v4.01" />
+              </svg>
+              {cartCount > 0 && (
+                <span className={`absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold ${cartPulse ? 'animate-ping' : ''}`}>
+                  {cartCount}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
 
         {/* Search Bar */}
@@ -854,6 +794,21 @@ const ProductPage = () => {
           <SearchBar onSearch={handleSearch} />
         </div>
 
+        {/* Offers Banner */}
+        <div className="text-center mb-8">
+          <div className="bg-gradient-to-r from-orange-400 to-red-700 rounded-2xl p-6 text-white shadow-lg">
+            <h2 className="text-2xl font-bold mb-2">🎁 Special Offers Available!</h2>
+            <p className="mb-4">Check out our limited-time deals and exclusive discounts</p>
+            <button
+              onClick={() => navigate('/offers')}
+              className="bg-purple-700 text-white hover:bg-purple-600 px-6 py-3 rounded-lg font-semibold transition-colors transform hover:scale-105"
+            >
+              View All Offers
+            </button>
+          </div>
+        </div>
+
+        
         {/* Enhanced Algorithm Selector */}
         <div className="bg-white rounded-2xl shadow-xl p-6 mb-8 border border-gray-100">
           <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
@@ -926,33 +881,6 @@ const ProductPage = () => {
             </div>
           </div>
         </div>
-
-        {/* Special Offers Section */}
-        {renderOffersSection()}
-
-        {/* Featured Products Section */}
-        {renderProductSection(
-          "⭐ Featured Products", 
-          featuredProducts, 
-          "⭐",
-          () => setActiveSection('featured')
-        )}
-
-        {/* New Arrivals Section */}
-        {renderProductSection(
-          "🆕 New Arrivals", 
-          newArrivals, 
-          "🆕",
-          () => setActiveSection('new')
-        )}
-
-        {/* Best Sellers Section */}
-        {renderProductSection(
-          "🔥 Best Sellers", 
-          bestSellers, 
-          "🔥",
-          () => setActiveSection('bestsellers')
-        )}
 
         {/* Main Content Grid */}
         <div className="flex flex-col lg:flex-row gap-8">
@@ -1237,7 +1165,37 @@ const ProductPage = () => {
             )}
           </div>
         </div>
+        {/* Combined Featured & New Arrivals Section */}
+        <div className="mb-12 mt-10">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
+              ⭐ Featured & New Arrivals
+            </h2>
+            <span className="text-blue-600 font-semibold cursor-pointer hover:underline">View All</span>
+          </div>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {[...featuredProducts.slice(0, 2), ...newArrivals.slice(0, 2)].map((product, index) => (
+              <div 
+                key={product.id}
+                className="transform transition-all duration-300 hover:scale-105"
+                style={{ animationDelay: `${index * 100}ms` }}
+              >
+                <ProductCard 
+                  product={product}
+                  onAddToCart={handleAddToCart}
+                  onViewDetails={() => loadProductDetails(product)}
+                  onAddReview={() => handleAddReview(product)}
+                  compact={true}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+
       </div>
+
+
 
       {/* Toast Notification */}
       <Toast 
