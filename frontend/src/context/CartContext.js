@@ -122,7 +122,7 @@ export const CartProvider = ({ children }) => {
     fetchCart();
   }, [fetchCart]);
 
-  // Enhanced addToCart
+  // UPDATED: Enhanced addToCart method with offer support
   const addToCart = async (product, quantity = 1) => {
     if (!isAuthenticated) {
       return { success: false, error: 'Please login to add items to cart' };
@@ -131,16 +131,30 @@ export const CartProvider = ({ children }) => {
     return executeWithRetry(async () => {
       try {
         const token = localStorage.getItem('token');
+        
+        // Handle special offer quantities
+        let finalQuantity = product.quantity || quantity;
+
+        const cartData = {
+          productId: product.id,
+          quantity: finalQuantity
+        };
+
+        // Include offer information if available
+        if (product.offer_id) {
+          cartData.offer_id = product.offer_id;
+          cartData.offer_type = product.offer_type;
+        }
+
+        console.log('🛒 Adding to cart with data:', cartData);
+
         const response = await fetch(`${API_BASE_URL}/api/cart/add`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
           },
-          body: JSON.stringify({
-            productId: product.id,
-            quantity: quantity
-          })
+          body: JSON.stringify(cartData)
         });
 
         const result = await handleApiResponse(response);
@@ -502,8 +516,6 @@ export const CartProvider = ({ children }) => {
       exportedAt: new Date().toISOString()
     };
   };
-
-  
 
   const value = {
     // State

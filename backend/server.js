@@ -54,7 +54,8 @@ const routes = [
   { path: '/api/reviews', file: './routes/reviewRoutes' },
   { path: '/api/promo', file: './routes/promoRoutes' },
   { path: '/api/email', file: './routes/emailRoutes' },
-  { path: '/api/admin', file: './routes/adminRoutes' }
+  { path: '/api/admin', file: './routes/adminRoutes' },
+   { path: '/api/offers', file: './routes/offerRoutes' } 
 ];
 
 routes.forEach(route => {
@@ -128,5 +129,7 @@ if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
+// In your server.js
+app.use('/api/offers', require('./routes/offerRoutes'));
 // Keep the process alive
 server.keepAliveTimeout = 120000;

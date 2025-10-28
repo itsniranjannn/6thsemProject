@@ -40,13 +40,14 @@ const OffersManagement = () => {
     setTimeout(() => setToast({ show: false, message: '', type: 'success' }), 3000);
   };
 
+  // UPDATED: Changed API endpoints to use new offer routes
   const fetchOffers = async () => {
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
       const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000';
       
-      const response = await fetch(`${API_BASE}/api/admin/offers`, {
+      const response = await fetch(`${API_BASE}/api/offers/admin/all`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       
@@ -85,6 +86,7 @@ const OffersManagement = () => {
     }
   };
 
+  // UPDATED: Handle form submission with proper offer type logic
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -94,22 +96,56 @@ const OffersManagement = () => {
       const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000';
       
       const url = editingOffer 
-        ? `${API_BASE}/api/admin/offers/${editingOffer.id}`
-        : `${API_BASE}/api/admin/offers`;
+        ? `${API_BASE}/api/offers/${editingOffer.id}`
+        : `${API_BASE}/api/offers`;
       
       const method = editingOffer ? 'PUT' : 'POST';
 
-      // Prepare offer data - handle both ENUM and custom types
+      // Prepare offer data with proper field handling
       const offerData = {
-        ...formData,
-        discount_percentage: formData.discount_percentage ? parseFloat(formData.discount_percentage) : null,
-        discount_amount: formData.discount_amount ? parseFloat(formData.discount_amount) : null,
-        min_quantity: formData.min_quantity ? parseInt(formData.min_quantity) : null,
-        max_quantity: formData.max_quantity ? parseInt(formData.max_quantity) : null
+        product_id: formData.product_id,
+        offer_type: formData.offer_type,
+        description: formData.description || '',
+        valid_from: formData.valid_from,
+        valid_until: formData.valid_until,
+        is_active: formData.is_active
       };
 
-      // If offer_type is one of the ENUM values, use it as is
-      // Otherwise, it will be stored as a custom type in the database
+      // Handle different offer types
+      if (formData.offer_type.includes('discount') || 
+          formData.offer_type.includes('percentage') || 
+          formData.offer_type === 'flat_discount' ||
+          formData.offer_type === 'clearance_sale' ||
+          formData.offer_type === 'clearance') {
+        
+        // For discount-based offers, include percentage and amount
+        if (formData.discount_percentage) {
+          offerData.discount_percentage = parseFloat(formData.discount_percentage);
+        }
+        if (formData.discount_amount) {
+          offerData.discount_amount = parseFloat(formData.discount_amount);
+        }
+      }
+
+      // For bulk offers, include quantity limits
+      if (formData.offer_type.includes('bulk')) {
+        if (formData.min_quantity) {
+          offerData.min_quantity = parseInt(formData.min_quantity);
+        }
+        if (formData.max_quantity) {
+          offerData.max_quantity = parseInt(formData.max_quantity);
+        }
+      }
+
+      // For BOGO offers, ensure proper handling
+      if (formData.offer_type === 'buy_one_get_one' || formData.offer_type === 'bogo') {
+        // BOGO doesn't need discount fields
+        offerData.discount_percentage = null;
+        offerData.discount_amount = null;
+      }
+
+      console.log('Submitting offer data:', offerData);
+
       const response = await fetch(url, {
         method,
         headers: {
@@ -149,6 +185,7 @@ const OffersManagement = () => {
     }
   };
 
+  // UPDATED: Changed API endpoint for delete
   const handleDelete = async (offerId) => {
     if (!window.confirm('Are you sure you want to delete this offer?')) return;
 
@@ -156,7 +193,7 @@ const OffersManagement = () => {
       const token = localStorage.getItem('token');
       const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000';
       
-      const response = await fetch(`${API_BASE}/api/admin/offers/${offerId}`, {
+      const response = await fetch(`${API_BASE}/api/offers/${offerId}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -191,6 +228,7 @@ const OffersManagement = () => {
     setShowModal(true);
   };
 
+  // UPDATED: Improved edit modal with proper field handling
   const openEditModal = (offer) => {
     setEditingOffer(offer);
     setFormData({
@@ -226,6 +264,7 @@ const OffersManagement = () => {
       'bulk_discount': 'bg-indigo-100 text-indigo-800 border-indigo-200',
       'free_shipping': 'bg-pink-100 text-pink-800 border-pink-200',
       'clearance_sale': 'bg-red-100 text-red-800 border-red-200',
+      'clearance': 'bg-red-100 text-red-800 border-red-200',
       'seasonal_offer': 'bg-yellow-100 text-yellow-800 border-yellow-200',
       'flash_sale': 'bg-red-100 text-red-800 border-red-200',
       'limited_time': 'bg-purple-100 text-purple-800 border-purple-200',
@@ -234,18 +273,15 @@ const OffersManagement = () => {
       'winter_sale': 'bg-gray-100 text-gray-800 border-gray-200',
       'festival_offer': 'bg-yellow-100 text-yellow-800 border-yellow-200',
       'anniversary_sale': 'bg-pink-100 text-pink-800 border-pink-200',
-      'clearance': 'bg-red-100 text-red-800 border-red-200',
       'end_of_season': 'bg-gray-100 text-gray-800 border-gray-200',
       'new_arrival': 'bg-green-100 text-green-800 border-green-200',
       'hot_deal': 'bg-red-100 text-red-800 border-red-200'
     };
     
-    // Check if we have a specific color for this type
     if (colors[type]) {
       return colors[type];
     }
     
-    // For custom types, use a default color based on the first character
     const firstChar = type?.charAt(0)?.toLowerCase();
     const defaultColors = {
       'a': 'bg-blue-100 text-blue-800 border-blue-200',
@@ -279,33 +315,40 @@ const OffersManagement = () => {
     return defaultColors[firstChar] || 'bg-gray-100 text-gray-800 border-gray-200';
   };
 
+  // UPDATED: Enhanced offer description with clearance sale support
   const getOfferDescription = (offer) => {
     if (offer.description) return offer.description;
     
-    // Handle both ENUM and custom offer types
     switch (offer.offer_type) {
       case 'discount':
       case 'percentage_off':
         return offer.discount_percentage 
           ? `${offer.discount_percentage}% off`
-          : `Rs. ${offer.discount_amount} off`;
+          : offer.discount_amount 
+          ? `Rs. ${offer.discount_amount} off`
+          : 'Special discount';
       case 'flat_discount':
         return `Flat Rs. ${offer.discount_amount} off`;
       case 'buy_one_get_one':
       case 'bogo':
-        return 'Buy One Get One';
-      case 'bulk_discount':
+        return 'Buy One Get One Free';
       case 'bulk_discount':
         return `Bulk discount (min ${offer.min_quantity})`;
       case 'free_shipping':
         return 'Free Shipping';
       case 'clearance_sale':
       case 'clearance':
-        return 'Clearance Sale';
+        if (offer.discount_percentage) {
+          return `Clearance Sale - ${offer.discount_percentage}% OFF`;
+        } else if (offer.discount_amount) {
+          return `Clearance Sale - Rs. ${offer.discount_amount} OFF`;
+        } else {
+          return 'Clearance Sale - Special Pricing';
+        }
       case 'seasonal_offer':
         return 'Seasonal Offer';
       case 'flash_sale':
-        return 'Flash Sale';
+        return 'Flash Sale - Limited Time!';
       case 'limited_time':
         return 'Limited Time Offer';
       case 'special_offer':
@@ -323,13 +366,29 @@ const OffersManagement = () => {
       case 'new_arrival':
         return 'New Arrival Offer';
       case 'hot_deal':
-        return 'Hot Deal';
+        return 'Hot Deal - Limited Stock!';
       default:
-        // For custom offer types, format them nicely
         return offer.offer_type 
           ? offer.offer_type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
           : 'Special Offer';
     }
+  };
+
+  // UPDATED: Show discount fields for clearance sales
+  const showDiscountFields = () => {
+    return formData.offer_type.includes('discount') || 
+           formData.offer_type.includes('percentage') || 
+           formData.offer_type === 'flat_discount' ||
+           formData.offer_type === 'clearance_sale' ||
+           formData.offer_type === 'clearance' ||
+           formData.offer_type === 'flash_sale' ||
+           formData.offer_type === 'seasonal_offer' ||
+           formData.offer_type === 'hot_deal';
+  };
+
+  // UPDATED: Show bulk fields only for bulk offers
+  const showBulkFields = () => {
+    return formData.offer_type.includes('bulk');
   };
 
   const filteredSuggestions = offerTypeSuggestions.filter(suggestion =>
@@ -488,6 +547,7 @@ const OffersManagement = () => {
                               <div>
                                 <p className="text-sm font-medium text-gray-900">{product.name}</p>
                                 <p className="text-xs text-gray-500">{product.category}</p>
+                                <p className="text-xs text-gray-600">Rs. {product.price}</p>
                               </div>
                             </div>
                           ) : (
@@ -607,14 +667,17 @@ const OffersManagement = () => {
                       )}
                     </div>
                     <p className="text-xs text-gray-500 mt-1">
-                      Common types: discount, bogo, bulk, free_shipping, flash_sale, seasonal_offer
+                      Common types: discount, bogo, bulk, free_shipping, flash_sale, clearance_sale
                     </p>
                   </div>
 
-                  {(formData.offer_type.includes('discount') || formData.offer_type.includes('percentage') || formData.offer_type === 'flat_discount') ? (
+                  {/* UPDATED: Show discount fields for clearance sales and other discount-based offers */}
+                  {showDiscountFields() && (
                     <>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Discount Percentage</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Discount Percentage {formData.offer_type === 'clearance_sale' && '(Recommended)'}
+                        </label>
                         <input
                           type="number"
                           step="0.01"
@@ -625,9 +688,14 @@ const OffersManagement = () => {
                           className="w-full px-3 lg:px-4 py-2 lg:py-3 border border-gray-300 rounded-lg lg:rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
                           placeholder="10"
                         />
+                        <p className="text-xs text-gray-500 mt-1">
+                          Percentage discount (0-100)
+                        </p>
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Discount Amount (Rs.)</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Discount Amount (Rs.) {formData.offer_type === 'clearance_sale' && '(Alternative)'}
+                        </label>
                         <input
                           type="number"
                           step="0.01"
@@ -637,11 +705,15 @@ const OffersManagement = () => {
                           className="w-full px-3 lg:px-4 py-2 lg:py-3 border border-gray-300 rounded-lg lg:rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
                           placeholder="50"
                         />
+                        <p className="text-xs text-gray-500 mt-1">
+                          Fixed amount discount
+                        </p>
                       </div>
                     </>
-                  ) : null}
+                  )}
 
-                  {formData.offer_type.includes('bulk') && (
+                  {/* UPDATED: Show bulk fields only for bulk offers */}
+                  {showBulkFields() && (
                     <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">Minimum Quantity</label>
@@ -669,30 +741,30 @@ const OffersManagement = () => {
                   )}
                 </div>
 
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6">
-  <div>
-    <label className="block text-sm font-medium text-gray-700 mb-2">Valid From *</label>
-    <input
-      type="date"
-      required
-      min={new Date().toISOString().split('T')[0]}
-      value={formData.valid_from}
-      onChange={(e) => setFormData({...formData, valid_from: e.target.value})}
-      className="w-full px-3 lg:px-4 py-2 lg:py-3 border border-gray-300 rounded-lg lg:rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
-    />
-  </div>
-  <div>
-    <label className="block text-sm font-medium text-gray-700 mb-2">Valid Until *</label>
-    <input
-      type="date"
-      required
-      min={formData.valid_from || new Date().toISOString().split('T')[0]}
-      value={formData.valid_until}
-      onChange={(e) => setFormData({...formData, valid_until: e.target.value})}
-      className="w-full px-3 lg:px-4 py-2 lg:py-3 border border-gray-300 rounded-lg lg:rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
-    />
-  </div>
-</div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Valid From *</label>
+                    <input
+                      type="date"
+                      required
+                      min={new Date().toISOString().split('T')[0]}
+                      value={formData.valid_from}
+                      onChange={(e) => setFormData({...formData, valid_from: e.target.value})}
+                      className="w-full px-3 lg:px-4 py-2 lg:py-3 border border-gray-300 rounded-lg lg:rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Valid Until *</label>
+                    <input
+                      type="date"
+                      required
+                      min={formData.valid_from || new Date().toISOString().split('T')[0]}
+                      value={formData.valid_until}
+                      onChange={(e) => setFormData({...formData, valid_until: e.target.value})}
+                      className="w-full px-3 lg:px-4 py-2 lg:py-3 border border-gray-300 rounded-lg lg:rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
+                    />
+                  </div>
+                </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
@@ -705,7 +777,7 @@ const OffersManagement = () => {
                   />
                 </div>
 
-                {/* Offer Preview */}
+                {/* UPDATED: Enhanced offer preview */}
                 <div className="bg-gray-50 rounded-lg lg:rounded-xl p-4">
                   <h4 className="text-sm font-medium text-gray-700 mb-3">Offer Preview</h4>
                   <div className={`p-3 rounded-lg border-l-4 ${
@@ -713,6 +785,7 @@ const OffersManagement = () => {
                     formData.offer_type.includes('bogo') ? 'border-orange-400 bg-orange-50' :
                     formData.offer_type.includes('bulk') ? 'border-indigo-400 bg-indigo-50' :
                     formData.offer_type.includes('free') ? 'border-pink-400 bg-pink-50' :
+                    formData.offer_type.includes('clearance') ? 'border-red-400 bg-red-50' :
                     'border-green-400 bg-green-50'
                   }`}>
                     <div className="flex items-start space-x-2">
@@ -720,7 +793,8 @@ const OffersManagement = () => {
                         {formData.offer_type.includes('discount') ? '💰' :
                          formData.offer_type.includes('bogo') ? '🎁' :
                          formData.offer_type.includes('bulk') ? '📦' :
-                         formData.offer_type.includes('free') ? '🚚' : '🎯'}
+                         formData.offer_type.includes('free') ? '🚚' :
+                         formData.offer_type.includes('clearance') ? '🔥' : '🎯'}
                       </div>
                       <div className="flex-1 min-w-0">
                         <h5 className="font-medium text-gray-900 text-sm">
@@ -733,6 +807,20 @@ const OffersManagement = () => {
                           <p className="text-gray-500 text-xs mt-1">
                             Product: {products.find(p => p.id === formData.product_id)?.name || 'Selected product'}
                           </p>
+                        )}
+                        {(formData.discount_percentage || formData.discount_amount) && (
+                          <div className="flex space-x-2 mt-1">
+                            {formData.discount_percentage && (
+                              <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
+                                {formData.discount_percentage}% OFF
+                              </span>
+                            )}
+                            {formData.discount_amount && (
+                              <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                                Rs. {formData.discount_amount} OFF
+                              </span>
+                            )}
+                          </div>
                         )}
                       </div>
                     </div>
