@@ -8,12 +8,17 @@ const getCart = async (req, res) => {
     const total = await Cart.getCartTotal(req.user.id);
     
     res.json({
+      success: true,
       items: cartItems,
-      total: parseFloat(total)
+      total: parseFloat(total.toFixed(2)),
+      itemCount: cartItems.reduce((sum, item) => sum + item.quantity, 0)
     });
   } catch (error) {
     console.error('Get cart error:', error);
-    res.status(500).json({ message: 'Error fetching cart' });
+    res.status(500).json({ 
+      success: false,
+      message: 'Error fetching cart' 
+    });
   }
 };
 
@@ -23,23 +28,37 @@ const addToCart = async (req, res) => {
     const { productId, quantity, offer_id, offer_type } = req.body;
     
     if (!productId) {
-      return res.status(400).json({ message: 'Product ID is required' });
+      return res.status(400).json({ 
+        success: false,
+        message: 'Product ID is required' 
+      });
     }
 
-    await Cart.addToCart(req.user.id, productId, quantity || 1, offer_id || null);
+    // For BOGO offers from offers page, ensure quantity is 2
+    let finalQuantity = quantity || 1;
+    if (offer_type === 'Bogo' && offer_id) {
+      finalQuantity = 2; // Force 2 items for BOGO deals
+    }
+
+    await Cart.addToCart(req.user.id, productId, finalQuantity, offer_id || null);
     
     // Return updated cart
     const cartItems = await Cart.getCartItems(req.user.id);
     const total = await Cart.getCartTotal(req.user.id);
     
     res.json({
+      success: true,
       message: 'Product added to cart',
       items: cartItems,
-      total: parseFloat(total)
+      total: parseFloat(total.toFixed(2)),
+      itemCount: cartItems.reduce((sum, item) => sum + item.quantity, 0)
     });
   } catch (error) {
     console.error('Add to cart error:', error);
-    res.status(400).json({ message: 'Error adding product to cart' });
+    res.status(400).json({ 
+      success: false,
+      message: 'Error adding product to cart' 
+    });
   }
 };
 
@@ -47,26 +66,34 @@ const addToCart = async (req, res) => {
 const updateCartItem = async (req, res) => {
   try {
     const { productId } = req.params;
-    const { quantity } = req.body;
+    const { quantity, offer_id } = req.body;
 
     if (quantity === undefined) {
-      return res.status(400).json({ message: 'Quantity is required' });
+      return res.status(400).json({ 
+        success: false,
+        message: 'Quantity is required' 
+      });
     }
 
-    await Cart.updateCartItem(req.user.id, productId, quantity);
+    await Cart.updateCartItem(req.user.id, productId, quantity, offer_id || null);
     
     // Return updated cart
     const cartItems = await Cart.getCartItems(req.user.id);
     const total = await Cart.getCartTotal(req.user.id);
     
     res.json({
+      success: true,
       message: 'Cart updated successfully',
       items: cartItems,
-      total: parseFloat(total)
+      total: parseFloat(total.toFixed(2)),
+      itemCount: cartItems.reduce((sum, item) => sum + item.quantity, 0)
     });
   } catch (error) {
     console.error('Update cart error:', error);
-    res.status(400).json({ message: 'Error updating cart' });
+    res.status(400).json({ 
+      success: false,
+      message: 'Error updating cart' 
+    });
   }
 };
 
@@ -74,20 +101,27 @@ const updateCartItem = async (req, res) => {
 const removeFromCart = async (req, res) => {
   try {
     const { productId } = req.params;
-    await Cart.removeFromCart(req.user.id, productId);
+    const { offer_id } = req.body;
+    
+    await Cart.removeFromCart(req.user.id, productId, offer_id || null);
     
     // Return updated cart
     const cartItems = await Cart.getCartItems(req.user.id);
     const total = await Cart.getCartTotal(req.user.id);
     
     res.json({
+      success: true,
       message: 'Product removed from cart',
       items: cartItems,
-      total: parseFloat(total)
+      total: parseFloat(total.toFixed(2)),
+      itemCount: cartItems.reduce((sum, item) => sum + item.quantity, 0)
     });
   } catch (error) {
     console.error('Remove from cart error:', error);
-    res.status(400).json({ message: 'Error removing product from cart' });
+    res.status(400).json({ 
+      success: false,
+      message: 'Error removing product from cart' 
+    });
   }
 };
 
@@ -96,36 +130,71 @@ const clearCart = async (req, res) => {
   try {
     await Cart.clearCart(req.user.id);
     res.json({ 
+      success: true,
       message: 'Cart cleared successfully',
       items: [],
-      total: 0
+      total: 0,
+      itemCount: 0
     });
   } catch (error) {
     console.error('Clear cart error:', error);
-    res.status(400).json({ message: 'Error clearing cart' });
+    res.status(400).json({ 
+      success: false,
+      message: 'Error clearing cart' 
+    });
   }
 };
 
-// ✅ ADD THIS: Validate cart items
+// Validate cart items
 const validateCart = async (req, res) => {
   try {
     const result = await Cart.checkStockAvailability(req.user.id);
-    res.json(result);
+    res.json({
+      success: true,
+      ...result
+    });
   } catch (error) {
     console.error('Validate cart error:', error);
-    res.status(500).json({ message: 'Error validating cart' });
+    res.status(500).json({ 
+      success: false,
+      message: 'Error validating cart' 
+    });
   }
 };
 
-// ✅ ADD THIS: Merge carts
+// Merge carts
 const mergeCarts = async (req, res) => {
   try {
     const { items } = req.body;
     // Implementation for merging local and server carts
-    res.json({ success: true, merged: 0 });
+    let mergedCount = 0;
+    
+    if (items && Array.isArray(items)) {
+      for (const item of items) {
+        try {
+          await Cart.addToCart(
+            req.user.id, 
+            item.productId, 
+            item.quantity, 
+            item.offer_id || null
+          );
+          mergedCount++;
+        } catch (error) {
+          console.error('Error merging item:', error);
+        }
+      }
+    }
+    
+    res.json({ 
+      success: true, 
+      merged: mergedCount 
+    });
   } catch (error) {
     console.error('Merge cart error:', error);
-    res.status(500).json({ message: 'Error merging carts' });
+    res.status(500).json({ 
+      success: false,
+      message: 'Error merging carts' 
+    });
   }
 };
 
