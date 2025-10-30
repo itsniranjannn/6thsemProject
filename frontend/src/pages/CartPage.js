@@ -41,17 +41,17 @@ const CartPage = () => {
     setTimeout(() => setToast({ message: '', type: 'success' }), 3000);
   };
 
-  const handleQuantityChange = async (productId, newQuantity) => {
+  const handleQuantityChange = async (productId, newQuantity, offerId = null) => {
     if (!user) {
       showToast('Please login to update cart', 'error');
       return;
     }
 
-    console.log('Updating quantity:', productId, newQuantity);
+    console.log('Updating quantity:', productId, newQuantity, offerId);
     setUpdatingItem(productId);
     
     try {
-      const result = await updateCartItem(productId, newQuantity);
+      const result = await updateCartItem(productId, newQuantity, offerId);
       console.log('Update result:', result);
       
       // ✅ Check the actual success status from the result
@@ -69,20 +69,20 @@ const CartPage = () => {
   };
 
   // ✅ Updated remove item handler with custom modal
-  const handleRemoveClick = (productId, productName) => {
-    setItemToRemove({ id: productId, name: productName });
+  const handleRemoveClick = (productId, productName, offerId = null) => {
+    setItemToRemove({ id: productId, name: productName, offerId });
     setShowRemoveModal(true);
   };
 
   const handleRemoveConfirm = async () => {
     if (!itemToRemove) return;
 
-    console.log('Removing item:', itemToRemove.id);
+    console.log('Removing item:', itemToRemove.id, itemToRemove.offerId);
     setRemovingItem(itemToRemove.id);
     setShowRemoveModal(false);
     
     try {
-      const result = await removeFromCart(itemToRemove.id);
+      const result = await removeFromCart(itemToRemove.id, itemToRemove.offerId);
       console.log('Remove result:', result);
       
       if (result.success) {
@@ -126,13 +126,15 @@ const CartPage = () => {
 
   const incrementQuantity = (item) => {
     const productId = item.product_id || item.product?.id || item.id;
-    handleQuantityChange(productId, item.quantity + 1);
+    const offerId = item.offer_id || null;
+    handleQuantityChange(productId, item.quantity + 1, offerId);
   };
 
   const decrementQuantity = (item) => {
     if (item.quantity > 1) {
       const productId = item.product_id || item.product?.id || item.id;
-      handleQuantityChange(productId, item.quantity - 1);
+      const offerId = item.offer_id || null;
+      handleQuantityChange(productId, item.quantity - 1, offerId);
     }
   };
 
@@ -144,15 +146,83 @@ const CartPage = () => {
     navigate('/checkout');
   };
 
-  // ✅ Helper function to get product data safely
+  // ✅ UPDATED: Helper function to get product data safely with PROPER BOGO pricing
   const getProductData = (item) => {
+    // Use final_price for offer items, otherwise use regular price
+    const finalPrice = parseFloat(item.final_price || item.product?.price || item.price || 0);
+    const originalPrice = parseFloat(item.product?.price || item.price || 0);
+    const unitPrice = parseFloat(item.unit_price || finalPrice);
+    const hasOffer = item.has_offer || item.offer_id;
+    const displayQuantity = item.display_quantity || item.quantity;
+    
+    // ✅ FIXED BOGO CALCULATION: For BOGO, finalPrice should be for paid items only
+    let calculatedSavings = 0;
+    
+    if (item.offer_type === 'Bogo' && hasOffer) {
+      // For BOGO: Calculate what the price should be without offer
+      const regularPriceForQuantity = originalPrice * displayQuantity;
+      calculatedSavings = regularPriceForQuantity - finalPrice;
+    } else if (hasOffer) {
+      // For other offers
+      calculatedSavings = (originalPrice - unitPrice) * displayQuantity;
+    }
+    
     return {
       id: item.product_id || item.product?.id || item.id,
       name: item.product?.name || item.name || 'Unknown Product',
-      price: item.product?.price || item.price || 0,
+      price: unitPrice, // Use unit price for display
+      final_price: finalPrice, // Total price for the quantity
+      original_price: originalPrice, // Keep original for comparison
       category: item.product?.category || item.category || 'Uncategorized',
-      image_url: item.product?.image_url || item.image_url || '/api/placeholder/80/80'
+      image_url: item.product?.image_url || item.image_url || '/api/placeholder/80/80',
+      offer_id: item.offer_id,
+      offer_type: item.offer_type,
+      has_offer: hasOffer,
+      quantity: item.quantity,
+      display_quantity: displayQuantity,
+      // Calculate savings properly
+      savings: calculatedSavings
     };
+  };
+
+  // ✅ Get offer badge for cart items
+  const getOfferBadge = (item) => {
+    if (!item.has_offer) return null;
+    
+    switch (item.offer_type) {
+      case 'Bogo':
+        return {
+          text: 'BOGO DEAL',
+          color: 'bg-purple-100 text-purple-800',
+          icon: '🎁'
+        };
+      case 'flat_discount':
+        return {
+          text: 'FLAT DISCOUNT',
+          color: 'bg-green-100 text-green-800',
+          icon: '💰'
+        };
+      case 'percentage_discount':
+        return {
+          text: `${item.discount_percentage}% OFF`,
+          color: 'bg-blue-100 text-blue-800',
+          icon: '🔥'
+        };
+      default:
+        return {
+          text: 'SPECIAL OFFER',
+          color: 'bg-orange-100 text-orange-800',
+          icon: '🎯'
+        };
+    }
+  };
+
+  // ✅ Calculate total savings properly
+  const getTotalSavings = () => {
+    return cartItems.reduce((total, item) => {
+      const product = getProductData(item);
+      return total + product.savings;
+    }, 0);
   };
 
   if (loading && cartItems.length === 0) {
@@ -249,17 +319,28 @@ const CartPage = () => {
               {cartItems.map((item, index) => {
                 const product = getProductData(item);
                 const productId = product.id;
-                const quantity = item.quantity;
-                const price = parseFloat(product.price);
-                const total = price * quantity;
+                const quantity = product.display_quantity; // Use display quantity
+                const price = product.price; // This is the unit price
+                const finalPrice = product.final_price; // This is the total price for the quantity
+                const originalPrice = product.original_price;
+                const total = finalPrice; // Use the calculated final price
+                const offerBadge = getOfferBadge(item);
 
                 return (
                   <div
-                    key={`${productId}-${index}`}
+                    key={`${productId}-${product.offer_id || 'regular'}-${index}`}
                     className={`flex flex-col sm:flex-row items-center p-6 ${
                       index !== cartItems.length - 1 ? 'border-b border-gray-200' : ''
-                    } transition-all duration-200 hover:bg-gray-50`}
+                    } transition-all duration-200 hover:bg-gray-50 relative`}
                   >
+                    {/* Offer Badge */}
+                    {offerBadge && (
+                      <div className={`absolute top-2 left-2 px-2 py-1 rounded-full text-xs font-medium ${offerBadge.color} flex items-center gap-1`}>
+                        <span>{offerBadge.icon}</span>
+                        <span>{offerBadge.text}</span>
+                      </div>
+                    )}
+
                     {/* Product Image */}
                     <div className="flex-shrink-0 w-20 h-20 mb-4 sm:mb-0 sm:mr-6">
                       <img
@@ -280,9 +361,35 @@ const CartPage = () => {
                       <p className="text-gray-600 text-sm mb-2">
                         {product.category}
                       </p>
-                      <p className="text-lg font-bold text-blue-600">
-                        Rs. {price.toFixed(2)}
-                      </p>
+                      
+                      {/* Price Display - Show original price if there's an offer */}
+                      <div className="flex items-center gap-2">
+                        <p className="text-lg font-bold text-blue-600">
+                          Rs. {price.toFixed(2)}
+                          {product.offer_type === 'Bogo' && (
+                            <span className="text-sm font-normal text-gray-600 ml-1">(per paid item)</span>
+                          )}
+                        </p>
+                        {product.has_offer && originalPrice > price && (
+                          <p className="text-sm text-gray-500 line-through">
+                            Rs. {originalPrice.toFixed(2)}
+                          </p>
+                        )}
+                      </div>
+                      
+                      {/* Savings Display */}
+                      {product.savings > 0 && (
+                        <p className="text-sm text-green-600 font-medium mt-1">
+                          You save: Rs. {product.savings.toFixed(2)}
+                        </p>
+                      )}
+                      
+                      {/* BOGO Info */}
+                      {product.offer_type === 'Bogo' && (
+                        <p className="text-sm text-purple-600 font-medium mt-1">
+                          🎁 BOGO Deal: Buy 1 Get 1 Free - You pay for {Math.ceil(quantity / 2)} out of {quantity} items
+                        </p>
+                      )}
                     </div>
 
                     {/* Quantity Controls */}
@@ -317,11 +424,19 @@ const CartPage = () => {
                       <p className="text-lg font-bold text-gray-900">
                         Rs. {total.toFixed(2)}
                       </p>
+                      {product.has_offer && (
+                        <p className="text-sm text-gray-500">
+                          {quantity} items
+                          {product.offer_type === 'Bogo' && (
+                            <span className="text-purple-600"> (pay for {Math.ceil(quantity / 2)})</span>
+                          )}
+                        </p>
+                      )}
                     </div>
 
                     {/* Remove Button */}
                     <button
-                      onClick={() => handleRemoveClick(productId, product.name)}
+                      onClick={() => handleRemoveClick(productId, product.name, product.offer_id)}
                       disabled={removingItem === productId || updatingItem === productId}
                       className="text-red-600 hover:text-red-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors p-2 hover:bg-red-50 rounded-lg"
                       title="Remove item"
@@ -341,11 +456,30 @@ const CartPage = () => {
 
             {/* Cart Summary */}
             <div className="bg-white rounded-2xl shadow-sm p-6">
-              <div className="flex justify-between items-center mb-4">
-                <span className="text-xl font-semibold text-gray-900">Total:</span>
-                <span className="text-2xl font-bold text-blue-600">
-                  Rs. {getCartTotal().toFixed(2)}
-                </span>
+              <div className="space-y-3 mb-4">
+                <div className="flex justify-between items-center">
+                  <span className="text-lg text-gray-700">Subtotal:</span>
+                  <span className="text-lg font-semibold text-gray-900">
+                    Rs. {getCartTotal().toFixed(2)}
+                  </span>
+                </div>
+                
+                {/* Total Savings */}
+                {getTotalSavings() > 0 && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-lg text-green-600">Total Savings:</span>
+                    <span className="text-lg font-semibold text-green-600">
+                      - Rs. {getTotalSavings().toFixed(2)}
+                    </span>
+                  </div>
+                )}
+                
+                <div className="flex justify-between items-center border-t border-gray-200 pt-3">
+                  <span className="text-xl font-semibold text-gray-900">Total:</span>
+                  <span className="text-2xl font-bold text-blue-600">
+                    Rs. {getCartTotal().toFixed(2)}
+                  </span>
+                </div>
               </div>
               
               <div className="flex flex-col sm:flex-row gap-4">

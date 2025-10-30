@@ -132,15 +132,20 @@ export const CartProvider = ({ children }) => {
       try {
         const token = localStorage.getItem('token');
         
-        // Handle special offer quantities
+        // Handle special offer quantities - FIXED FOR OFFERS PAGE
         let finalQuantity = product.quantity || quantity;
+        
+        // For BOGO offers from offers page, ensure we add 2 items
+        if (product.offer_type === 'Bogo' && product.offer_id) {
+          finalQuantity = 2; // Force 2 items for BOGO deals
+        }
 
         const cartData = {
-          productId: product.id,
+          productId: product.id || product.product_id,
           quantity: finalQuantity
         };
 
-        // Include offer information if available
+        // Include offer information if available (from offers page)
         if (product.offer_id) {
           cartData.offer_id = product.offer_id;
           cartData.offer_type = product.offer_type;
@@ -183,13 +188,13 @@ export const CartProvider = ({ children }) => {
   };
 
   // Enhanced updateCartItem
-  const updateCartItem = async (productId, quantity) => {
+  const updateCartItem = async (productId, quantity, offerId = null) => {
     if (!isAuthenticated) {
       return { success: false, error: 'Please login to update cart' };
     }
 
     if (quantity < 1) {
-      return removeFromCart(productId);
+      return removeFromCart(productId, offerId);
     }
 
     const previousItems = [...cartItems];
@@ -197,7 +202,8 @@ export const CartProvider = ({ children }) => {
     // Optimistic update
     setCartItems(prev =>
       prev.map(item =>
-        (item.product_id || item.product?.id) === productId
+        (item.product_id || item.product?.id) === productId && 
+        (item.offer_id === offerId)
           ? { ...item, quantity: quantity }
           : item
       )
@@ -212,7 +218,7 @@ export const CartProvider = ({ children }) => {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
           },
-          body: JSON.stringify({ quantity })
+          body: JSON.stringify({ quantity, offer_id: offerId })
         });
 
         const result = await handleApiResponse(response);
@@ -243,19 +249,23 @@ export const CartProvider = ({ children }) => {
   };
 
   // Enhanced removeFromCart
-  const removeFromCart = async (productId) => {
+  const removeFromCart = async (productId, offerId = null) => {
     if (!isAuthenticated) {
       return { success: false, error: 'Please login to remove items' };
     }
 
     const removedItem = cartItems.find(item => 
-      (item.product_id || item.product?.id) === productId
+      (item.product_id || item.product?.id) === productId &&
+      item.offer_id === offerId
     );
     const previousItems = [...cartItems];
     
     // Optimistic update
     setCartItems(prev =>
-      prev.filter(item => (item.product_id || item.product?.id) !== productId)
+      prev.filter(item => 
+        !((item.product_id || item.product?.id) === productId && 
+        item.offer_id === offerId)
+      )
     );
 
     return executeWithRetry(async () => {
@@ -264,8 +274,10 @@ export const CartProvider = ({ children }) => {
         const response = await fetch(`${API_BASE_URL}/api/cart/remove/${productId}`, {
           method: 'DELETE',
           headers: {
+            'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
-          }
+          },
+          body: JSON.stringify({ offer_id: offerId })
         });
 
         const result = await handleApiResponse(response);
@@ -343,10 +355,11 @@ export const CartProvider = ({ children }) => {
     });
   };
 
-  // Cart calculations
+  // Cart calculations - UPDATED to use final_price for offers
   const getCartTotal = () => {
     return cartItems.reduce((total, item) => {
-      const price = parseFloat(item.product?.price || item.price || 0);
+      // Use final_price for offer items, otherwise use regular price
+      const price = parseFloat(item.final_price || item.product?.price || item.price || 0);
       return total + (price * item.quantity);
     }, 0);
   };
@@ -368,11 +381,14 @@ export const CartProvider = ({ children }) => {
     return cartItems.map(item => ({
       id: item.product_id || item.product?.id || item.id,
       name: item.product?.name || item.name,
-      price: parseFloat(item.product?.price || item.price || 0),
+      price: parseFloat(item.final_price || item.product?.price || item.price || 0),
       quantity: item.quantity,
       image_url: item.product?.image_url || item.image_url,
       description: item.product?.description || item.description,
-      category: item.product?.category || item.category
+      category: item.product?.category || item.category,
+      offer_id: item.offer_id,
+      offer_type: item.offer_type,
+      has_offer: item.has_offer
     }));
   };
 
@@ -391,24 +407,27 @@ export const CartProvider = ({ children }) => {
     };
   };
 
-  // Get cart item by product ID
-  const getCartItem = (productId) => {
+  // Get cart item by product ID and offer ID
+  const getCartItem = (productId, offerId = null) => {
     return cartItems.find(item => 
-      (item.product_id || item.product?.id) === productId
+      (item.product_id || item.product?.id) === productId &&
+      item.offer_id === offerId
     );
   };
 
   // Check if product is in cart
-  const isProductInCart = (productId) => {
+  const isProductInCart = (productId, offerId = null) => {
     return cartItems.some(item => 
-      (item.product_id || item.product?.id) === productId
+      (item.product_id || item.product?.id) === productId &&
+      item.offer_id === offerId
     );
   };
 
   // Get product quantity in cart
-  const getProductQuantity = (productId) => {
+  const getProductQuantity = (productId, offerId = null) => {
     const item = cartItems.find(item => 
-      (item.product_id || item.product?.id) === productId
+      (item.product_id || item.product?.id) === productId &&
+      item.offer_id === offerId
     );
     return item ? item.quantity : 0;
   };
@@ -416,7 +435,7 @@ export const CartProvider = ({ children }) => {
   // Calculate total savings if products have original prices
   const getTotalSavings = () => {
     return cartItems.reduce((savings, item) => {
-      const currentPrice = parseFloat(item.product?.price || item.price || 0);
+      const currentPrice = parseFloat(item.final_price || item.product?.price || item.price || 0);
       const originalPrice = parseFloat(item.product?.original_price || item.original_price || currentPrice);
       return savings + ((originalPrice - currentPrice) * item.quantity);
     }, 0);
@@ -448,13 +467,7 @@ export const CartProvider = ({ children }) => {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          cartItems: cartItems.map(item => ({
-            productId: item.product_id || item.product?.id,
-            quantity: item.quantity
-          }))
-        })
+        }
       });
 
       const result = await handleApiResponse(response);
@@ -507,10 +520,14 @@ export const CartProvider = ({ children }) => {
       items: cartItems.map(item => ({
         productId: item.product_id || item.product?.id,
         name: item.product?.name || item.name,
-        price: item.product?.price || item.price,
+        price: item.final_price || item.product?.price || item.price,
+        original_price: item.product?.original_price || item.original_price,
         quantity: item.quantity,
         image: item.product?.image_url || item.image_url,
-        category: item.product?.category || item.category
+        category: item.product?.category || item.category,
+        offer_id: item.offer_id,
+        offer_type: item.offer_type,
+        has_offer: item.has_offer
       })),
       summary: getCartSummary(),
       exportedAt: new Date().toISOString()
