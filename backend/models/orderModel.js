@@ -702,6 +702,83 @@ static async findAllWithPagination(limit = 10, offset = 0, status = null) {
       throw new Error(`Failed to find orders by status: ${error.message}`);
     }
   }
+  // Get orders by user ID with details
+static async findByUserIdWithDetails(userId, limit = 10, offset = 0, status = null) {
+  try {
+    const db = await pool.getConnection();
+    
+    let query = `
+      SELECT 
+        o.*,
+        COUNT(oi.id) as item_count,
+        SUM(oi.quantity) as total_quantity,
+        p.name as product_name,
+        p.image_url
+      FROM orders o
+      LEFT JOIN order_items oi ON o.id = oi.order_id
+      LEFT JOIN products p ON oi.product_id = p.id
+      WHERE o.user_id = ?
+    `;
+    
+    const params = [userId];
+    
+    if (status) {
+      query += ' AND o.status = ?';
+      params.push(status);
+    }
+    
+    query += ' GROUP BY o.id ORDER BY o.created_at DESC LIMIT ? OFFSET ?';
+    params.push(limit, offset);
+    
+    const [orders] = await db.execute(query, params);
+    db.release();
+    
+    return orders;
+  } catch (error) {
+    console.error('Find orders by user ID with details error:', error);
+    throw error;
+  }
+}
+
+// Get order by ID with items
+static async findByIdWithItems(orderId) {
+  try {
+    const db = await pool.getConnection();
+    
+    // Get order details
+    const [orders] = await db.execute(
+      `SELECT o.*, u.name as user_name, u.email as user_email 
+       FROM orders o 
+       LEFT JOIN users u ON o.user_id = u.id 
+       WHERE o.id = ?`,
+      [orderId]
+    );
+    
+    if (orders.length === 0) {
+      db.release();
+      return null;
+    }
+    
+    const order = orders[0];
+    
+    // Get order items
+    const [items] = await db.execute(
+      `SELECT oi.*, p.name, p.image_url, p.category 
+       FROM order_items oi 
+       LEFT JOIN products p ON oi.product_id = p.id 
+       WHERE oi.order_id = ?`,
+      [orderId]
+    );
+    
+    order.items = items;
+    db.release();
+    
+    return order;
+  } catch (error) {
+    console.error('Find order by ID with items error:', error);
+    throw error;
+  }
+}
 }
 
 module.exports = Order;

@@ -5,9 +5,15 @@ const {
   getOrderById,
   getAllOrders,
   updateOrderStatus,
-  getSalesStats
+  getSalesStats,
+  getOrderAnalytics,
+  processPaymentSuccess,
+  processPaymentFailure,
+  cancelOrder
 } = require('../controllers/orderController');
 const { protect, admin } = require('../middleware/authMiddleware');
+const Order = require('../models/orderModel');
+const User = require('../models/userModel');
 
 const router = express.Router();
 
@@ -21,6 +27,12 @@ router.get('/:id', protect, getOrderById);
 router.get('/', protect, admin, getAllOrders);
 router.put('/:id/status', protect, admin, updateOrderStatus);
 router.get('/admin/stats', protect, admin, getSalesStats);
+router.get('/admin/analytics', protect, admin, getOrderAnalytics);
+
+// NEW: Email Integration Routes
+router.post('/:id/payment-success', protect, processPaymentSuccess);
+router.post('/:id/payment-failure', protect, processPaymentFailure);
+router.post('/:id/cancel', protect, cancelOrder);
 
 // ✅ FIXED: Enhanced Professional Invoice Generation
 router.post('/:id/generate-invoice', protect, async (req, res) => {
@@ -46,7 +58,7 @@ router.post('/:id/generate-invoice', protect, async (req, res) => {
 
     // Set response headers
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename=nexusstore-invoice-${orderId}.pdf`);
+    res.setHeader('Content-Disposition', `attachment; filename=NexusStore-invoice-${orderId}.pdf`);
 
     // Pipe PDF to response
     doc.pipe(res);
@@ -55,15 +67,15 @@ router.post('/:id/generate-invoice', protect, async (req, res) => {
     doc.fillColor('#4F46E5')
        .fontSize(24)
        .font('Helvetica-Bold')
-       .text('6thSHOP', 50, 50);
+       .text('NexusStore', 50, 50);
     
     doc.fillColor('#666666')
        .fontSize(10)
        .font('Helvetica')
        .text('Your Trusted Shopping Partner', 50, 80);
     
-    doc.text('Email: support@nexusstore.com | Phone: +977-1-4000000', 50, 95);
-    doc.text('Website: www.nexusstore.com', 50, 110);
+    doc.text('Email: support@NexusStore.com | Phone: +977-1-4000000', 50, 95);
+    doc.text('Website: www.NexusStore.com', 50, 110);
 
     // Invoice details
     doc.fillColor('#000000')
@@ -168,8 +180,8 @@ router.post('/:id/generate-invoice', protect, async (req, res) => {
        .font('Helvetica');
     
     doc.text('Thank you for your business!', 50, footerY);
-    doc.text('For questions about this invoice, contact support@nexusstore.com', 50, footerY + 12);
-    doc.text('Nexus Store - Your Trusted Shopping Partner', 50, footerY + 24);
+    doc.text('For questions about this invoice, contact support@NexusStore.com', 50, footerY + 12);
+    doc.text('6th Shop - Your Trusted Shopping Partner', 50, footerY + 24);
 
     doc.end();
 

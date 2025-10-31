@@ -1,4 +1,3 @@
-// backend/routes/userRoutes.js
 const express = require('express');
 const { 
   registerUser, 
@@ -13,37 +12,38 @@ const {
 } = require('../controllers/userController');
 const { protect } = require('../middleware/authMiddleware');
 
-// 2️⃣ Create router instance
+// Import dashboard routes
+const userDashboardRoutes = require('./userDashboardRoutes');
+
 const router = express.Router();
 
-// 3️⃣ Define authentication routes
+// Authentication routes
 router.post('/register', registerUser);
 router.post('/login', loginUser);
 router.get('/profile', protect, getUserProfile);
 
-// 4️⃣ Define email verification routes
+// Email verification routes
 router.post('/verify-email', verifyEmail);
 router.post('/resend-verification', resendVerificationEmail);
 router.post('/check-verification', checkEmailVerification);
 
-// 5️⃣ Define password management routes
+// Password management routes
 router.post('/forgot-password', requestPasswordReset);
 router.post('/reset-password', resetPassword);
 router.post('/change-password', protect, changePassword);
 
-// 6️⃣ Notifications route
+// Notifications route
 router.get('/notifications', protect, async (req, res) => {
   try {
     const db = require('../config/db');
     
-    // Get notifications for all users or specific user
     const [notifications] = await db.execute(`
       SELECT * FROM notifications 
       WHERE (target_users = 'all' OR JSON_CONTAINS(user_ids, JSON_QUOTE(?)))
         AND (expires_at IS NULL OR expires_at > NOW())
       ORDER BY created_at DESC
       LIMIT 50
-    `, [req.user.id.toString()]); // convert user ID to string for JSON comparison
+    `, [req.user.id.toString()]);
 
     res.json({
       success: true,
@@ -55,5 +55,7 @@ router.get('/notifications', protect, async (req, res) => {
   }
 });
 
-// 7️⃣ Export router
+// Use dashboard routes
+router.use('/', userDashboardRoutes);
+
 module.exports = router;

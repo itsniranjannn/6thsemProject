@@ -34,6 +34,46 @@ router.post('/upload-image', protect, admin, uploadProductImage);
 router.post('/', protect, admin, createProduct);
 router.put('/:id', protect, admin, updateProduct);
 router.delete('/:id', protect, admin, deleteProduct);
+// Get trending searches
+router.get('/trending-searches', async (req, res) => {
+  try {
+    // Get popular search terms from database or analytics
+    const popularSearches = await Product.aggregate([
+      { 
+        $match: { 
+          // Add any filters for popular products
+        } 
+      },
+      { 
+        $group: { 
+          _id: '$category',
+          count: { $sum: 1 }
+        } 
+      },
+      { 
+        $sort: { count: -1 } 
+      },
+      { 
+        $limit: 5 
+      }
+    ]);
 
+    // Fallback if no data
+    const trendingSearches = popularSearches.length > 0 
+      ? popularSearches.map(item => item._id.toLowerCase())
+      : ['electronics', 'clothing', 'home', 'sports', 'books'];
+
+    res.json({
+      success: true,
+      trendingSearches
+    });
+  } catch (error) {
+    console.error('Error fetching trending searches:', error);
+    res.json({
+      success: true,
+      trendingSearches: ['electronics', 'clothing', 'home', 'sports', 'books']
+    });
+  }
+});
 
 module.exports = router;

@@ -33,7 +33,7 @@ class User {
 
   static async findById(id) {
     const [rows] = await db.execute(
-      'SELECT id, name, email, role, created_at FROM users WHERE id = ?',
+      'SELECT id, name, email, role, email_verified, created_at FROM users WHERE id = ?',
       [id]
     );
     return rows[0];
@@ -45,7 +45,7 @@ class User {
 
   static async getAllUsers() {
     const [rows] = await db.execute(
-      'SELECT id, name, email, role, created_at FROM users'
+      'SELECT id, name, email, role, email_verified, created_at FROM users'
     );
     return rows;
   }
@@ -167,7 +167,61 @@ class User {
     return { success: true };
   }
 
-  // Check if user is verified
+  // NEW METHODS FOR EMAIL INTEGRATION
+
+  // Update verification token (for JWT tokens)
+  static async updateVerificationToken(userId, token) {
+    const expires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+    const [result] = await db.execute(
+      'UPDATE users SET email_verification_token = ?, email_verification_expires = ? WHERE id = ?',
+      [token, expires, userId]
+    );
+    return result;
+  }
+
+  // Mark email as verified (without token verification)
+  static async markEmailAsVerified(userId) {
+    const [result] = await db.execute(
+      'UPDATE users SET email_verified = TRUE, email_verification_token = NULL, email_verification_expires = NULL WHERE id = ?',
+      [userId]
+    );
+    return result;
+  }
+
+  // Update password reset token (for JWT tokens)
+  static async updatePasswordResetToken(userId, token) {
+    const expires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+    const [result] = await db.execute(
+      'UPDATE users SET password_reset_token = ?, password_reset_expires = ? WHERE id = ?',
+      [token, expires, userId]
+    );
+    return result;
+  }
+
+  // Clear password reset token
+  static async clearPasswordResetToken(userId) {
+    const [result] = await db.execute(
+      'UPDATE users SET password_reset_token = NULL, password_reset_expires = NULL WHERE id = ?',
+      [userId]
+    );
+    return result;
+  }
+
+  // Update password without current password check (for reset)
+  static async updatePasswordDirect(userId, newPassword) {
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
+    const [result] = await db.execute(
+      'UPDATE users SET password = ? WHERE id = ?',
+      [hashedPassword, userId]
+    );
+    
+    return {
+      success: result.affectedRows > 0,
+      message: result.affectedRows > 0 ? 'Password updated successfully' : 'Failed to update password'
+    };
+  }
+
+  // Check if email is verified
   static async isEmailVerified(email) {
     const [rows] = await db.execute(
       'SELECT email_verified FROM users WHERE email = ?',
@@ -175,6 +229,64 @@ class User {
     );
     
     return rows.length > 0 ? rows[0].email_verified : false;
+  }
+
+  // Get user by verification token
+  static async findByVerificationToken(token) {
+    const [rows] = await db.execute(
+      'SELECT * FROM users WHERE email_verification_token = ? AND email_verification_expires > NOW()',
+      [token]
+    );
+    return rows[0];
+  }
+
+  // Get user by reset token
+  static async findByResetToken(token) {
+    const [rows] = await db.execute(
+      'SELECT * FROM users WHERE password_reset_token = ? AND password_reset_expires > NOW()',
+      [token]
+    );
+    return rows[0];
+  }
+
+  // Delete user (admin only)
+  static async deleteUser(userId) {
+    const [result] = await db.execute(
+      'DELETE FROM users WHERE id = ?',
+      [userId]
+    );
+    return result;
+  }
+
+  // Update user profile
+  static async updateProfile(userId, updateData) {
+    const { name, phone, address, city, country } = updateData;
+    const [result] = await db.execute(
+      'UPDATE users SET name = ?, phone = ?, address = ?, city = ?, country = ? WHERE id = ?',
+      [name, phone, address, city, country, userId]
+    );
+    return result;
+  }
+
+  // Get user stats for admin
+  static async getUserStats() {
+    const [totalUsers] = await db.execute(
+      'SELECT COUNT(*) as total FROM users'
+    );
+    
+    const [verifiedUsers] = await db.execute(
+      'SELECT COUNT(*) as verified FROM users WHERE email_verified = true'
+    );
+    
+    const [todayUsers] = await db.execute(
+      'SELECT COUNT(*) as today FROM users WHERE DATE(created_at) = CURDATE()'
+    );
+
+    return {
+      total: totalUsers[0].total,
+      verified: verifiedUsers[0].verified,
+      today: todayUsers[0].today
+    };
   }
 }
 
