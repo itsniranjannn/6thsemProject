@@ -13,7 +13,8 @@ import {
   Users,
   Settings,
   Sparkles,
-  Zap
+  Zap,
+  LayoutDashboard
 } from 'lucide-react';
 
 const Navbar = () => {
@@ -66,6 +67,14 @@ const Navbar = () => {
     closed: { opacity: 0, x: -20 },
     open: { opacity: 1, x: 0 }
   };
+
+  // Debug user data
+  console.log('Navbar User Data:', {
+    user,
+    isAuthenticated,
+    isAdmin,
+    role: user?.role
+  });
 
   return (
     <motion.nav 
@@ -171,7 +180,7 @@ const Navbar = () => {
               <div className="flex flex-col">
                 <motion.span 
                   className={`text-xl font-black tracking-tight ${
-                    scrolled ? 'text-gray-900' : 'text-white'
+                    scrolled ? 'text-gray-500' : 'text-white'
                   }`}
                   whileHover={{ color: scrolled ? '#3B82F6' : '#60A5FA' }}
                 >
@@ -235,11 +244,12 @@ const Navbar = () => {
               );
             })}
 
+            {/* Cart Link - Always visible for authenticated users */}
             {isAuthenticated && (
               <motion.div
                 initial={{ opacity: 0, y: -20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3 }}
+                transition={{ delay: 0.25 }}
               >
                 <Link
                   to="/cart"
@@ -255,11 +265,33 @@ const Navbar = () => {
               </motion.div>
             )}
 
-            {isAdmin && (
+            {/* Dashboard Link - Only for regular users (not admin) */}
+            {isAuthenticated && user?.role === 'user' && (
               <motion.div
                 initial={{ opacity: 0, y: -20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.4 }}
+                transition={{ delay: 0.3 }}
+              >
+                <Link
+                  to="/dashboard"
+                  className={`flex items-center space-x-2 px-4 py-2 rounded-xl transition-all duration-200 border ${
+                    scrolled
+                      ? 'text-gray-600 hover:text-purple-600 hover:bg-gray-50 border-transparent hover:border-purple-200'
+                      : 'text-white/80 hover:text-white hover:bg-white/10 border-transparent hover:border-white/20'
+                  }`}
+                >
+                  <LayoutDashboard size={18} />
+                  <span className="font-semibold">Dashboard</span>
+                </Link>
+              </motion.div>
+            )}
+
+            {/* Admin Panel Link - Only for admin users */}
+            {isAuthenticated && user?.role === 'admin' && (
+              <motion.div
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.35 }}
               >
                 <Link
                   to="/admin"
@@ -298,13 +330,20 @@ const Navbar = () => {
                       ? 'bg-gradient-to-r from-blue-500 to-purple-500' 
                       : 'bg-white/20'
                   }`}>
-                    <User size={16} className={scrolled ? 'text-white' : 'text-white'} />
+                    <User size={16} className="text-white" />
                   </div>
-                  <span className={`font-semibold max-w-24 truncate ${
-                    scrolled ? 'text-gray-700' : 'text-white'
-                  }`}>
-                    {user.name}
-                  </span>
+                  <div className="flex flex-col">
+                    <span className={`font-semibold max-w-24 truncate text-sm ${
+                      scrolled ? 'text-gray-700' : 'text-white'
+                    }`}>
+                      {user.name}
+                    </span>
+                    <span className={`text-xs ${
+                      scrolled ? 'text-gray-500' : 'text-white/70'
+                    }`}>
+                      {user.role}
+                    </span>
+                  </div>
                 </motion.div>
                 
                 {/* Logout Button */}
@@ -420,8 +459,9 @@ const Navbar = () => {
                   );
                 })}
 
+                {/* Cart Link - Mobile */}
                 {isAuthenticated && (
-                  <motion.div variants={itemVariants} transition={{ delay: 0.3 }}>
+                  <motion.div variants={itemVariants} transition={{ delay: 0.25 }}>
                     <Link
                       to="/cart"
                       onClick={() => setIsMenuOpen(false)}
@@ -437,8 +477,27 @@ const Navbar = () => {
                   </motion.div>
                 )}
 
-                {isAdmin && (
-                  <motion.div variants={itemVariants} transition={{ delay: 0.4 }}>
+                {/* Dashboard Link - Mobile (Only for regular users) */}
+                {isAuthenticated && user?.role === 'user' && (
+                  <motion.div variants={itemVariants} transition={{ delay: 0.3 }}>
+                    <Link
+                      to="/dashboard"
+                      onClick={() => setIsMenuOpen(false)}
+                      className={`flex items-center space-x-3 px-4 py-3 rounded-lg mx-2 transition-all duration-200 border ${
+                        scrolled
+                          ? 'text-gray-700 hover:bg-gray-100 border-transparent'
+                          : 'text-white/80 hover:bg-white/10 border-transparent'
+                      }`}
+                    >
+                      <LayoutDashboard size={20} />
+                      <span className="font-semibold">Dashboard</span>
+                    </Link>
+                  </motion.div>
+                )}
+
+                {/* Admin Panel Link - Mobile (Only for admin users) */}
+                {isAuthenticated && user?.role === 'admin' && (
+                  <motion.div variants={itemVariants} transition={{ delay: 0.35 }}>
                     <Link
                       to="/admin"
                       onClick={() => setIsMenuOpen(false)}
@@ -469,7 +528,10 @@ const Navbar = () => {
                         }`}>
                           <User size={16} className="text-white" />
                         </div>
-                        <span className="font-semibold">Welcome, {user.name}</span>
+                        <div className="flex flex-col">
+                          <span className="font-semibold">Welcome, {user.name}</span>
+                          <span className="text-sm opacity-75">Role: {user.role}</span>
+                        </div>
                       </div>
                       <button
                         onClick={handleLogout}

@@ -1,6 +1,23 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext.js';
 import Toast from './Toast.js';
+import { 
+  Bell, 
+  X, 
+  CheckCircle, 
+  Trash2, 
+  RefreshCw, 
+  AlertTriangle,
+  Info,
+  ShoppingBag,
+  CreditCard,
+  Gift,
+  Star,
+  Package,
+  Zap,
+  MessageCircle
+} from 'lucide-react';
 
 const NotificationCenter = () => {
   const { user } = useAuth();
@@ -9,6 +26,19 @@ const NotificationCenter = () => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+  const dropdownRef = useRef(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setShowNotifications(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   useEffect(() => {
     if (user) {
@@ -18,7 +48,7 @@ const NotificationCenter = () => {
 
   const showToast = (message, type = 'success') => {
     setToast({ show: true, message, type });
-    setTimeout(() => setToast({ show: false, message: '', type: 'success' }), 3000);
+    setTimeout(() => setToast({ show: false, message: '', type: 'success' }), 4000);
   };
 
   const fetchNotifications = async () => {
@@ -58,79 +88,110 @@ const NotificationCenter = () => {
     setShowNotifications(!showNotifications);
   };
 
-  const getNotificationIcon = (type) => {
-    switch (type) {
-      case 'success':
-        return '✅';
-      case 'warning':
-        return '⚠️';
-      case 'error':
-        return '❌';
-      case 'promotion':
-        return '🎉';
-      case 'order':
-        return '📦';
-      case 'payment':
-        return '💳';
-      case 'promo':
-        return '🎫';
-      case 'offer':
-        return '🎁';
-      case 'system':
-        return '⚙️';
-      default:
-        return '🔔';
-    }
-  };
-
-  const getNotificationColor = (type) => {
-    switch (type) {
-      case 'success':
-        return 'border-l-green-500 bg-green-50 hover:bg-green-100';
-      case 'warning':
-        return 'border-l-yellow-500 bg-yellow-50 hover:bg-yellow-100';
-      case 'error':
-        return 'border-l-red-500 bg-red-50 hover:bg-red-100';
-      case 'promotion':
-        return 'border-l-purple-500 bg-purple-50 hover:bg-purple-100';
-      case 'order':
-        return 'border-l-blue-500 bg-blue-50 hover:bg-blue-100';
-      case 'payment':
-        return 'border-l-indigo-500 bg-indigo-50 hover:bg-indigo-100';
-      case 'promo':
-        return 'border-l-pink-500 bg-pink-50 hover:bg-pink-100';
-      case 'offer':
-        return 'border-l-orange-500 bg-orange-50 hover:bg-orange-100';
-      case 'system':
-        return 'border-l-gray-500 bg-gray-50 hover:bg-gray-100';
-      default:
-        return 'border-l-gray-400 bg-gray-50 hover:bg-gray-100';
-    }
-  };
-
-  const getNotificationBadgeColor = (type) => {
-    switch (type) {
-      case 'success':
-        return 'bg-green-100 text-green-800';
-      case 'warning':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'error':
-        return 'bg-red-100 text-red-800';
-      case 'promotion':
-        return 'bg-purple-100 text-purple-800';
-      case 'order':
-        return 'bg-blue-100 text-blue-800';
-      case 'payment':
-        return 'bg-indigo-100 text-indigo-800';
-      case 'promo':
-        return 'bg-pink-100 text-pink-800';
-      case 'offer':
-        return 'bg-orange-100 text-orange-800';
-      case 'system':
-        return 'bg-gray-100 text-gray-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
+  const getNotificationConfig = (type) => {
+    const configs = {
+      success: {
+        icon: CheckCircle,
+        gradient: 'from-emerald-500 to-green-500',
+        bg: 'bg-gradient-to-br from-emerald-50 to-green-50',
+        border: 'border-l-4 border-emerald-500',
+        text: 'text-emerald-900',
+        badge: 'bg-emerald-100 text-emerald-800',
+        iconBg: 'bg-emerald-500',
+        glow: 'shadow-[0_0_20px_rgba(16,185,129,0.1)]'
+      },
+      warning: {
+        icon: AlertTriangle,
+        gradient: 'from-amber-500 to-orange-500',
+        bg: 'bg-gradient-to-br from-amber-50 to-orange-50',
+        border: 'border-l-4 border-amber-500',
+        text: 'text-amber-900',
+        badge: 'bg-amber-100 text-amber-800',
+        iconBg: 'bg-amber-500',
+        glow: 'shadow-[0_0_20px_rgba(245,158,11,0.1)]'
+      },
+      error: {
+        icon: X,
+        gradient: 'from-red-500 to-rose-500',
+        bg: 'bg-gradient-to-br from-red-50 to-rose-50',
+        border: 'border-l-4 border-red-500',
+        text: 'text-red-900',
+        badge: 'bg-red-100 text-red-800',
+        iconBg: 'bg-red-500',
+        glow: 'shadow-[0_0_20px_rgba(239,68,68,0.1)]'
+      },
+      promotion: {
+        icon: Gift,
+        gradient: 'from-purple-500 to-pink-500',
+        bg: 'bg-gradient-to-br from-purple-50 to-pink-50',
+        border: 'border-l-4 border-purple-500',
+        text: 'text-purple-900',
+        badge: 'bg-purple-100 text-purple-800',
+        iconBg: 'bg-purple-500',
+        glow: 'shadow-[0_0_20px_rgba(168,85,247,0.1)]'
+      },
+      order: {
+        icon: ShoppingBag,
+        gradient: 'from-blue-500 to-cyan-500',
+        bg: 'bg-gradient-to-br from-blue-50 to-cyan-50',
+        border: 'border-l-4 border-blue-500',
+        text: 'text-blue-900',
+        badge: 'bg-blue-100 text-blue-800',
+        iconBg: 'bg-blue-500',
+        glow: 'shadow-[0_0_20px_rgba(59,130,246,0.1)]'
+      },
+      payment: {
+        icon: CreditCard,
+        gradient: 'from-indigo-500 to-violet-500',
+        bg: 'bg-gradient-to-br from-indigo-50 to-violet-50',
+        border: 'border-l-4 border-indigo-500',
+        text: 'text-indigo-900',
+        badge: 'bg-indigo-100 text-indigo-800',
+        iconBg: 'bg-indigo-500',
+        glow: 'shadow-[0_0_20px_rgba(99,102,241,0.1)]'
+      },
+      promo: {
+        icon: Star,
+        gradient: 'from-yellow-500 to-amber-500',
+        bg: 'bg-gradient-to-br from-yellow-50 to-amber-50',
+        border: 'border-l-4 border-yellow-500',
+        text: 'text-yellow-900',
+        badge: 'bg-yellow-100 text-yellow-800',
+        iconBg: 'bg-yellow-500',
+        glow: 'shadow-[0_0_20px_rgba(234,179,8,0.1)]'
+      },
+      offer: {
+        icon: Zap,
+        gradient: 'from-orange-500 to-red-500',
+        bg: 'bg-gradient-to-br from-orange-50 to-red-50',
+        border: 'border-l-4 border-orange-500',
+        text: 'text-orange-900',
+        badge: 'bg-orange-100 text-orange-800',
+        iconBg: 'bg-orange-500',
+        glow: 'shadow-[0_0_20px_rgba(249,115,22,0.1)]'
+      },
+      system: {
+        icon: Info,
+        gradient: 'from-gray-500 to-slate-500',
+        bg: 'bg-gradient-to-br from-gray-50 to-slate-50',
+        border: 'border-l-4 border-gray-500',
+        text: 'text-gray-900',
+        badge: 'bg-gray-100 text-gray-800',
+        iconBg: 'bg-gray-500',
+        glow: 'shadow-[0_0_20px_rgba(107,114,128,0.1)]'
+      },
+      info: {
+        icon: MessageCircle,
+        gradient: 'from-sky-500 to-blue-500',
+        bg: 'bg-gradient-to-br from-sky-50 to-blue-50',
+        border: 'border-l-4 border-sky-500',
+        text: 'text-sky-900',
+        badge: 'bg-sky-100 text-sky-800',
+        iconBg: 'bg-sky-500',
+        glow: 'shadow-[0_0_20px_rgba(14,165,233,0.1)]'
+      }
+    };
+    return configs[type] || configs.info;
   };
 
   const markAsRead = async (notificationId) => {
@@ -138,7 +199,6 @@ const NotificationCenter = () => {
       const token = localStorage.getItem('token');
       const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
       
-      // Try the mark as read endpoint, if it fails, update locally
       try {
         const response = await fetch(`${API_BASE_URL}/api/notifications/${notificationId}/read`, {
           method: 'PUT',
@@ -155,7 +215,6 @@ const NotificationCenter = () => {
         console.warn('Mark as read API call failed, updating locally');
       }
 
-      // Update local state regardless of API call
       setNotifications(prev => 
         prev.map(notification => 
           notification.id === notificationId 
@@ -177,7 +236,6 @@ const NotificationCenter = () => {
       const token = localStorage.getItem('token');
       const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
       
-      // Try the mark all as read endpoint, if it fails, update locally
       try {
         const response = await fetch(`${API_BASE_URL}/api/notifications/mark-all-read`, {
           method: 'PUT',
@@ -194,7 +252,6 @@ const NotificationCenter = () => {
         console.warn('Mark all as read API call failed, updating locally');
       }
 
-      // Update local state regardless of API call
       setNotifications(prev => 
         prev.map(notification => ({ ...notification, is_read: true }))
       );
@@ -212,7 +269,6 @@ const NotificationCenter = () => {
       const token = localStorage.getItem('token');
       const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
       
-      // Try the clear all endpoint, if it fails, update locally
       try {
         const response = await fetch(`${API_BASE_URL}/api/notifications/clear-all`, {
           method: 'DELETE',
@@ -228,7 +284,6 @@ const NotificationCenter = () => {
         console.warn('Clear all API call failed, updating locally');
       }
 
-      // Update local state regardless of API call
       setNotifications([]);
       setUnreadCount(0);
       showToast('All notifications cleared', 'success');
@@ -265,10 +320,114 @@ const NotificationCenter = () => {
     return date.toLocaleDateString();
   };
 
+  const NotificationItem = ({ notification, index }) => {
+    const config = getNotificationConfig(notification.type);
+    const IconComponent = config.icon;
+
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 20, scale: 0.95 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, x: -100 }}
+        transition={{ delay: index * 0.05 }}
+        className={`p-4 ${config.bg} ${config.border} ${config.glow} cursor-pointer transition-all duration-300 group hover:shadow-lg relative overflow-hidden`}
+        onClick={() => !notification.is_read && markAsRead(notification.id)}
+      >
+        {/* Unread indicator */}
+        {!notification.is_read && (
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            className="absolute top-4 right-4 w-3 h-3 bg-blue-500 rounded-full animate-pulse ring-2 ring-white"
+          />
+        )}
+
+        {/* Background gradient effect */}
+        <div className="absolute inset-0 bg-gradient-to-r from-white/0 to-white/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+
+        <div className="flex items-start space-x-4 relative z-10">
+          {/* Icon with gradient background */}
+          <motion.div
+            whileHover={{ scale: 1.1, rotate: 5 }}
+            className={`flex-shrink-0 w-12 h-12 ${config.iconBg} rounded-2xl flex items-center justify-center shadow-lg group-hover:shadow-xl transition-all duration-300`}
+          >
+            <IconComponent size={20} className="text-white" />
+          </motion.div>
+
+          {/* Content */}
+          <div className="flex-1 min-w-0 space-y-2">
+            {/* Header with title and badge */}
+            <div className="flex items-start justify-between">
+              <motion.h4 
+                className="text-sm font-bold text-gray-900 leading-tight pr-2"
+                whileHover={{ color: config.text }}
+              >
+                {notification.title}
+              </motion.h4>
+              <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${config.badge} shadow-sm flex-shrink-0`}>
+                {notification.type}
+              </span>
+            </div>
+            
+            {/* Message */}
+            <motion.p 
+              className="text-sm text-gray-700 leading-relaxed"
+              whileHover={{ color: '#374151' }}
+            >
+              {notification.message}
+            </motion.p>
+
+            {/* Image if available */}
+            {notification.image_url && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="mt-2 overflow-hidden rounded-xl border border-gray-200 shadow-sm"
+              >
+                <img
+                  src={notification.image_url}
+                  alt="Notification"
+                  className="w-full h-32 object-cover transition-transform duration-500 group-hover:scale-105"
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                  }}
+                />
+              </motion.div>
+            )}
+
+            {/* Footer with timestamp and actions */}
+            <div className="flex items-center justify-between pt-2">
+              <motion.p 
+                className="text-xs text-gray-500 font-medium"
+                whileHover={{ scale: 1.05 }}
+              >
+                {formatTimeAgo(notification.created_at)}
+              </motion.p>
+              
+              {!notification.is_read && (
+                <motion.button
+                  initial={{ opacity: 0 }}
+                  whileHover={{ opacity: 1 }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    markAsRead(notification.id);
+                  }}
+                  className="text-xs text-blue-600 hover:text-blue-800 font-semibold px-3 py-1.5 hover:bg-blue-50 rounded-lg transition-all duration-200 border border-blue-200 hover:border-blue-300 hover:shadow-sm"
+                >
+                  Mark read
+                </motion.button>
+              )}
+            </div>
+          </div>
+        </div>
+      </motion.div>
+    );
+  };
+
   if (!user) return null;
 
   return (
-    <div className="relative">
+    <div className="relative" ref={dropdownRef}>
       {/* Toast Notification */}
       {toast.show && (
         <Toast 
@@ -279,195 +438,186 @@ const NotificationCenter = () => {
       )}
 
       {/* Notification Bell */}
-      <button
+      <motion.button
+        whileHover={{ scale: 1.05 }}
+        whileTap={{ scale: 0.95 }}
         onClick={toggleNotifications}
         className="relative p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-xl transition-all duration-200 group"
       >
         <div className="relative">
-          <svg className="w-6 h-6 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-          </svg>
+          <motion.div
+            animate={{ 
+              rotate: showNotifications ? [0, -10, 10, 0] : 0,
+              scale: showNotifications ? [1, 1.1, 1] : 1
+            }}
+            transition={{ duration: 0.5 }}
+          >
+            <Bell className="w-6 h-6 transition-colors" />
+          </motion.div>
+          
           {unreadCount > 0 && (
-            <span className="absolute -top-2 -right-2 bg-gradient-to-r from-red-500 to-pink-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center shadow-lg animate-pulse">
+            <motion.span
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              className="absolute -top-2 -right-2 bg-gradient-to-r from-red-500 to-pink-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center shadow-lg ring-2 ring-white"
+            >
               {unreadCount > 9 ? '9+' : unreadCount}
-            </span>
+            </motion.span>
           )}
         </div>
-      </button>
+      </motion.button>
 
       {/* Notification Dropdown */}
-      {showNotifications && (
-        <div className="absolute right-0 mt-2 w-96 bg-white rounded-2xl shadow-2xl border border-gray-200 z-50 max-h-[480px] overflow-hidden transform transition-all duration-300 ease-out">
-          {/* Header */}
-          <div className="p-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
-                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                  </svg>
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-gray-900">Notifications</h3>
-                  <p className="text-sm text-gray-600">
-                    {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up!'}
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center space-x-2">
-                {notifications.length > 0 && (
-                  <button
-                    onClick={handleClearAll}
-                    className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors duration-200 hover:scale-110"
-                    title="Clear all"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
-                )}
-                <button
-                  onClick={toggleNotifications}
-                  className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors duration-200 hover:scale-110"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Notifications List */}
-          <div className="max-h-80 overflow-y-auto">
-            {loading ? (
-              <div className="p-8 text-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-3"></div>
-                <p className="text-gray-600 text-sm">Loading notifications...</p>
-              </div>
-            ) : notifications.length === 0 ? (
-              <div className="p-8 text-center">
-                <div className="w-16 h-16 bg-gradient-to-br from-gray-100 to-gray-200 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                  <span className="text-2xl text-gray-400">🔔</span>
-                </div>
-                <p className="text-gray-600 font-medium mb-1">No notifications</p>
-                <p className="text-sm text-gray-500">You're all caught up!</p>
-              </div>
-            ) : (
-              <div className="divide-y divide-gray-100">
-                {notifications.map((notification) => (
-                  <div
-                    key={notification.id}
-                    className={`p-4 border-l-4 transition-all duration-200 cursor-pointer group relative ${
-                      getNotificationColor(notification.type)
-                    } ${!notification.is_read ? 'bg-blue-50 border-l-blue-500' : ''}`}
-                    onClick={() => !notification.is_read && markAsRead(notification.id)}
-                  >
-                    {/* Unread indicator */}
-                    {!notification.is_read && (
-                      <div className="absolute top-4 right-4 w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-                    )}
-
-                    <div className="flex items-start space-x-3">
-                      {/* Icon */}
-                      <div className="flex-shrink-0">
-                        <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm border border-gray-200 group-hover:scale-105 transition-transform duration-200">
-                          <span className="text-lg">
-                            {getNotificationIcon(notification.type)}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Content */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between mb-1">
-                          <h4 className="text-sm font-semibold text-gray-900 leading-tight group-hover:text-gray-700 transition-colors">
-                            {notification.title}
-                          </h4>
-                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getNotificationBadgeColor(notification.type)} group-hover:scale-105 transition-transform`}>
-                            {notification.type}
-                          </span>
-                        </div>
-                        
-                        <p className="text-sm text-gray-700 mb-2 leading-relaxed group-hover:text-gray-600 transition-colors">
-                          {notification.message}
-                        </p>
-
-                        {notification.image_url && (
-                          <div className="mb-2 transform group-hover:scale-[1.02] transition-transform duration-200">
-                            <img
-                              src={notification.image_url}
-                              alt="Notification"
-                              className="w-full h-32 object-cover rounded-lg border border-gray-200 shadow-sm"
-                              onError={(e) => {
-                                e.target.style.display = 'none';
-                              }}
-                            />
-                          </div>
-                        )}
-
-                        <div className="flex items-center justify-between">
-                          <p className="text-xs text-gray-500 font-medium group-hover:text-gray-600 transition-colors">
-                            {formatTimeAgo(notification.created_at)}
-                          </p>
-                          {!notification.is_read && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                markAsRead(notification.id);
-                              }}
-                              className="text-xs text-blue-600 hover:text-blue-800 font-medium opacity-0 group-hover:opacity-100 transition-all duration-200 px-2 py-1 hover:bg-blue-50 rounded-lg hover:shadow-sm"
-                            >
-                              Mark read
-                            </button>
-                          )}
-                        </div>
-                      </div>
+      <AnimatePresence>
+        {showNotifications && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black bg-opacity-10 z-40"
+              onClick={() => setShowNotifications(false)}
+            />
+            
+            {/* Dropdown */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: -20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: -20 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className="absolute right-0 mt-2 w-96 bg-white rounded-3xl shadow-2xl border border-gray-200 z-50 max-h-[520px] overflow-hidden"
+            >
+              {/* Header with gradient */}
+              <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-6 text-white relative overflow-hidden">
+                {/* Background pattern */}
+                <div className="absolute inset-0 bg-black/10"></div>
+                <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-16 translate-x-16"></div>
+                <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/5 rounded-full translate-y-12 -translate-x-12"></div>
+                
+                <div className="flex items-center justify-between relative z-10">
+                  <div className="flex items-center space-x-4">
+                    <motion.div
+                      whileHover={{ scale: 1.1, rotate: 5 }}
+                      className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center shadow-lg"
+                    >
+                      <Bell size={24} className="text-white" />
+                    </motion.div>
+                    <div>
+                      <motion.h3
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        className="text-xl font-bold"
+                      >
+                        Notifications
+                      </motion.h3>
+                      <motion.p
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: 0.1 }}
+                        className="text-blue-100 text-sm"
+                      >
+                        {unreadCount > 0 ? `${unreadCount} unread message${unreadCount > 1 ? 's' : ''}` : 'All caught up!'}
+                      </motion.p>
                     </div>
                   </div>
-                ))}
+                  <div className="flex items-center space-x-2">
+                    {notifications.length > 0 && (
+                      <motion.button
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.9 }}
+                        onClick={handleClearAll}
+                        className="p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-xl transition-all duration-200 backdrop-blur-sm"
+                        title="Clear all"
+                      >
+                        <Trash2 size={18} />
+                      </motion.button>
+                    )}
+                    <motion.button
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
+                      onClick={toggleNotifications}
+                      className="p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-xl transition-all duration-200 backdrop-blur-sm"
+                    >
+                      <X size={18} />
+                    </motion.button>
+                  </div>
+                </div>
               </div>
-            )}
-          </div>
 
-          {/* Footer Actions */}
-          {notifications.length > 0 && (
-            <div className="p-4 border-t border-gray-200 bg-gray-50">
-              <div className="flex items-center justify-between">
-                <button
-                  onClick={handleRefresh}
-                  className="flex items-center space-x-2 text-sm text-gray-600 hover:text-gray-800 font-medium transition-colors duration-200 hover:scale-105 group"
-                >
-                  <svg className="w-4 h-4 group-hover:rotate-180 transition-transform duration-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                  <span>Refresh</span>
-                </button>
-                
-                {unreadCount > 0 && (
-                  <button
-                    onClick={markAllAsRead}
-                    className="flex items-center space-x-2 text-sm text-blue-600 hover:text-blue-800 font-medium transition-colors duration-200 hover:scale-105 group"
+              {/* Notifications List */}
+              <div className="max-h-80 overflow-y-auto">
+                {loading ? (
+                  <div className="p-8 text-center">
+                    <motion.div
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                      className="rounded-full h-10 w-10 border-2 border-blue-500 border-t-transparent mx-auto mb-4"
+                    />
+                    <p className="text-gray-600 text-sm font-medium">Loading notifications...</p>
+                  </div>
+                ) : notifications.length === 0 ? (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="p-8 text-center"
                   >
-                    <svg className="w-4 h-4 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    <span>Mark all as read</span>
-                  </button>
+                    <div className="w-20 h-20 bg-gradient-to-br from-gray-100 to-gray-200 rounded-3xl flex items-center justify-center mx-auto mb-4 shadow-lg">
+                      <Bell size={32} className="text-gray-400" />
+                    </div>
+                    <p className="text-gray-600 font-bold text-lg mb-2">No notifications</p>
+                    <p className="text-sm text-gray-500">You're all caught up with your notifications!</p>
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ staggerChildren: 0.1 }}
+                    className="divide-y divide-gray-100/50"
+                  >
+                    {notifications.map((notification, index) => (
+                      <NotificationItem
+                        key={notification.id}
+                        notification={notification}
+                        index={index}
+                      />
+                    ))}
+                  </motion.div>
                 )}
               </div>
-            </div>
-          )}
-        </div>
-      )}
 
-      {/* Backdrop */}
-      {showNotifications && (
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-10 z-40"
-          onClick={() => setShowNotifications(false)}
-        />
-      )}
+              {/* Footer Actions */}
+              {notifications.length > 0 && (
+                <div className="p-4 border-t border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100/50">
+                  <div className="flex items-center justify-between">
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={handleRefresh}
+                      className="flex items-center space-x-2 text-sm text-gray-600 hover:text-gray-800 font-semibold transition-colors duration-200 px-3 py-2 hover:bg-white rounded-xl"
+                    >
+                      <RefreshCw size={16} />
+                      <span>Refresh</span>
+                    </motion.button>
+                    
+                    {unreadCount > 0 && (
+                      <motion.button
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={markAllAsRead}
+                        className="flex items-center space-x-2 text-sm text-blue-600 hover:text-blue-800 font-semibold transition-colors duration-200 px-3 py-2 hover:bg-blue-50 rounded-xl"
+                      >
+                        <CheckCircle size={16} />
+                        <span>Mark all as read</span>
+                      </motion.button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

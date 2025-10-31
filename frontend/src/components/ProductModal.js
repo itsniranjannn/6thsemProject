@@ -1,4 +1,19 @@
+// frontend/src/components/ProductModal.js - PROFESSIONAL REDESIGN
 import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { 
+  X, 
+  ShoppingCart, 
+  Heart, 
+  Star, 
+  ChevronLeft, 
+  ChevronRight,
+  Truck,
+  Shield,
+  Zap,
+  Clock,
+  Package
+} from 'lucide-react';
 
 const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, onAddReview }) => {
   const [selectedImage, setSelectedImage] = useState(0);
@@ -10,14 +25,14 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
   const [activeAlgorithm, setActiveAlgorithm] = useState('ml');
   const [realTimeRating, setRealTimeRating] = useState(null);
   const [realTimeReviews, setRealTimeReviews] = useState(null);
+  const [isWishlisted, setIsWishlisted] = useState(false);
 
-  // Enhanced images handling with multiple URLs - FIXED
+  // Enhanced images handling
   const getProductImages = () => {
     if (!product) return ['https://via.placeholder.com/400x400?text=No+Image'];
     
     let images = [];
     
-    // Handle image_urls array
     if (product.image_urls) {
       if (Array.isArray(product.image_urls)) {
         images = product.image_urls.filter(url => url && url.trim() !== '');
@@ -31,12 +46,10 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
       }
     }
     
-    // Fallback to single image_url
     if (images.length === 0 && product.image_url) {
       images = [product.image_url];
     }
     
-    // Final fallback
     if (images.length === 0) {
       images = ['https://via.placeholder.com/400x400?text=No+Image'];
     }
@@ -46,14 +59,14 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
 
   const images = getProductImages();
 
-  // Fetch real-time rating and reviews when product changes
+  // Fetch real-time data
   useEffect(() => {
     if (product?.id) {
       fetchRealTimeData();
     }
   }, [product?.id]);
 
-  // Fetch recommendations when modal opens
+  // Fetch recommendations
   useEffect(() => {
     if (product?.id) {
       fetchRecommendations();
@@ -118,7 +131,6 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
       if (response.ok) {
         const data = await response.json();
         if (data.success && data.recommendations) {
-          // Process recommendations with proper image handling
           const processedRecs = data.recommendations.map(rec => {
             let recImages = [];
             
@@ -264,82 +276,125 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50 animate-fade-in backdrop-blur-sm">
-      <div className="bg-white rounded-3xl max-w-6xl w-full max-h-[95vh] overflow-hidden animate-scale-in shadow-2xl border border-gray-100">
+    <motion.div 
+      className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50 backdrop-blur-sm"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+    >
+      <motion.div 
+        className="bg-white rounded-3xl max-w-6xl w-full max-h-[95vh] overflow-hidden shadow-2xl border border-gray-100"
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.9, opacity: 0 }}
+        transition={{ type: "spring", damping: 30 }}
+      >
         <div className="flex flex-col lg:flex-row h-full">
-          {/* Product Images - Enhanced multiple image support */}
+          {/* Product Images */}
           <div className="lg:w-1/2 p-8">
             <div className="relative group">
               {/* Main Image */}
-              <div className="relative overflow-hidden rounded-2xl bg-gray-100">
-                <img
+              <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-gray-50 to-gray-100">
+                <motion.img
                   src={images[selectedImage]}
                   alt={product.name}
-                  className="w-full h-96 object-cover transition-transform duration-500 group-hover:scale-105"
+                  className="w-full h-96 object-cover"
+                  key={selectedImage}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.3 }}
                 />
                 
                 {/* Image Navigation Arrows */}
                 {images.length > 1 && (
                   <>
-                    <button
+                    <motion.button
                       onClick={() => setSelectedImage(selectedImage > 0 ? selectedImage - 1 : images.length - 1)}
-                      className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-white/90 hover:bg-white text-gray-800 rounded-full p-3 shadow-lg transition-all duration-200 hover:scale-110"
+                      className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-white/90 hover:bg-white text-gray-800 rounded-full p-3 shadow-lg transition-all duration-200"
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
                     >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                      </svg>
-                    </button>
-                    <button
+                      <ChevronLeft className="w-5 h-5" />
+                    </motion.button>
+                    <motion.button
                       onClick={() => setSelectedImage(selectedImage < images.length - 1 ? selectedImage + 1 : 0)}
-                      className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-white/90 hover:bg-white text-gray-800 rounded-full p-3 shadow-lg transition-all duration-200 hover:scale-110"
+                      className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-white/90 hover:bg-white text-gray-800 rounded-full p-3 shadow-lg transition-all duration-200"
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
                     >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
-                    </button>
+                      <ChevronRight className="w-5 h-5" />
+                    </motion.button>
                   </>
                 )}
 
                 {/* Product Tags */}
                 <div className="absolute top-4 left-4 flex flex-col gap-2">
                   {product.is_featured && (
-                    <span className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-3 py-2 rounded-full text-sm font-semibold shadow-lg">
+                    <motion.span 
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-3 py-2 rounded-full text-sm font-semibold shadow-lg"
+                    >
                       ⭐ Featured
-                    </span>
+                    </motion.span>
                   )}
                   {product.is_new && (
-                    <span className="bg-gradient-to-r from-green-500 to-emerald-500 text-white px-3 py-2 rounded-full text-sm font-semibold shadow-lg">
+                    <motion.span 
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      className="bg-gradient-to-r from-green-500 to-emerald-500 text-white px-3 py-2 rounded-full text-sm font-semibold shadow-lg"
+                    >
                       🆕 New Arrival
-                    </span>
+                    </motion.span>
                   )}
                   {product.stock_quantity < 10 && product.stock_quantity > 0 && (
-                    <span className="bg-gradient-to-r from-orange-500 to-red-500 text-white px-3 py-2 rounded-full text-sm font-semibold shadow-lg animate-pulse">
+                    <motion.span 
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      className="bg-gradient-to-r from-orange-500 to-red-500 text-white px-3 py-2 rounded-full text-sm font-semibold shadow-lg animate-pulse"
+                    >
                       ⚠️ Only {product.stock_quantity} left!
-                    </span>
+                    </motion.span>
                   )}
                   {product.discount_percentage > 0 && (
-                    <span className="bg-gradient-to-r from-red-500 to-orange-500 text-white px-3 py-2 rounded-full text-sm font-semibold shadow-lg">
+                    <motion.span 
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      className="bg-gradient-to-r from-red-500 to-orange-500 text-white px-3 py-2 rounded-full text-sm font-semibold shadow-lg"
+                    >
                       {product.discount_percentage}% OFF
-                    </span>
+                    </motion.span>
                   )}
                 </div>
+
+                {/* Wishlist Button */}
+                <motion.button
+                  onClick={() => setIsWishlisted(!isWishlisted)}
+                  className="absolute top-4 right-4 bg-white/90 hover:bg-white text-gray-600 hover:text-red-500 rounded-full p-3 shadow-lg transition-all duration-200"
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
+                >
+                  <Heart className={`w-5 h-5 ${isWishlisted ? 'fill-red-500 text-red-500' : ''}`} />
+                </motion.button>
               </div>
 
               {/* Thumbnail Images */}
               {images.length > 1 && (
                 <div className="flex gap-3 mt-6 justify-center">
                   {images.map((img, index) => (
-                    <button
+                    <motion.button
                       key={index}
                       onClick={() => setSelectedImage(index)}
-                      className={`w-20 h-20 border-2 rounded-xl overflow-hidden transition-all duration-300 transform hover:scale-110 ${
+                      className={`w-20 h-20 border-2 rounded-xl overflow-hidden transition-all duration-300 ${
                         selectedImage === index 
                           ? 'border-blue-500 shadow-lg ring-2 ring-blue-200' 
                           : 'border-gray-300 hover:border-gray-400'
                       }`}
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
                     >
                       <img src={img} alt={`${product.name} view ${index + 1}`} className="w-full h-full object-cover" />
-                    </button>
+                    </motion.button>
                   ))}
                 </div>
               )}
@@ -351,7 +406,13 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
             {/* Header */}
             <div className="flex justify-between items-start mb-6">
               <div className="flex-1">
-                <h2 className="text-3xl font-bold text-gray-900 mb-2">{product.name}</h2>
+                <motion.h2 
+                  className="text-3xl font-bold text-gray-900 mb-2"
+                  initial={{ opacity: 0, y: -20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                >
+                  {product.name}
+                </motion.h2>
                 <div className="flex items-center gap-4 mb-4">
                   <div className="flex items-center gap-2 bg-yellow-50 px-3 py-2 rounded-xl">
                     {renderStars(displayRating, 'text-xl')}
@@ -365,12 +426,14 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
                   )}
                 </div>
               </div>
-              <button
+              <motion.button
                 onClick={onClose}
                 className="text-gray-500 hover:text-gray-700 text-3xl transition-colors duration-200 hover:scale-110 bg-gray-100 hover:bg-gray-200 rounded-full w-10 h-10 flex items-center justify-center"
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
               >
-                ×
-              </button>
+                <X className="w-6 h-6" />
+              </motion.button>
             </div>
 
             {/* Price and Stock */}
@@ -380,8 +443,9 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
                   Rs. {parseFloat(product.price || 0).toLocaleString()}
                 </span>
                 {product.stock_quantity > 0 ? (
-                  <span className="text-green-600 font-semibold text-lg bg-green-50 px-3 py-1 rounded-full">
-                    ✓ In Stock ({product.stock_quantity} available)
+                  <span className="text-green-600 font-semibold text-lg bg-green-50 px-3 py-1 rounded-full flex items-center gap-2">
+                    <Package className="w-4 h-4" />
+                    In Stock ({product.stock_quantity} available)
                   </span>
                 ) : (
                   <span className="text-red-500 font-semibold text-lg bg-red-50 px-3 py-1 rounded-full">
@@ -396,19 +460,39 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
               )}
             </div>
 
+            {/* Premium Features */}
+            <div className="grid grid-cols-2 gap-4 mb-6">
+              <div className="flex items-center gap-2 bg-blue-50 p-3 rounded-lg">
+                <Truck className="w-5 h-5 text-blue-600" />
+                <span className="text-sm font-medium text-blue-700">Free Delivery</span>
+              </div>
+              <div className="flex items-center gap-2 bg-green-50 p-3 rounded-lg">
+                <Shield className="w-5 h-5 text-green-600" />
+                <span className="text-sm font-medium text-green-700">Secure Payment</span>
+              </div>
+              <div className="flex items-center gap-2 bg-purple-50 p-3 rounded-lg">
+                <Zap className="w-5 h-5 text-purple-600" />
+                <span className="text-sm font-medium text-purple-700">Fast Support</span>
+              </div>
+              <div className="flex items-center gap-2 bg-orange-50 p-3 rounded-lg">
+                <Clock className="w-5 h-5 text-orange-600" />
+                <span className="text-sm font-medium text-orange-700">24/7 Available</span>
+              </div>
+            </div>
+
             {/* Quantity Selector */}
             {product.stock_quantity > 0 && (
               <div className="mb-6">
                 <label className="block text-sm font-semibold text-gray-700 mb-3">Quantity:</label>
                 <div className="flex items-center gap-3">
-                  <button
+                  <motion.button
                     onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                    className="w-12 h-12 bg-gray-200 hover:bg-gray-300 rounded-lg flex items-center justify-center transition-all duration-200 transform hover:scale-110"
+                    className="w-12 h-12 bg-gray-200 hover:bg-gray-300 rounded-lg flex items-center justify-center transition-all duration-200"
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
                   >
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
-                    </svg>
-                  </button>
+                    <span className="text-lg font-bold">-</span>
+                  </motion.button>
                   <input
                     type="number"
                     value={quantity}
@@ -417,28 +501,30 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
                     min="1"
                     max={product.stock_quantity}
                   />
-                  <button
+                  <motion.button
                     onClick={() => setQuantity(Math.min(product.stock_quantity, quantity + 1))}
-                    className="w-12 h-12 bg-gray-200 hover:bg-gray-300 rounded-lg flex items-center justify-center transition-all duration-200 transform hover:scale-110"
+                    className="w-12 h-12 bg-gray-200 hover:bg-gray-300 rounded-lg flex items-center justify-center transition-all duration-200"
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
                   >
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                    </svg>
-                  </button>
+                    <span className="text-lg font-bold">+</span>
+                  </motion.button>
                 </div>
               </div>
             )}
 
             {/* Action Buttons */}
             <div className="flex gap-4 mb-8">
-              <button
+              <motion.button
                 onClick={handleAddToCartWithQuantity}
                 disabled={product.stock_quantity === 0 || isAddingToCart}
-                className={`flex-1 py-4 px-6 rounded-xl font-semibold text-lg transition-all duration-300 transform hover:scale-105 shadow-lg ${
+                className={`flex-1 py-4 px-6 rounded-xl font-semibold text-lg transition-all duration-300 shadow-lg flex items-center justify-center gap-3 ${
                   product.stock_quantity === 0 || isAddingToCart
                     ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                     : 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white'
                 }`}
+                whileHover={product.stock_quantity > 0 && !isAddingToCart ? { scale: 1.02 } : {}}
+                whileTap={product.stock_quantity > 0 && !isAddingToCart ? { scale: 0.98 } : {}}
               >
                 {isAddingToCart ? (
                   <div className="flex items-center justify-center gap-2">
@@ -447,31 +533,27 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
                   </div>
                 ) : (
                   <div className="flex items-center justify-center gap-2">
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L7 13m0 0l-2.5 5M7 13l2.5 5m6-5v6a2 2 0 01-2 2H9a2 2 0 01-2-2v-6m8 0V9a2 2 0 00-2-2H9a2 2 0 00-2 2v4.01" />
-                    </svg>
+                    <ShoppingCart className="w-6 h-6" />
                     Add to Cart ({quantity})
                   </div>
                 )}
-              </button>
-              <button
+              </motion.button>
+              <motion.button
                 onClick={onAddReview}
-                className="flex-1 border-2 border-gray-300 text-gray-700 hover:bg-gray-50 py-4 px-6 rounded-xl font-semibold text-lg transition-all duration-300 transform hover:scale-105"
+                className="flex-1 border-2 border-gray-300 text-gray-700 hover:bg-gray-50 py-4 px-6 rounded-xl font-semibold text-lg transition-all duration-300 flex items-center justify-center gap-3"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
               >
-                <div className="flex items-center justify-center gap-2">
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-                  </svg>
-                  Write Review
-                </div>
-              </button>
+                <Star className="w-6 h-6" />
+                Write Review
+              </motion.button>
             </div>
 
             {/* Enhanced Tabs */}
             <div className="border-b border-gray-200 mb-6">
               <div className="flex gap-6">
                 {['description', 'reviews', 'specifications', 'recommendations'].map(tab => (
-                  <button
+                  <motion.button
                     key={tab}
                     onClick={() => setActiveTab(tab)}
                     className={`pb-3 px-1 font-semibold capitalize transition-all duration-200 ${
@@ -479,9 +561,10 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
                         ? 'text-blue-600 border-b-2 border-blue-500'
                         : 'text-gray-500 hover:text-gray-700'
                     }`}
+                    whileHover={{ scale: 1.05 }}
                   >
                     {tab === 'recommendations' ? '🤖 AI Recommendations' : tab}
-                  </button>
+                  </motion.button>
                 ))}
               </div>
             </div>
@@ -489,11 +572,15 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
             {/* Tab Content */}
             <div className="max-h-80 overflow-y-auto">
               {activeTab === 'description' && (
-                <div className="space-y-4">
+                <motion.div 
+                  className="space-y-4"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.3 }}
+                >
                   <h4 className="text-lg font-semibold text-gray-900">Product Description</h4>
                   <p className="text-gray-700 leading-relaxed">{product.description || 'No description available for this product.'}</p>
                   
-                  {/* Product Features */}
                   <div className="grid grid-cols-2 gap-4 mt-6">
                     <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-xl">
                       <h5 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
@@ -508,11 +595,15 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
                       <p className="text-green-700">{product.stock_quantity} units available</p>
                     </div>
                   </div>
-                </div>
+                </motion.div>
               )}
 
               {activeTab === 'reviews' && (
-                <div>
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.3 }}
+                >
                   {reviewsLoading ? (
                     <div className="text-center py-8">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
@@ -542,7 +633,11 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
                         {displayReviews.reviews && displayReviews.reviews.length > 0 ? (
                           <div className="space-y-4">
                             {displayReviews.reviews.slice(0, 5).map(review => (
-                              <div key={review.id} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow">
+                              <motion.div 
+                                key={review.id} 
+                                className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow"
+                                whileHover={{ scale: 1.02 }}
+                              >
                                 <div className="flex items-center gap-3 mb-3">
                                   <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
                                     <span className="text-white font-semibold text-sm">
@@ -565,19 +660,21 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
                                     day: 'numeric'
                                   })}
                                 </span>
-                              </div>
+                              </motion.div>
                             ))}
                           </div>
                         ) : (
                           <div className="text-center py-8 bg-gray-50 rounded-xl">
                             <div className="text-4xl mb-2">⭐</div>
                             <p className="text-gray-500 mb-4">No reviews yet. Be the first to review!</p>
-                            <button
+                            <motion.button
                               onClick={onAddReview}
                               className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg transition-colors"
+                              whileHover={{ scale: 1.05 }}
+                              whileTap={{ scale: 0.95 }}
                             >
                               Write First Review
-                            </button>
+                            </motion.button>
                           </div>
                         )}
                       </div>
@@ -587,11 +684,16 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
                       <p className="text-gray-500">No reviews available</p>
                     </div>
                   )}
-                </div>
+                </motion.div>
               )}
 
               {activeTab === 'specifications' && (
-                <div className="space-y-6">
+                <motion.div 
+                  className="space-y-6"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.3 }}
+                >
                   <h4 className="text-lg font-semibold text-gray-900">Product Specifications</h4>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -623,11 +725,16 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
                       <p className="text-orange-700">#{product.id}</p>
                     </div>
                   </div>
-                </div>
+                </motion.div>
               )}
 
               {activeTab === 'recommendations' && (
-                <div className="space-y-6">
+                <motion.div 
+                  className="space-y-6"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.3 }}
+                >
                   <div className="flex items-center justify-between">
                     <h4 className="text-lg font-semibold text-gray-900">AI-Powered Recommendations</h4>
                     
@@ -636,7 +743,7 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
                       {['ml', 'content', 'collaborative', 'popular'].map(algorithm => {
                         const info = getAlgorithmInfo(algorithm);
                         return (
-                          <button
+                          <motion.button
                             key={algorithm}
                             onClick={() => setActiveAlgorithm(algorithm)}
                             className={`px-3 py-2 rounded-lg text-xs font-medium transition-all duration-200 ${
@@ -644,9 +751,11 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
                                 ? `bg-gradient-to-r ${info.color} text-white shadow-lg`
                                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                             }`}
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
                           >
                             {info.icon} {info.name}
-                          </button>
+                          </motion.button>
                         );
                       })}
                     </div>
@@ -660,8 +769,12 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
                   ) : recommendations.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {recommendations.map(rec => (
-                        <div key={rec.id} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm hover:shadow-md transition-all duration-300 hover:scale-105 cursor-pointer"
-                             onClick={() => window.location.href = `/product/${rec.id}`}>
+                        <motion.div 
+                          key={rec.id} 
+                          className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm hover:shadow-md transition-all duration-300 cursor-pointer"
+                          onClick={() => window.location.href = `/product/${rec.id}`}
+                          whileHover={{ scale: 1.02, y: -2 }}
+                        >
                           <img 
                             src={rec.mainImage || rec.image_urls?.[0] || rec.image_url} 
                             alt={rec.name}
@@ -676,7 +789,7 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
                             {renderStars(rec.rating || '0', 'text-xs')}
                             <span className="text-xs text-gray-500">({rec.reviewCount || 0})</span>
                           </div>
-                        </div>
+                        </motion.div>
                       ))}
                     </div>
                   ) : (
@@ -685,13 +798,13 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
                       <p className="text-gray-500">No recommendations available</p>
                     </div>
                   )}
-                </div>
+                </motion.div>
               )}
             </div>
           </div>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 };
 
