@@ -5,6 +5,7 @@ import { Toast } from '../components/Toast.js';
 import { useCart } from '../context/CartContext.js';
 import { useAuth } from '../context/AuthContext.js';
 import SupportWidget from '../components/SupportWidget.js';
+import CategoryNavbar from '../components/CategoryNavbar.js';
 
 const OffersPage = () => {
   const [offers, setOffers] = useState([]);
@@ -185,6 +186,9 @@ const OffersPage = () => {
     }
   };
 
+<CategoryNavbar />
+
+
   // Get offer badge styling
   const getOfferBadge = (offer) => {
     switch (offer.offer_type) {
@@ -220,6 +224,7 @@ const OffersPage = () => {
         }
     }
   };
+
 
   // Get time remaining
   const getTimeRemaining = (validUntil) => {

@@ -1,4 +1,3 @@
-// frontend/src/pages/ProductPage.js - COMPLETE FIXED VERSION
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ProductCard from '../components/ProductCard.js';
@@ -10,28 +9,52 @@ import CategoryNavbar from '../components/CategoryNavbar.js';
 import { Toast } from '../components/Toast.js';
 import { useCart } from '../context/CartContext.js';
 import { useAuth } from '../context/AuthContext.js';
+import { motion, AnimatePresence } from 'framer-motion';
+import { 
+  Filter, 
+  X, 
+  ShoppingCart, 
+  Sparkles, 
+  Zap,
+  TrendingUp,
+  Star,
+  Shield,
+  Truck,
+  Search,
+  SlidersHorizontal,
+  Grid3X3,
+  List,
+  Eye,
+  Heart,
+  Share2,
+  Clock,
+  Award,
+  Crown,
+  Rocket,
+  Brain,
+  Users,
+  Flame,
+  ChevronDown,
+  ChevronUp,
+  Play,
+  Pause,
+  RotateCcw
+} from 'lucide-react';
 
 const ProductPage = () => {
   const [products, setProducts] = useState([]);
   const [filteredProducts, setFilteredProducts] = useState([]);
-  const [featuredProducts, setFeaturedProducts] = useState([]);
-  const [newArrivals, setNewArrivals] = useState([]);
-  const [offers, setOffers] = useState([]);
   const [recommendations, setRecommendations] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [featuredLoading, setFeaturedLoading] = useState(false);
-  const [newArrivalsLoading, setNewArrivalsLoading] = useState(false);
-  const [offersLoading, setOffersLoading] = useState(false);
   const [recommendationsLoading, setRecommendationsLoading] = useState(false);
   const [error, setError] = useState('');
   const { addToCart, getCartItemsCount } = useCart();
+  const [isLoading, setIsLoading] = useState(false);
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  // Toast state
+  // Enhanced state management
   const [toast, setToast] = useState({ message: '', type: 'success' });
-
-  // Filter states
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [minPrice, setMinPrice] = useState(0);
   const [maxPrice, setMaxPrice] = useState(1000);
@@ -42,31 +65,46 @@ const ProductPage = () => {
   const [activeAlgorithm, setActiveAlgorithm] = useState('ml');
   const [algorithmPerformance, setAlgorithmPerformance] = useState({});
   const [showAlgorithmDetails, setShowAlgorithmDetails] = useState(false);
-  
-  // Modal states
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [showProductModal, setShowProductModal] = useState(false);
   const [showReviewModal, setShowReviewModal] = useState(false);
-
-  // Animation states
   const [animateProducts, setAnimateProducts] = useState(false);
   const [cartPulse, setCartPulse] = useState(false);
-
-  // Reviews state
   const [productReviews, setProductReviews] = useState({});
   const [reviewsLoading, setReviewsLoading] = useState({});
+  const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'list'
+  const [expandedCategories, setExpandedCategories] = useState(true);
+  const [autoRotateRecommendations, setAutoRotateRecommendations] = useState(true);
+  const [currentRecommendationIndex, setCurrentRecommendationIndex] = useState(0);
 
-  // Get cart count for badge
   const cartCount = getCartItemsCount();
 
-  // Show toast function
+  // Enhanced toast function with emojis
   const showToast = (message, type = 'success') => {
-    setToast({ message, type });
+    const emojis = {
+      success: '🎉',
+      error: '❌',
+      info: '💡',
+      warning: '⚠️'
+    };
+    setToast({ message: `${emojis[type]} ${message}`, type });
     setTimeout(() => setToast({ message: '', type: 'success' }), 4000);
   };
 
-  // Get unique categories from products
   const categories = ['all', ...new Set(products.map(p => p?.category).filter(Boolean))];
+
+  // Enhanced useEffect for auto-rotating recommendations
+  useEffect(() => {
+    let interval;
+    if (autoRotateRecommendations && recommendations.length > 0) {
+      interval = setInterval(() => {
+        setCurrentRecommendationIndex(prev => 
+          prev < recommendations.length - 4 ? prev + 1 : 0
+        );
+      }, 5000);
+    }
+    return () => clearInterval(interval);
+  }, [autoRotateRecommendations, recommendations]);
 
   useEffect(() => {
     fetchAllData();
@@ -82,7 +120,6 @@ const ProductPage = () => {
     }
   }, [filteredProducts, activeAlgorithm]);
 
-  // Animation trigger when products load
   useEffect(() => {
     if (!loading && filteredProducts.length > 0) {
       setAnimateProducts(true);
@@ -95,14 +132,7 @@ const ProductPage = () => {
     try {
       setLoading(true);
       setError('');
-      
-      // Fetch all data in parallel
-      await Promise.all([
-        fetchProducts(),
-        fetchFeaturedProducts(),
-        fetchNewArrivals(),
-        fetchOffers()
-      ]);
+      await fetchProducts();
     } catch (error) {
       console.error('Error fetching all data:', error);
       setError('Failed to load some data. Please refresh the page.');
@@ -120,7 +150,6 @@ const ProductPage = () => {
       const data = await response.json();
       
       if (Array.isArray(data) && data.length > 0) {
-        // Calculate max price for range slider
         const prices = data.map(p => parseFloat(p.price || 0));
         const actualMaxPrice = Math.ceil(Math.max(...prices));
         const calculatedMaxPrice = Math.max(actualMaxPrice, 1000);
@@ -128,7 +157,6 @@ const ProductPage = () => {
         setCurrentMaxPrice(calculatedMaxPrice);
         setMaxPrice(calculatedMaxPrice);
 
-        // Process products with proper defaults
         const processedProducts = data.map(product => ({
           ...product,
           image_urls: processImageUrls(product.image_urls, product.image_url),
@@ -137,7 +165,8 @@ const ProductPage = () => {
           reviewCount: product.reviewCount || 0,
           is_featured: Boolean(product.is_featured || product.featured || false),
           is_new: checkIfProductIsNew(product.created_at),
-          stock_quantity: product.stock_quantity || 0
+          stock_quantity: product.stock_quantity || 0,
+          discount_percentage: product.discount_percentage || 0
         }));
 
         setProducts(processedProducts);
@@ -152,81 +181,6 @@ const ProductPage = () => {
     }
   };
 
-  const fetchFeaturedProducts = async () => {
-    try {
-      setFeaturedLoading(true);
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/products/featured?limit=8`);
-      
-      if (response.ok) {
-        const data = await response.json();
-        if (Array.isArray(data)) {
-          const processedProducts = data.map(product => ({
-            ...product,
-            image_urls: processImageUrls(product.image_urls, product.image_url),
-            rating: product.rating ? parseFloat(product.rating).toFixed(1) : "0.0",
-            reviewCount: product.reviewCount || 0
-          }));
-          setFeaturedProducts(processedProducts);
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching featured products:', error);
-    } finally {
-      setFeaturedLoading(false);
-    }
-  };
-
-  const fetchNewArrivals = async () => {
-    try {
-      setNewArrivalsLoading(true);
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/products/new-arrivals?limit=8`);
-      
-      if (response.ok) {
-        const data = await response.json();
-        if (Array.isArray(data)) {
-          const processedProducts = data.map(product => ({
-            ...product,
-            image_urls: processImageUrls(product.image_urls, product.image_url),
-            rating: product.rating ? parseFloat(product.rating).toFixed(1) : "0.0",
-            reviewCount: product.reviewCount || 0
-          }));
-          setNewArrivals(processedProducts);
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching new arrivals:', error);
-    } finally {
-      setNewArrivalsLoading(false);
-    }
-  };
-
-  const fetchOffers = async () => {
-    try {
-      setOffersLoading(true);
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/products/offers`);
-      
-      if (response.ok) {
-        const data = await response.json();
-        // Process offers with proper product data
-        const processedOffers = Array.isArray(data) ? data.map(offer => ({
-          ...offer,
-          product: {
-            ...offer,
-            image_urls: processImageUrls(offer.image_urls, offer.image_url),
-            price: parseFloat(offer.price || 0),
-            discount_percentage: offer.discount_percentage || 0
-          }
-        })) : [];
-        setOffers(processedOffers);
-      }
-    } catch (error) {
-      console.error('Error fetching offers:', error);
-    } finally {
-      setOffersLoading(false);
-    }
-  };
-
-  // Helper function to process image URLs - FIXED for ML algorithm
   const processImageUrls = (image_urls, fallback_image_url) => {
     let imageUrls = [];
     
@@ -254,7 +208,6 @@ const ProductPage = () => {
     return imageUrls;
   };
 
-  // Helper function to process tags - FIXED to avoid "0" or "00" icons
   const processTags = (tags) => {
     let processedTags = [];
     
@@ -274,7 +227,6 @@ const ProductPage = () => {
     return processedTags;
   };
 
-  // Helper function to check if product is new (within 30 days)
   const checkIfProductIsNew = (createdAt) => {
     if (!createdAt) return false;
     const createdDate = new Date(createdAt);
@@ -309,7 +261,6 @@ const ProductPage = () => {
     } catch (error) {
       console.error('Error fetching reviews:', error);
     }
-    // Return empty reviews if API fails
     return { 
       reviews: [], 
       average_rating: "0.0", 
@@ -344,23 +295,23 @@ const ProductPage = () => {
         
         switch (activeAlgorithm) {
           case 'ml':
-            apiUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommendations/product/${firstProduct.id}?algorithm=ml&limit=4`;
+            apiUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommendations/product/${firstProduct.id}?algorithm=ml&limit=8`;
             break;
           case 'content':
-            apiUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommendations/product/${firstProduct.id}?algorithm=content&limit=4`;
+            apiUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommendations/product/${firstProduct.id}?algorithm=content&limit=8`;
             break;
           case 'collaborative':
             if (user) {
-              apiUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommendations/user/personalized?limit=4`;
+              apiUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommendations/user/personalized?limit=8`;
             } else {
-              apiUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommendations/product/${firstProduct.id}?algorithm=content&limit=4`;
+              apiUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommendations/product/${firstProduct.id}?algorithm=content&limit=8`;
             }
             break;
           case 'popular':
-            apiUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommendations/popular?limit=4`;
+            apiUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommendations/popular?limit=8`;
             break;
           default:
-            apiUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommendations/product/${firstProduct.id}?algorithm=ml&limit=4`;
+            apiUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommendations/product/${firstProduct.id}?algorithm=ml&limit=8`;
         }
 
         const response = await fetch(apiUrl, { headers });
@@ -371,9 +322,6 @@ const ProductPage = () => {
         if (response.ok) {
           const data = await response.json();
           if (data.success && data.recommendations && data.recommendations.length > 0) {
-            console.log(`Using ${data.algorithm} recommendations algorithm`);
-            
-            // Process recommendation images properly - FIXED for ML algorithm
             const processedRecommendations = data.recommendations.map(rec => ({
               ...rec,
               image_urls: processImageUrls(rec.image_urls, rec.image_url),
@@ -384,7 +332,6 @@ const ProductPage = () => {
 
             setRecommendations(processedRecommendations);
             
-            // Track algorithm performance
             setAlgorithmPerformance(prev => ({
               ...prev,
               [activeAlgorithm]: {
@@ -403,10 +350,9 @@ const ProductPage = () => {
       }
     } catch (error) {
       console.error('Error fetching recommendations:', error);
-      // Enhanced fallback with proper image handling
       const featured = products
         .filter(p => p.is_featured)
-        .slice(0, 4)
+        .slice(0, 8)
         .map(p => ({
           ...p,
           mainImage: p.image_urls[0]
@@ -414,7 +360,6 @@ const ProductPage = () => {
       
       setRecommendations(featured);
       
-      // Track failed performance
       setAlgorithmPerformance(prev => ({
         ...prev,
         [activeAlgorithm]: {
@@ -433,24 +378,20 @@ const ProductPage = () => {
   const applyFilters = () => {
     let filtered = [...products];
 
-    // Category filter
     if (selectedCategory !== 'all') {
       filtered = filtered.filter(product => 
         product.category && product.category.toLowerCase() === selectedCategory.toLowerCase()
       );
     }
 
-    // Price range filter
     filtered = filtered.filter(product => 
       parseFloat(product.price || 0) >= minPrice && parseFloat(product.price || 0) <= maxPrice
     );
 
-    // Rating filter
     if (ratingFilter > 0) {
       filtered = filtered.filter(product => parseFloat(product.rating || 0) >= ratingFilter);
     }
 
-    // Sort products
     switch (sortBy) {
       case 'price-low':
         filtered.sort((a, b) => parseFloat(a.price || 0) - parseFloat(b.price || 0));
@@ -485,25 +426,53 @@ const ProductPage = () => {
     }
     
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/products/search?q=${encodeURIComponent(query)}`);
+      setIsLoading(true);
+      
+      const response = await fetch(
+        `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/products/search?q=${encodeURIComponent(query)}`
+      );
+      
       if (response.ok) {
         const data = await response.json();
-        // Process search results with proper image handling
-        const processedResults = Array.isArray(data) ? data.map(product => ({
+        
+        let searchResults = [];
+        
+        if (Array.isArray(data)) {
+          searchResults = data;
+        } else if (data.products && Array.isArray(data.products)) {
+          searchResults = data.products;
+        } else if (data.success && data.results) {
+          searchResults = data.results;
+        }
+        
+        const processedResults = searchResults.map(product => ({
           ...product,
           image_urls: processImageUrls(product.image_urls, product.image_url),
-          rating: parseFloat(product.rating || 0).toFixed(1)
-        })) : [];
+          rating: parseFloat(product.rating || 0).toFixed(1),
+          reviewCount: product.reviewCount || 0
+        }));
+        
         setFilteredProducts(processedResults);
+        
+        showToast(`🔍 Found ${processedResults.length} products for "${query}"`, 'info');
+      } else {
+        throw new Error('Search failed');
       }
     } catch (error) {
       console.error('Search error:', error);
+      
       const filtered = products.filter(product =>
         product.name?.toLowerCase().includes(query.toLowerCase()) ||
         product.description?.toLowerCase().includes(query.toLowerCase()) ||
-        product.category?.toLowerCase().includes(query.toLowerCase())
+        product.category?.toLowerCase().includes(query.toLowerCase()) ||
+        (product.tags && Array.isArray(product.tags) && 
+         product.tags.some(tag => tag.toLowerCase().includes(query.toLowerCase())))
       );
+      
       setFilteredProducts(filtered);
+      showToast(`🔍 Found ${filtered.length} products for "${query}"`, 'info');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -525,7 +494,7 @@ const ProductPage = () => {
 
   const handleAddReview = (product) => {
     if (!user) {
-      showToast('Please login to add a review', 'error');
+      showToast('🔐 Please login to add a review', 'error');
       return;
     }
     setSelectedProduct(product);
@@ -533,14 +502,12 @@ const ProductPage = () => {
   };
 
   const handleReviewSubmitted = async (productId) => {
-    // Refresh reviews for this product
     const reviewsData = await fetchProductReviews(productId);
     setProductReviews(prev => ({ 
       ...prev, 
       [productId]: reviewsData 
     }));
     
-    // Update product in list with real review data
     setProducts(prev => prev.map(product => 
       product.id === productId 
         ? { 
@@ -551,14 +518,13 @@ const ProductPage = () => {
         : product
     ));
     
-    showToast('Review submitted successfully!');
+    showToast('⭐ Review submitted successfully!');
   };
 
-  // Enhanced cart function with toast notifications
   const handleAddToCart = async (product) => {
     try {
       if (!user) {
-        showToast('Please login to add items to cart', 'error');
+        showToast('🔐 Please login to add items to cart', 'error');
         return;
       }
 
@@ -566,7 +532,6 @@ const ProductPage = () => {
       
       if (result && result.success) {
         showToast(`🛒 ${product.name} added to cart!`, 'success');
-        // Trigger cart animation
         setCartPulse(true);
         setTimeout(() => setCartPulse(false), 600);
       } else {
@@ -575,68 +540,10 @@ const ProductPage = () => {
       }
     } catch (error) {
       console.error('Error adding to cart:', error);
-      showToast('Error adding product to cart. Please try again.', 'error');
+      showToast('❌ Error adding product to cart. Please try again.', 'error');
     }
   };
 
-  // Special function to handle offer products with automatic discount application
-  const handleOfferProductAdd = async (offerProduct) => {
-    try {
-      if (!user) {
-        showToast('Please login to purchase offer products', 'error');
-        navigate('/login');
-        return;
-      }
-
-      // Check if offer is still valid
-      const now = new Date();
-      const validFrom = new Date(offerProduct.valid_from);
-      const validUntil = new Date(offerProduct.valid_until);
-      
-      if (now < validFrom || now > validUntil) {
-        showToast('This offer has expired', 'error');
-        return;
-      }
-
-      // Calculate offer price
-      const calculateOfferPrice = (offer) => {
-        const originalPrice = parseFloat(offer.product.price);
-        
-        if (offer.discount_percentage) {
-          return originalPrice * (1 - offer.discount_percentage / 100);
-        }
-        if (offer.discount_amount) {
-          return Math.max(0, originalPrice - offer.discount_amount);
-        }
-        return originalPrice;
-      };
-
-      // Add the product to cart with offer details
-      const productWithOffer = {
-        ...offerProduct.product,
-        offer_id: offerProduct.id,
-        offer_type: offerProduct.offer_type,
-        discount_percentage: offerProduct.discount_percentage,
-        original_price: offerProduct.product.price,
-        price: calculateOfferPrice(offerProduct)
-      };
-
-      const result = await addToCart(productWithOffer);
-      
-      if (result && result.success) {
-        showToast(`🎉 ${offerProduct.product.name} added with special offer!`, 'success');
-        setCartPulse(true);
-        setTimeout(() => setCartPulse(false), 600);
-      } else {
-        showToast(result?.error || 'Failed to add offer product', 'error');
-      }
-    } catch (error) {
-      console.error('Error adding offer product:', error);
-      showToast('Error adding offer product. Please try again.', 'error');
-    }
-  };
-
-  // Enhanced sample products with proper structure
   const getSampleProducts = () => [
     {
       id: 1,
@@ -684,520 +591,837 @@ const ProductPage = () => {
     setMaxPrice(currentMaxPrice);
     setRatingFilter(0);
     setSortBy('featured');
-    showToast('Filters reset successfully');
+    showToast('🔄 Filters reset successfully');
   };
 
   const getAlgorithmInfo = (algorithm = activeAlgorithm) => {
     switch (algorithm) {
       case 'ml':
         return {
-          name: 'Machine Learning',
-          description: 'AI-powered recommendations based on product similarity',
+          name: 'Neural Network AI',
+          description: 'Deep learning algorithms analyze product patterns and user behavior',
           color: 'from-purple-500 to-pink-500',
-          icon: '🧠'
+          icon: '🧠',
+          gradient: 'bg-gradient-to-r from-purple-500 to-pink-500'
         };
       case 'content':
         return {
-          name: 'Content-Based',
-          description: 'Similar products based on categories and features',
+          name: 'Content Analysis',
+          description: 'Semantic analysis of product features and descriptions',
           color: 'from-blue-500 to-cyan-500',
-          icon: '📊'
+          icon: '📊',
+          gradient: 'bg-gradient-to-r from-blue-500 to-cyan-500'
         };
       case 'collaborative':
         return {
-          name: 'Collaborative',
-          description: 'Products liked by similar users',
+          name: 'Collaborative Filtering',
+          description: 'Recommendations based on similar users preferences',
           color: 'from-green-500 to-emerald-500',
-          icon: '👥'
+          icon: '👥',
+          gradient: 'bg-gradient-to-r from-green-500 to-emerald-500'
         };
       case 'popular':
         return {
-          name: 'Popular',
-          description: 'Trending products based on sales',
+          name: 'Trending Analytics',
+          description: 'Real-time trending products based on sales velocity',
           color: 'from-orange-500 to-red-500',
-          icon: '🔥'
+          icon: '🔥',
+          gradient: 'bg-gradient-to-r from-orange-500 to-red-500'
         };
       default:
         return {
           name: 'AI Recommendations',
           description: 'Smart product suggestions',
           color: 'from-purple-500 to-pink-500',
-          icon: '🧠'
+          icon: '🧠',
+          gradient: 'bg-gradient-to-r from-purple-500 to-pink-500'
         };
     }
   };
 
   const algorithmInfo = getAlgorithmInfo();
 
-  // Navigate to cart page
   const handleCartClick = () => {
     navigate('/cart');
   };
 
-  // Handle category selection from navbar
   const handleCategorySelect = (category) => {
     setSelectedCategory(category);
-    showToast(`Showing ${category === 'all' ? 'all products' : category}`, 'info');
+    showToast(`📁 Showing ${category === 'all' ? 'all products' : category}`, 'info');
   };
 
+  // Enhanced loading component
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 py-12">
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-purple-900 py-12">
         <div className="max-w-7xl mx-auto px-4">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-16 w-16 border-4 border-blue-500 border-t-transparent mx-auto mb-4"></div>
-            <p className="text-gray-600 text-lg">Loading amazing products...</p>
-          </div>
+          <motion.div 
+            className="text-center"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.6 }}
+          >
+            <div className="relative inline-block mb-6">
+              <motion.div
+                animate={{ 
+                  rotate: 360,
+                  scale: [1, 1.2, 1]
+                }}
+                transition={{ 
+                  rotate: { duration: 2, repeat: Infinity, ease: "linear" },
+                  scale: { duration: 1.5, repeat: Infinity }
+                }}
+                className="w-20 h-20 border-4 border-cyan-500 border-t-transparent rounded-full mx-auto"
+              />
+              <motion.div
+                animate={{ 
+                  rotate: -360,
+                  scale: [1.2, 1, 1.2]
+                }}
+                transition={{ 
+                  rotate: { duration: 3, repeat: Infinity, ease: "linear" },
+                  scale: { duration: 2, repeat: Infinity }
+                }}
+                className="absolute inset-0 w-20 h-20 border-4 border-purple-500 border-b-transparent rounded-full"
+              />
+            </div>
+            <motion.h2 
+              className="text-3xl font-bold bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent mb-4"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+            >
+              Curating Amazing Products
+            </motion.h2>
+            <motion.p 
+              className="text-gray-300 text-lg"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.5 }}
+            >
+              Loading the finest collection just for you...
+            </motion.p>
+          </motion.div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
-      {/* Category Navigation Bar */}
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-purple-900">
+      {/* Enhanced Category Navigation Bar */}
       <CategoryNavbar 
         onCategorySelect={handleCategorySelect}
         selectedCategory={selectedCategory}
       />
 
       <div className="max-w-7xl mx-auto px-4 py-8">
-        {/* Header with Cart Badge */}
-        <div className="text-center mb-12 relative">
-          <h1 className="text-5xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-4">
-            Smart Shopping Experience
-          </h1>
-          <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-            Powered by advanced AI recommendation algorithms
-          </p>
+        {/* Enhanced Header with Particles Effect */}
+        <motion.div 
+          className="text-center mb-12 relative"
+          initial={{ opacity: 0, y: -30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, ease: "easeOut" }}
+        >
+          {/* Animated Background Particles */}
+          <div className="absolute inset-0 overflow-hidden pointer-events-none">
+            {[...Array(20)].map((_, i) => (
+              <motion.div
+                key={i}
+                className="absolute w-2 h-2 bg-cyan-400 rounded-full opacity-20"
+                animate={{
+                  y: [0, -30, 0],
+                  x: [0, Math.sin(i) * 20, 0],
+                  opacity: [0.2, 0.8, 0.2],
+                }}
+                transition={{
+                  duration: 3 + i * 0.5,
+                  repeat: Infinity,
+                  delay: i * 0.2,
+                }}
+                style={{
+                  left: `${(i * 5) % 100}%`,
+                  top: `${20 + (i * 3) % 60}%`,
+                }}
+              />
+            ))}
+          </div>
+
+          <motion.h1 
+            className="text-6xl font-black bg-gradient-to-r from-cyan-400 via-blue-400 to-purple-400 bg-clip-text text-transparent mb-6 relative"
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.3, duration: 0.8 }}
+          >
+            Discover Excellence
+            <motion.div 
+              className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-32 h-1 bg-gradient-to-r from-cyan-400 to-purple-400 rounded-full"
+              initial={{ width: 0 }}
+              animate={{ width: 128 }}
+              transition={{ delay: 0.8, duration: 0.6 }}
+            />
+          </motion.h1>
           
-          {/* Cart Icon with Badge */}
-          <div className="absolute top-0 right-0">
-            <button
-              onClick={handleCartClick}
-              className="relative bg-white rounded-full p-3 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-110"
-            >
-              <svg className="w-8 h-8 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L7 13m0 0l-2.5 5M7 13l2.5 5m6-5v6a2 2 0 01-2 2H9a2 2 0 01-2-2v-6m8 0V9a2 2 0 00-2-2H9a2 2 0 00-2 2v4.01" />
-              </svg>
+          <motion.p 
+            className="text-xl text-gray-300 max-w-2xl mx-auto mb-8 leading-relaxed"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.5 }}
+          >
+            Explore our premium collection with <span className="text-cyan-300 font-semibold">AI-powered</span> recommendations and <span className="text-purple-300 font-semibold">smart filtering</span>
+          </motion.p>
+          
+          {/* Enhanced Cart Icon with Floating Animation */}
+          <motion.button
+            onClick={handleCartClick}
+            whileHover={{ scale: 1.1, rotate: [0, -5, 5, 0] }}
+            whileTap={{ scale: 0.95 }}
+            className="absolute top-0 right-0 bg-white/10 backdrop-blur-md rounded-2xl p-4 shadow-2xl hover:shadow-cyan-500/25 transition-all duration-300 border border-cyan-500/30 group"
+            animate={{
+              y: [0, -8, 0],
+            }}
+            transition={{
+              y: {
+                duration: 3,
+                repeat: Infinity,
+                ease: "easeInOut"
+              }
+            }}
+          >
+            <div className="relative">
+              <ShoppingCart className="w-8 h-8 text-white group-hover:text-cyan-300 transition-colors duration-300" />
               {cartCount > 0 && (
-                <span className={`absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold ${cartPulse ? 'animate-ping' : ''}`}>
-                  {cartCount}
-                </span>
-              )}
-            </button>
-          </div>
-        </div>
-
-        {/* Search Bar */}
-        <div className="mb-8">
-          <SearchBar onSearch={handleSearch} />
-        </div>
-
-        {/* Offers Banner */}
-        <div className="text-center mb-8">
-          <div className="bg-gradient-to-r from-orange-400 to-red-700 rounded-2xl p-6 text-white shadow-lg">
-            <h2 className="text-2xl font-bold mb-2">🎁 Special Offers Available!</h2>
-            <p className="mb-4">Check out our limited-time deals and exclusive discounts</p>
-            <button
-              onClick={() => navigate('/offers')}
-              className="bg-purple-700 text-white hover:bg-purple-600 px-6 py-3 rounded-lg font-semibold transition-colors transform hover:scale-105"
-            >
-              View All Offers
-            </button>
-          </div>
-        </div>
-
-        
-        {/* Enhanced Algorithm Selector */}
-        <div className="bg-white rounded-2xl shadow-xl p-6 mb-8 border border-gray-100">
-          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
-            <div className="flex-1">
-              <div className="flex items-center gap-3 mb-3">
-                <h3 className="text-xl font-bold text-gray-900">🎯 AI Recommendation Engine</h3>
-                <button
-                  onClick={() => setShowAlgorithmDetails(!showAlgorithmDetails)}
-                  className="text-blue-500 hover:text-blue-700 text-sm font-medium transition-colors"
-                >
-                  {showAlgorithmDetails ? 'Hide Details' : 'Show Performance'}
-                </button>
-              </div>
-              <p className="text-gray-600 text-sm mb-4">Choose how our AI suggests products for you</p>
-              
-              {/* Algorithm Performance Metrics */}
-              {showAlgorithmDetails && (
-                <div className="bg-gray-50 rounded-xl p-4 mb-4">
-                  <h4 className="font-semibold text-gray-900 mb-3">📊 Algorithm Performance</h4>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    {Object.entries(algorithmPerformance).map(([algo, perf]) => (
-                      <div key={algo} className={`p-3 rounded-lg border ${
-                        perf.success ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
-                      }`}>
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-sm font-medium">{getAlgorithmInfo(algo).icon}</span>
-                          <span className="text-xs font-semibold capitalize">{algo}</span>
-                        </div>
-                        <div className="text-xs text-gray-600">
-                          <div>Time: {perf.responseTime}ms</div>
-                          <div>Results: {perf.recommendationCount}</div>
-                          <div className={perf.success ? 'text-green-600' : 'text-red-600'}>
-                            {perf.success ? '✓ Success' : '✗ Failed'}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-            
-            <div className="flex flex-wrap gap-3">
-              {[
-                { id: 'ml', name: 'ML AI', icon: '🧠', color: 'from-purple-500 to-pink-500' },
-                { id: 'content', name: 'Content', icon: '📊', color: 'from-blue-500 to-cyan-500' },
-                { id: 'collaborative', name: 'Collaborative', icon: '👥', color: 'from-green-500 to-emerald-500' },
-                { id: 'popular', name: 'Popular', icon: '🔥', color: 'from-orange-500 to-red-500' }
-              ].map(algo => (
-                <button
-                  key={algo.id}
-                  onClick={() => setActiveAlgorithm(algo.id)}
-                  className={`px-4 py-3 rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 shadow-lg ${
-                    activeAlgorithm === algo.id
-                      ? `bg-gradient-to-r ${algo.color} text-white shadow-xl`
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200 hover:shadow-md'
+                <motion.span 
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  className={`absolute -top-3 -right-3 bg-gradient-to-r from-red-500 to-pink-500 text-white rounded-full w-8 h-8 flex items-center justify-center text-xs font-bold border-2 border-white shadow-lg ${
+                    cartPulse ? 'animate-ping' : ''
                   }`}
                 >
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg">{algo.icon}</span>
-                    <span>{algo.name}</span>
-                    {algorithmPerformance[algo.id]?.success && (
-                      <span className="text-xs bg-white/20 px-2 py-1 rounded-full">
-                        {algorithmPerformance[algo.id].responseTime}ms
-                      </span>
-                    )}
-                  </div>
-                </button>
-              ))}
+                  {cartCount}
+                </motion.span>
+              )}
             </div>
-          </div>
-        </div>
+          </motion.button>
+        </motion.div>
+
+        {/* Enhanced Search Bar */}
+        <motion.div 
+          className="mb-8"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+        >
+          <SearchBar onSearch={handleSearch} />
+        </motion.div>
 
         {/* Main Content Grid */}
         <div className="flex flex-col lg:flex-row gap-8">
-          {/* Filters Sidebar */}
-          <div className={`lg:w-80 transition-all duration-300 ${
-            showFilters ? 'block animate-slide-in-left' : 'hidden'
-          } lg:block`}>
-            <div className="bg-white rounded-2xl shadow-xl p-6 sticky top-24 border border-gray-100">
+          {/* Enhanced Filters Sidebar */}
+          <motion.div 
+            className="lg:w-80 flex-shrink-0"
+            initial={{ opacity: 0, x: -30 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.6, duration: 0.6 }}
+          >
+            <div className="bg-white/10 backdrop-blur-md rounded-3xl p-6 sticky top-24 border border-cyan-500/20 h-fit shadow-2xl">
+              {/* Header with Expand/Collapse */}
               <div className="flex justify-between items-center mb-6">
-                <h3 className="text-lg font-semibold text-gray-900">Filters & Sort</h3>
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-xl">
+                    <SlidersHorizontal className="w-5 h-5 text-white" />
+                  </div>
+                  <h3 className="text-lg font-bold text-white">Smart Filters</h3>
+                </div>
                 <button 
-                  onClick={() => setShowFilters(false)}
-                  className="lg:hidden text-gray-500 hover:text-gray-700 transition-colors"
+                  onClick={() => setExpandedCategories(!expandedCategories)}
+                  className="text-gray-300 hover:text-white transition-colors bg-white/10 p-2 rounded-xl"
                 >
-                  ✕
+                  {expandedCategories ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                 </button>
               </div>
 
-              <div className="space-y-2 max-h-60 overflow-y-auto scrollbar-hide">
-                {categories.map(category => {
-                  const categoryCount = products.filter(p => 
-                    category === 'all' || p.category === category
-                  ).length;
-                  
-                  return (
-                    <button
-                      key={category}
-                      onClick={() => setSelectedCategory(category)}
-                      className={`block w-full text-left px-3 py-2 rounded-lg transition-all duration-200 transform hover:scale-105 ${
-                        selectedCategory === category
-                          ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg'
-                          : 'text-gray-700 hover:bg-blue-50 hover:border-blue-200 border border-transparent'
-                      }`}
-                    >
-                      <span className="font-medium">
-                        {category.charAt(0).toUpperCase() + category.slice(1)}
-                      </span>
-                      <span className="text-sm opacity-70 ml-2">
-                        ({categoryCount})
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Price Range */}
-              <div className="mb-6">
-                <h4 className="font-medium text-gray-900 mb-3 flex items-center gap-2">
-                  <span>💰</span> Price Range
-                </h4>
-                <div className="space-y-4">
-                  <div className="flex justify-between text-sm text-gray-600">
-                    <span>Rs. {minPrice}</span>
-                    <span>Rs. {maxPrice}</span>
-                  </div>
-                  
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2">
-                      <label className="text-sm text-gray-600 w-16">Min:</label>
-                      <input
-                        type="number"
-                        value={minPrice}
-                        onChange={(e) => handleMinPriceChange(e.target.value)}
-                        min="0"
-                        max={maxPrice - 1}
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                      />
+              <AnimatePresence>
+                {expandedCategories && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    {/* Categories */}
+                    <div className="mb-6">
+                      <h4 className="font-semibold text-white mb-4 flex items-center gap-2">
+                        <span className="text-cyan-300">📂</span> 
+                        Product Categories
+                        <span className="text-xs bg-cyan-500/20 text-cyan-300 px-2 py-1 rounded-full ml-auto">
+                          {categories.length}
+                        </span>
+                      </h4>
+                      <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
+                        {categories.map(category => {
+                          const categoryCount = products.filter(p => 
+                            category === 'all' || p.category === category
+                          ).length;
+                          
+                          return (
+                            <motion.button
+                              key={category}
+                              onClick={() => setSelectedCategory(category)}
+                              whileHover={{ scale: 1.02, x: 4 }}
+                              whileTap={{ scale: 0.98 }}
+                              className={`block w-full text-left px-4 py-3 rounded-xl transition-all duration-300 border-2 ${
+                                selectedCategory === category
+                                  ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-lg border-cyan-400'
+                                  : 'text-gray-300 hover:bg-white/10 hover:text-white border-transparent hover:border-cyan-500/30'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <span className="font-medium capitalize">
+                                  {category === 'all' ? 'All Products' : category}
+                                </span>
+                                <span className={`text-sm px-2 py-1 rounded-full ${
+                                  selectedCategory === category 
+                                    ? 'bg-white/20' 
+                                    : 'bg-white/10'
+                                }`}>
+                                  {categoryCount}
+                                </span>
+                              </div>
+                            </motion.button>
+                          );
+                        })}
+                      </div>
                     </div>
-                    
-                    <div className="flex items-center gap-2">
-                      <label className="text-sm text-gray-600 w-16">Max:</label>
-                      <input
-                        type="number"
-                        value={maxPrice}
-                        onChange={(e) => handleMaxPriceChange(e.target.value)}
-                        min={minPrice + 1}
-                        max={currentMaxPrice}
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                      />
+
+                    {/* Price Range */}
+                    <div className="mb-6">
+                      <h4 className="font-semibold text-white mb-4 flex items-center gap-2">
+                        <span className="text-cyan-300">💰</span> 
+                        Price Range
+                      </h4>
+                      <div className="space-y-4">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-cyan-300 font-medium">Rs. {minPrice}</span>
+                          <span className="text-cyan-300 font-medium">Rs. {maxPrice}</span>
+                        </div>
+                        
+                        <div className="relative pt-4">
+                          <div className="bg-gray-600 rounded-full h-3 relative">
+                            <motion.div 
+                              className="bg-gradient-to-r from-cyan-500 to-blue-500 h-3 rounded-full shadow-lg"
+                              initial={{ width: 0 }}
+                              animate={{ 
+                                width: `${((maxPrice - minPrice) / currentMaxPrice) * 100}%`,
+                                marginLeft: `${(minPrice / currentMaxPrice) * 100}%`
+                              }}
+                              transition={{ duration: 0.8 }}
+                            />
+                          </div>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="text-xs text-gray-300 mb-1 block">Min Price</label>
+                            <input
+                              type="number"
+                              value={minPrice}
+                              onChange={(e) => handleMinPriceChange(e.target.value)}
+                              min="0"
+                              max={maxPrice - 1}
+                              className="w-full px-3 py-2 bg-white/10 border border-cyan-500/30 rounded-xl text-sm text-white focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs text-gray-300 mb-1 block">Max Price</label>
+                            <input
+                              type="number"
+                              value={maxPrice}
+                              onChange={(e) => handleMaxPriceChange(e.target.value)}
+                              min={minPrice + 1}
+                              max={currentMaxPrice}
+                              className="w-full px-3 py-2 bg-white/10 border border-cyan-500/30 rounded-xl text-sm text-white focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all"
+                            />
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                  
-                  <div className="bg-gray-200 rounded-full h-2 relative">
-                    <div 
-                      className="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full transition-all duration-300" 
-                      style={{ 
-                        width: `${((maxPrice - minPrice) / currentMaxPrice) * 100}%`,
-                        marginLeft: `${(minPrice / currentMaxPrice) * 100}%`
-                      }}
-                    ></div>
-                  </div>
-                </div>
-              </div>
 
-              {/* Ratings Filter */}
-              <div className="mb-6">
-                <h4 className="font-medium text-gray-900 mb-3 flex items-center gap-2">
-                  <span>⭐</span> Customer Ratings
-                </h4>
-                <div className="space-y-2">
-                  {[4, 3, 2, 1].map(rating => (
-                    <button
-                      key={rating}
-                      onClick={() => setRatingFilter(ratingFilter === rating ? 0 : rating)}
-                      className={`flex items-center w-full text-left px-3 py-2 rounded-lg transition-all duration-200 transform hover:scale-105 ${
-                        ratingFilter === rating
-                          ? 'bg-yellow-100 text-yellow-800 border border-yellow-300 shadow-sm'
-                          : 'text-gray-700 hover:bg-gray-50 border border-transparent'
-                      }`}
-                    >
-                      <span className="flex text-yellow-400 mr-2">
-                        {'★'.repeat(rating)}{'☆'.repeat(5-rating)}
-                      </span>
-                      <span className="text-sm">& above</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
+                    {/* Ratings Filter */}
+                    <div className="mb-6">
+                      <h4 className="font-semibold text-white mb-4 flex items-center gap-2">
+                        <Star className="w-4 h-4 text-yellow-400" />
+                        Customer Ratings
+                      </h4>
+                      <div className="space-y-2">
+                        {[4, 3, 2, 1].map(rating => (
+                          <motion.button
+                            key={rating}
+                            onClick={() => setRatingFilter(ratingFilter === rating ? 0 : rating)}
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                            className={`flex items-center w-full text-left px-4 py-3 rounded-xl transition-all duration-300 border-2 ${
+                              ratingFilter === rating
+                                ? 'bg-yellow-500/20 text-yellow-300 border-yellow-400 shadow-lg'
+                                : 'text-gray-300 hover:bg-white/10 border-transparent hover:border-yellow-500/30'
+                            }`}
+                          >
+                            <span className="flex text-yellow-400 mr-3 text-lg">
+                              {'★'.repeat(rating)}{'☆'.repeat(5-rating)}
+                            </span>
+                            <span className="text-sm font-medium">& above</span>
+                          </motion.button>
+                        ))}
+                      </div>
+                    </div>
 
-              {/* Clear Filters */}
-              <button
+                    {/* Sort Options */}
+                    <div className="mb-6">
+                      <h4 className="font-semibold text-white mb-4 flex items-center gap-2">
+                        <span className="text-cyan-300">🔃</span> 
+                        Sort By
+                      </h4>
+                      <div className="relative">
+                        <select
+                          value={sortBy}
+                          onChange={(e) => setSortBy(e.target.value)}
+                          className="w-full bg-white/10 border border-cyan-500/30 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all appearance-none"
+                        >
+                          <option value="featured" className="bg-gray-800">🌟 Featured</option>
+                          <option value="newest" className="bg-gray-800">🆕 Newest</option>
+                          <option value="price-low" className="bg-gray-800">💰 Price: Low to High</option>
+                          <option value="price-high" className="bg-gray-800">💎 Price: High to Low</option>
+                          <option value="rating" className="bg-gray-800">⭐ Top Rated</option>
+                        </select>
+                        <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-cyan-300 pointer-events-none">
+                          <ChevronDown className="w-4 h-4" />
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Clear Filters Button */}
+              <motion.button
                 onClick={resetFilters}
-                className="w-full bg-gradient-to-r from-gray-100 to-gray-200 hover:from-gray-200 hover:to-gray-300 text-gray-700 py-3 rounded-lg font-medium transition-all duration-200 transform hover:scale-105 shadow-sm border border-gray-200"
+                whileHover={{ scale: 1.02, y: -2 }}
+                whileTap={{ scale: 0.98 }}
+                className="w-full bg-gradient-to-r from-cyan-500/20 to-blue-500/20 hover:from-cyan-500/30 hover:to-blue-500/30 text-white py-3 rounded-xl font-semibold transition-all duration-300 shadow-lg border border-cyan-500/30 flex items-center justify-center gap-3 group"
               >
-                🗑️ Clear All Filters
-              </button>
+                <RotateCcw className="w-4 h-4 group-hover:rotate-180 transition-transform duration-500" />
+                Reset All Filters
+              </motion.button>
             </div>
-          </div>
+          </motion.div>
 
-          {/* Products Section */}
+          {/* Enhanced Products Section */}
           <div className="flex-1">
-            {/* Controls Bar */}
-            <div className="bg-white rounded-2xl shadow-xl p-6 mb-6 border border-gray-100">
+            {/* Enhanced Controls Bar */}
+            <motion.div 
+              className="bg-white/10 backdrop-blur-md rounded-3xl p-6 mb-6 border border-cyan-500/20 shadow-2xl"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.7 }}
+            >
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div className="flex items-center gap-4">
-                  <button
-                    onClick={() => setShowFilters(true)}
-                    className="lg:hidden bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white px-6 py-3 rounded-lg font-medium transition-all duration-200 transform hover:scale-105 shadow-lg"
-                  >
-                    ☰ Show Filters
-                  </button>
-                  <p className="text-gray-600 text-lg">
-                    Showing <span className="font-semibold text-gray-900">{filteredProducts.length}</span> products
+                  {/* View Mode Toggle */}
+                  <div className="flex bg-white/10 rounded-xl p-1 border border-cyan-500/20">
+                    <button
+                      onClick={() => setViewMode('grid')}
+                      className={`p-2 rounded-lg transition-all duration-300 ${
+                        viewMode === 'grid' 
+                          ? 'bg-cyan-500 text-white shadow-lg' 
+                          : 'text-gray-300 hover:text-white'
+                      }`}
+                    >
+                      <Grid3X3 className="w-5 h-5" />
+                    </button>
+                    <button
+                      onClick={() => setViewMode('list')}
+                      className={`p-2 rounded-lg transition-all duration-300 ${
+                        viewMode === 'list' 
+                          ? 'bg-cyan-500 text-white shadow-lg' 
+                          : 'text-gray-300 hover:text-white'
+                      }`}
+                    >
+                      <List className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  {/* Results Count */}
+                  <div className="flex items-center gap-3">
+                    <div className="w-2 h-2 bg-cyan-400 rounded-full animate-pulse"></div>
+                    <p className="text-gray-300 text-lg">
+                      <span className="font-bold text-white">{filteredProducts.length}</span> products found
+                    </p>
                     {filteredProducts.length !== products.length && (
                       <button
                         onClick={resetFilters}
-                        className="text-blue-500 hover:text-blue-700 text-sm font-medium ml-2 transition-colors"
+                        className="text-cyan-300 hover:text-cyan-200 text-sm font-medium transition-colors flex items-center gap-1"
                       >
-                        (Show all)
+                        <RotateCcw className="w-3 h-3" />
+                        Show all
                       </button>
                     )}
-                  </p>
+                  </div>
                 </div>
                 
-                {/* Cart Count Display */}
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-2 bg-blue-50 px-4 py-2 rounded-lg">
-                    <span className="text-blue-600 font-semibold">🛒</span>
-                    <span className="text-blue-800 font-bold">{cartCount}</span>
-                    <span className="text-blue-600 text-sm">items in cart</span>
-                  </div>
-                  
-                  <div className="flex items-center gap-3">
-                    <span className="text-gray-600 text-sm">Sort by:</span>
-                    <select
-                      value={sortBy}
-                      onChange={(e) => setSortBy(e.target.value)}
-                      className="border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-white"
-                    >
-                      <option value="featured">Featured</option>
-                      <option value="newest">Newest</option>
-                      <option value="price-low">Price: Low to High</option>
-                      <option value="price-high">Price: High to Low</option>
-                      <option value="rating">Top Rated</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Products Grid */}
-            {filteredProducts.length === 0 ? (
-              <div className="text-center py-16 bg-white rounded-2xl shadow-xl border border-gray-100">
-                <div className="text-6xl mb-4">🔍</div>
-                <h3 className="text-2xl font-semibold text-gray-900 mb-2">No products found</h3>
-                <p className="text-gray-600 mb-6">Try adjusting your filters or search terms</p>
-                <button
-                  onClick={resetFilters}
-                  className="bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white px-8 py-3 rounded-lg font-medium transition-all duration-200 transform hover:scale-105 shadow-lg"
+                {/* Enhanced Cart Count Display */}
+                <motion.div 
+                  className="flex items-center gap-4"
+                  whileHover={{ scale: 1.05 }}
                 >
-                  Reset Filters
-                </button>
+                  <div className="flex items-center gap-3 bg-gradient-to-r from-cyan-500/20 to-blue-500/20 px-4 py-3 rounded-xl border border-cyan-400/30 shadow-lg">
+                    <div className="relative">
+                      <ShoppingCart className="text-cyan-300 w-6 h-6" />
+                      {cartCount > 0 && (
+                        <motion.div
+                          animate={{ scale: [1, 1.2, 1] }}
+                          transition={{ duration: 0.6, repeat: Infinity }}
+                          className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-white"
+                        />
+                      )}
+                    </div>
+                    <div className="text-right">
+                      <div className="text-white font-bold text-lg">{cartCount}</div>
+                      <div className="text-cyan-200 text-xs">in cart</div>
+                    </div>
+                  </div>
+                </motion.div>
               </div>
+            </motion.div>
+
+            {/* Products Grid/List View */}
+            {filteredProducts.length === 0 ? (
+              <motion.div 
+                className="text-center py-20 bg-white/10 backdrop-blur-md rounded-3xl border border-cyan-500/20 shadow-2xl"
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.5 }}
+              >
+                <motion.div
+                  animate={{ 
+                    y: [0, -10, 0],
+                    rotate: [0, 5, -5, 0]
+                  }}
+                  transition={{ 
+                    duration: 2,
+                    repeat: Infinity,
+                    ease: "easeInOut"
+                  }}
+                  className="text-8xl mb-6"
+                >
+                  🔍
+                </motion.div>
+                <h3 className="text-3xl font-bold text-white mb-4">No Products Found</h3>
+                <p className="text-gray-300 mb-8 text-lg">Try adjusting your filters or search terms</p>
+                <motion.button
+                  onClick={resetFilters}
+                  whileHover={{ scale: 1.05, y: -2 }}
+                  whileTap={{ scale: 0.95 }}
+                  className="bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white px-8 py-4 rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-cyan-500/25 flex items-center gap-3"
+                >
+                  <RotateCcw className="w-5 h-5" />
+                  Reset All Filters
+                </motion.button>
+              </motion.div>
             ) : (
               <>
-                <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6 mb-12 ${
-                  animateProducts ? 'animate-fade-in-up' : ''
-                }`}>
+                <motion.div 
+                  className={`${
+                    viewMode === 'grid' 
+                      ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6 mb-12'
+                      : 'space-y-4 mb-12'
+                  }`}
+                  initial="hidden"
+                  animate="visible"
+                  variants={{
+                    hidden: { opacity: 0 },
+                    visible: {
+                      opacity: 1,
+                      transition: {
+                        staggerChildren: 0.1
+                      }
+                    }
+                  }}
+                >
                   {filteredProducts.map((product, index) => (
-                    <div 
+                    <motion.div 
                       key={product.id}
-                      className="transform transition-all duration-300 hover:scale-105"
-                      style={{ animationDelay: `${index * 100}ms` }}
+                      variants={{
+                        hidden: { opacity: 0, y: 20 },
+                        visible: { opacity: 1, y: 0 }
+                      }}
+                      transition={{ 
+                        duration: 0.5, 
+                        delay: index * 0.1,
+                        type: "spring",
+                        stiffness: 100
+                      }}
+                      layout
                     >
                       <ProductCard 
                         product={product}
                         onAddToCart={handleAddToCart}
                         onViewDetails={() => loadProductDetails(product)}
                         onAddReview={() => handleAddReview(product)}
+                        viewMode={viewMode}
                       />
-                    </div>
+                    </motion.div>
                   ))}
-                </div>
-
-                {/* Enhanced AI-Powered Recommendations Section */}
-                {recommendations.length > 0 && (
-                  <div className="animate-fade-in mt-12">
-                    <div className="text-center mb-8">
-                      <div className="flex items-center justify-center gap-3 mb-4">
-                        <h3 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
-                          {algorithmInfo.icon} {algorithmInfo.name} Recommendations
-                        </h3>
-                        {algorithmPerformance[activeAlgorithm]?.success && (
-                          <div className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium">
-                            ⚡ {algorithmPerformance[activeAlgorithm].responseTime}ms
-                          </div>
-                        )}
-                      </div>
-                      <p className="text-gray-600 text-lg mb-4">
-                        {algorithmInfo.description}
-                      </p>
-                      
-                      {/* Algorithm Status */}
-                      <div className="flex items-center justify-center gap-4 mb-6">
-                        {recommendationsLoading ? (
-                          <div className="inline-flex items-center gap-2 bg-blue-100 text-blue-800 px-4 py-2 rounded-full text-sm font-medium">
-                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-800"></div>
-                            Generating smart recommendations...
-                          </div>
-                        ) : (
-                          <div className="inline-flex items-center gap-2 bg-green-100 text-green-800 px-4 py-2 rounded-full text-sm font-medium">
-                            <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-                            AI Recommendations Active
-                          </div>
-                        )}
-                        
-                        {/* Recommendation Count */}
-                        <div className="inline-flex items-center gap-2 bg-purple-100 text-purple-800 px-4 py-2 rounded-full text-sm font-medium">
-                          <span>📊</span>
-                          {recommendations.length} products suggested
-                        </div>
-                      </div>
-                    </div>
-                    
-                    {recommendationsLoading ? (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                        {[1, 2, 3, 4].map(i => (
-                          <div key={i} className="bg-white rounded-2xl shadow-lg p-4 animate-pulse">
-                            <div className="bg-gray-300 h-40 rounded-lg mb-4"></div>
-                            <div className="bg-gray-300 h-4 rounded mb-2"></div>
-                            <div className="bg-gray-300 h-3 rounded w-3/4"></div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                        {recommendations.map(product => (
-                          <ProductCard 
-                            key={product.id}
-                            product={product}
-                            onAddToCart={handleAddToCart}
-                            onViewDetails={() => loadProductDetails(product)}
-                            onAddReview={() => handleAddReview(product)}
-                            compact={true}
-                          />
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
+                </motion.div>
               </>
             )}
           </div>
         </div>
-        {/* Combined Featured & New Arrivals Section */}
-        <div className="mb-12 mt-10">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-              ⭐ Featured & New Arrivals
-            </h2>
-            <span className="text-blue-600 font-semibold cursor-pointer hover:underline">View All</span>
-          </div>
-          
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {[...featuredProducts.slice(0, 2), ...newArrivals.slice(0, 2)].map((product, index) => (
-              <div 
-                key={product.id}
-                className="transform transition-all duration-300 hover:scale-105"
-                style={{ animationDelay: `${index * 100}ms` }}
-              >
-                <ProductCard 
-                  product={product}
-                  onAddToCart={handleAddToCart}
-                  onViewDetails={() => loadProductDetails(product)}
-                  onAddReview={() => handleAddReview(product)}
-                  compact={true}
-                />
-              </div>
-            ))}
-          </div>
-        </div>
 
+        {/* Enhanced AI Recommendations Section */}
+        {recommendations.length > 0 && (
+          <motion.section 
+            className="mt-16"
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8 }}
+          >
+            {/* Enhanced Header */}
+            <div className="text-center mb-12">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.3 }}
+                className="inline-flex items-center gap-4 mb-6"
+              >
+                <div className="relative">
+                  <motion.div
+                    animate={{ 
+                      rotate: 360,
+                      scale: [1, 1.1, 1]
+                    }}
+                    transition={{ 
+                      rotate: { duration: 3, repeat: Infinity, ease: "linear" },
+                      scale: { duration: 2, repeat: Infinity }
+                    }}
+                    className="w-16 h-16 bg-gradient-to-r from-purple-500 to-pink-500 rounded-2xl flex items-center justify-center shadow-2xl"
+                  >
+                    <span className="text-2xl">{algorithmInfo.icon}</span>
+                  </motion.div>
+                  <motion.div
+                    animate={{ 
+                      rotate: -360,
+                      scale: [1.1, 1, 1.1]
+                    }}
+                    transition={{ 
+                      rotate: { duration: 4, repeat: Infinity, ease: "linear" },
+                      scale: { duration: 3, repeat: Infinity }
+                    }}
+                    className="absolute -inset-2 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-2xl opacity-50 blur-sm"
+                  />
+                </div>
+                <div>
+                  <h3 className="text-4xl font-black bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">
+                    {algorithmInfo.name}
+                  </h3>
+                  <p className="text-gray-300 text-lg mt-2">
+                    {algorithmInfo.description}
+                  </p>
+                </div>
+              </motion.div>
+
+              {/* Enhanced Algorithm Controls */}
+              <div className="flex flex-wrap justify-center gap-4 mb-8">
+                {[
+                  { id: 'ml', name: 'AI Neural', icon: Brain, color: 'from-purple-500 to-pink-500' },
+                  { id: 'content', name: 'Content AI', icon: TrendingUp, color: 'from-blue-500 to-cyan-500' },
+                  { id: 'collaborative', name: 'Social AI', icon: Users, color: 'from-green-500 to-emerald-500' },
+                  { id: 'popular', name: 'Trending', icon: Flame, color: 'from-orange-500 to-red-500' }
+                ].map(algo => {
+                  const Icon = algo.icon;
+                  return (
+                    <motion.button
+                      key={algo.id}
+                      onClick={() => setActiveAlgorithm(algo.id)}
+                      whileHover={{ scale: 1.05, y: -2 }}
+                      whileTap={{ scale: 0.95 }}
+                      className={`px-6 py-4 rounded-2xl font-bold transition-all duration-300 shadow-xl backdrop-blur-sm border-2 ${
+                        activeAlgorithm === algo.id
+                          ? `bg-gradient-to-r ${algo.color} text-white shadow-2xl border-white/20`
+                          : 'bg-white/10 text-white hover:bg-white/20 border-white/10 hover:border-cyan-500/30'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <Icon className="w-5 h-5" />
+                        <span>{algo.name}</span>
+                        {algorithmPerformance[algo.id]?.success && (
+                          <span className="text-xs bg-white/20 px-2 py-1 rounded-full">
+                            {algorithmPerformance[algo.id].responseTime}ms
+                          </span>
+                        )}
+                      </div>
+                    </motion.button>
+                  );
+                })}
+              </div>
+
+              {/* Enhanced Status Bar */}
+              <div className="flex flex-wrap justify-center gap-6 mb-8">
+                {recommendationsLoading ? (
+                  <motion.div 
+                    className="inline-flex items-center gap-3 bg-cyan-500/20 text-cyan-300 px-6 py-3 rounded-2xl text-sm font-medium border border-cyan-400/30 shadow-lg"
+                    animate={{ opacity: [0.7, 1, 0.7] }}
+                    transition={{ duration: 1.5, repeat: Infinity }}
+                  >
+                    <div className="flex gap-1">
+                      {[0, 1, 2].map(i => (
+                        <motion.div
+                          key={i}
+                          animate={{ scale: [1, 1.5, 1] }}
+                          transition={{ 
+                            duration: 0.6, 
+                            repeat: Infinity,
+                            delay: i * 0.2 
+                          }}
+                          className="w-2 h-2 bg-cyan-400 rounded-full"
+                        />
+                      ))}
+                    </div>
+                    AI is generating smart recommendations...
+                  </motion.div>
+                ) : (
+                  <>
+                    <div className="inline-flex items-center gap-3 bg-green-500/20 text-green-300 px-6 py-3 rounded-2xl text-sm font-medium border border-green-400/30 shadow-lg">
+                      <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                      AI Recommendations Active
+                    </div>
+                    <div className="inline-flex items-center gap-3 bg-purple-500/20 text-purple-300 px-6 py-3 rounded-2xl text-sm font-medium border border-purple-400/30 shadow-lg">
+                      <span>🎯</span>
+                      {recommendations.length} smart suggestions
+                    </div>
+                    <button
+                      onClick={() => setAutoRotateRecommendations(!autoRotateRecommendations)}
+                      className={`inline-flex items-center gap-3 px-6 py-3 rounded-2xl text-sm font-medium border shadow-lg transition-all ${
+                        autoRotateRecommendations
+                          ? 'bg-cyan-500/20 text-cyan-300 border-cyan-400/30'
+                          : 'bg-gray-500/20 text-gray-300 border-gray-400/30'
+                      }`}
+                    >
+                      {autoRotateRecommendations ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                      Auto-rotate: {autoRotateRecommendations ? 'ON' : 'OFF'}
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+            
+            {/* Enhanced Recommendations Carousel */}
+            {recommendationsLoading ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                {[1, 2, 3, 4].map(i => (
+                  <motion.div
+                    key={i}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.1 }}
+                    className="bg-white/10 rounded-3xl p-6 animate-pulse border border-cyan-500/20"
+                  >
+                    <div className="bg-gray-600 h-48 rounded-2xl mb-4"></div>
+                    <div className="bg-gray-600 h-4 rounded mb-2"></div>
+                    <div className="bg-gray-600 h-3 rounded w-3/4"></div>
+                  </motion.div>
+                ))}
+              </div>
+            ) : (
+              <div className="relative">
+                {/* Navigation Arrows */}
+                {recommendations.length > 4 && (
+                  <>
+                    <button
+                      onClick={() => setCurrentRecommendationIndex(prev => Math.max(0, prev - 1))}
+                      className="absolute left-0 top-1/2 transform -translate-y-1/2 -translate-x-4 bg-white/20 backdrop-blur-md text-white p-3 rounded-full shadow-2xl border border-cyan-500/30 hover:bg-white/30 transition-all z-10"
+                    >
+                      <ChevronDown className="w-6 h-6 transform -rotate-90" />
+                    </button>
+                    <button
+                      onClick={() => setCurrentRecommendationIndex(prev => 
+                        Math.min(recommendations.length - 4, prev + 1)
+                      )}
+                      className="absolute right-0 top-1/2 transform -translate-y-1/2 translate-x-4 bg-white/20 backdrop-blur-md text-white p-3 rounded-full shadow-2xl border border-cyan-500/30 hover:bg-white/30 transition-all z-10"
+                    >
+                      <ChevronDown className="w-6 h-6 transform rotate-90" />
+                    </button>
+                  </>
+                )}
+
+                <motion.div 
+                  className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 overflow-hidden"
+                  initial="hidden"
+                  animate="visible"
+                  variants={{
+                    hidden: { opacity: 0 },
+                    visible: {
+                      opacity: 1,
+                      transition: {
+                        staggerChildren: 0.1
+                      }
+                    }
+                  }}
+                >
+                  {recommendations
+                    .slice(currentRecommendationIndex, currentRecommendationIndex + 4)
+                    .map((product, index) => (
+                    <motion.div
+                      key={product.id}
+                      variants={{
+                        hidden: { opacity: 0, scale: 0.8, y: 20 },
+                        visible: { opacity: 1, scale: 1, y: 0 }
+                      }}
+                      transition={{ 
+                        duration: 0.5, 
+                        delay: index * 0.1,
+                        type: "spring",
+                        stiffness: 100
+                      }}
+                      whileHover={{ 
+                        y: -8,
+                        transition: { duration: 0.3 }
+                      }}
+                    >
+                      <ProductCard 
+                        product={product}
+                        onAddToCart={handleAddToCart}
+                        onViewDetails={() => loadProductDetails(product)}
+                        onAddReview={() => handleAddReview(product)}
+                        compact={true}
+                        featured={true}
+                      />
+                    </motion.div>
+                  ))}
+                </motion.div>
+
+                {/* Carousel Indicators */}
+                {recommendations.length > 4 && (
+                  <div className="flex justify-center gap-2 mt-6">
+                    {Array.from({ length: Math.ceil(recommendations.length / 4) }).map((_, index) => (
+                      <button
+                        key={index}
+                        onClick={() => setCurrentRecommendationIndex(index * 4)}
+                        className={`w-3 h-3 rounded-full transition-all ${
+                          currentRecommendationIndex === index * 4
+                            ? 'bg-cyan-400 scale-125'
+                            : 'bg-gray-600 hover:bg-gray-400'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </motion.section>
+        )}
       </div>
 
-
-
-      {/* Toast Notification */}
+      {/* Enhanced Toast Notification */}
       <Toast 
         message={toast.message} 
         type={toast.type} 
@@ -1230,24 +1454,6 @@ const ProductPage = () => {
 
       {/* Support Widget */}
       <SupportWidget />
-
-      {/* Add custom animations */}
-      <style jsx>{`
-        @keyframes slide-in-left {
-          from { transform: translateX(-100%); opacity: 0; }
-          to { transform: translateX(0); opacity: 1; }
-        }
-        @keyframes fade-in-up {
-          from { transform: translateY(30px); opacity: 0; }
-          to { transform: translateY(0); opacity: 1; }
-        }
-        .animate-slide-in-left {
-          animation: slide-in-left 0.3s ease-out;
-        }
-        .animate-fade-in-up {
-          animation: fade-in-up 0.6s ease-out;
-        }
-      `}</style>
     </div>
   );
 };

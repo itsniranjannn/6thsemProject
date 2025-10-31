@@ -202,7 +202,7 @@ const AboutPage = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-purple-900 pt-16">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-purple-900">
       {/* Enhanced Hero Section */}
       <section className="relative py-24 overflow-hidden">
         {/* Animated Background */}
