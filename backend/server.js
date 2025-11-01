@@ -1,13 +1,20 @@
+// ======================
+// SMARTSHOP BACKEND - server.js
+// ======================
+
 const express = require('express');
 const mysql = require('mysql2');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
 require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Add error handling early
+// ======================
+// Global Error Handling (Early)
+// ======================
 process.on('uncaughtException', (err) => {
   console.error('❌ Uncaught Exception:', err);
 });
@@ -16,16 +23,29 @@ process.on('unhandledRejection', (err) => {
   console.error('❌ Unhandled Rejection:', err);
 });
 
-// ✅ FIXED: Middleware - Remove duplicates
+// ======================
+// Middleware Setup
+// ======================
 app.use(cors());
 
-// ✅ FIXED: Stripe webhook needs raw body - PLACE THIS BEFORE JSON MIDDLEWARE
-app.use('/api/payments/stripe/webhook', express.raw({type: 'application/json'}));
+// Stripe Webhook — must come before JSON body parsing
+app.use('/api/payments/stripe/webhook', express.raw({ type: 'application/json' }));
 
-// Regular JSON middleware for other routes
+// Parse JSON for other routes
 app.use(express.json());
 
-// Database connection
+// Serve uploaded files
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// Ensure uploads directory exists
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+// ======================
+// Database Connection
+// ======================
 console.log('🔌 Connecting to database...');
 const db = mysql.createConnection({
   host: process.env.DB_HOST || 'localhost',
@@ -37,13 +57,15 @@ const db = mysql.createConnection({
 db.connect((err) => {
   if (err) {
     console.error('❌ Database connection failed:', err.message);
-    console.log('⚠️  Server continuing without database connection');
+    console.log('⚠️ Server continuing without database connection');
   } else {
     console.log('✅ Connected to MySQL Database');
   }
 });
 
-// Routes - with error handling
+// ======================
+// Load API Routes
+// ======================
 const routes = [
   { path: '/api/products', file: './routes/productRoutes' },
   { path: '/api/users', file: './routes/userRoutes' },
@@ -55,46 +77,61 @@ const routes = [
   { path: '/api/promo', file: './routes/promoRoutes' },
   { path: '/api/email', file: './routes/emailRoutes' },
   { path: '/api/admin', file: './routes/adminRoutes' },
-   { path: '/api/offers', file: './routes/offerRoutes' } 
+  { path: '/api/offers', file: './routes/offerRoutes' },
+  { path: '/api/user-dashboard', file: './routes/userDashboardRoutes' },
 ];
 
-routes.forEach(route => {
+routes.forEach((route) => {
   try {
     app.use(route.path, require(route.file));
     console.log(`✅ ${route.path} routes loaded`);
   } catch (err) {
-    console.error(`❌ ${route.path} routes failed:`, err.message);
+    console.error(`❌ Failed to load ${route.path}:`, err.message);
   }
 });
 
-// Basic routes
+// ======================
+// Health & Base Routes
+// ======================
 app.get('/', (req, res) => {
-  res.json({ 
-    message: 'Nexus Store API is running!',
+  res.json({
+    message: '🛍️ SmartShop API is running successfully!',
     version: '1.0.0',
     timestamp: new Date().toISOString()
   });
 });
 
 app.get('/api/health', (req, res) => {
-  res.json({ 
+  res.json({
     status: 'healthy',
     database: db && db.state === 'connected' ? 'connected' : 'disconnected',
-    timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development'
+    environment: process.env.NODE_ENV || 'development',
+    timestamp: new Date().toISOString()
   });
 });
 
-// ✅ FIXED: Serve static files from React build (for production)
+// ======================
+// Serve Frontend (Production)
+// ======================
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, '../frontend/build')));
-  
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../frontend/build', 'index.html'));
+
+  // ✅ Modern Express 5 fix — use RegExp instead of '*'
+  app.get(/.*/, (req, res) => {
+    res.sendFile(path.join(__dirname, '../frontend/build', 'index.html'), (err) => {
+      if (err) {
+        console.error('⚠️ Error serving frontend build:', err);
+        res.status(500).send('Frontend not found');
+      } else {
+        console.log(`📄 Served frontend route: ${req.originalUrl}`);
+      }
+    });
   });
 }
 
-// Start server
+// ======================
+// Start Server
+// ======================
 console.log('🚀 Starting server...');
 const server = app.listen(PORT, () => {
   console.log(`✅ Server running on port ${PORT}`);
@@ -104,7 +141,9 @@ const server = app.listen(PORT, () => {
   console.log(`🔔 Stripe Webhook: ${process.env.BACKEND_URL || 'http://localhost:5000'}/api/payments/stripe/webhook`);
 });
 
-// Global error handlers
+// ======================
+// Global Shutdown Handlers
+// ======================
 process.on('uncaughtException', (error) => {
   console.error('❌ UNCAUGHT EXCEPTION! Shutting down...');
   console.error(error.name, error.message);
@@ -114,22 +153,8 @@ process.on('uncaughtException', (error) => {
 process.on('unhandledRejection', (error) => {
   console.error('❌ UNHANDLED REJECTION! Shutting down...');
   console.error(error.name, error.message);
-  server.close(() => {
-    process.exit(1);
-  });
+  server.close(() => process.exit(1));
 });
 
-// Add this after your middleware but before routes
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
-// Create uploads directory if it doesn't exist
-const fs = require('fs');
-const uploadsDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
-}
-
-// In your server.js
-app.use('/api/offers', require('./routes/offerRoutes'));
-// Keep the process alive
+// Extend keep-alive for some hosting providers
 server.keepAliveTimeout = 120000;
