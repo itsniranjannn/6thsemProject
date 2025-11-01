@@ -1,5 +1,12 @@
 const Order = require('../models/orderModel');
 const Cart = require('../models/cartModel');
+const User = require('../models/userModel');
+const { 
+  sendOrderConfirmation, 
+  sendPaymentSuccess, 
+  sendPaymentFailed,
+  sendOrderCancelled
+} = require('./emailController');
 
 // Create new order
 const createOrder = async (req, res) => {
@@ -42,6 +49,28 @@ const createOrder = async (req, res) => {
     }));
 
     await Order.createOrderItems(orderId, orderItems);
+
+    // Get user details for email
+    const user = await User.findById(user_id);
+    
+    // Send order confirmation email
+    try {
+      const orderWithDetails = {
+        id: orderId,
+        total_amount: calculatedTotal,
+        status: 'pending',
+        payment_method: payment_method || 'cod',
+        payment_status: 'pending',
+        shipping_address: shipping_address,
+        created_at: new Date()
+      };
+
+      await sendOrderConfirmation(orderWithDetails, user, orderItems);
+      console.log('✅ Order confirmation email sent');
+    } catch (emailError) {
+      console.error('⚠️ Failed to send order confirmation email:', emailError);
+      // Don't fail the order if email fails
+    }
 
     // Clear user's cart after order creation
     try {
@@ -253,6 +282,182 @@ const getOrderAnalytics = async (req, res) => {
   }
 };
 
+// Process payment success - NEW: With email notification
+const processPaymentSuccess = async (req, res) => {
+  try {
+    const { orderId, paymentMethod, transactionId } = req.body;
+    const user_id = req.user.id;
+
+    console.log(`💰 Processing payment success for order ${orderId}`);
+
+    // Get order details
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: 'Order not found'
+      });
+    }
+
+    // Check authorization
+    if (req.user.role !== 'admin' && order.user_id !== user_id) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to update this order'
+      });
+    }
+
+    // Update payment status
+    await Order.updatePaymentStatus(orderId, 'completed');
+
+    // Get user details for email
+    const user = await User.findById(user_id);
+
+    // Send payment success email
+    try {
+      const paymentDetails = {
+        transaction_id: transactionId,
+        payment_method: paymentMethod
+      };
+
+      await sendPaymentSuccess(order, user, paymentDetails);
+      console.log('✅ Payment success email sent');
+    } catch (emailError) {
+      console.error('⚠️ Failed to send payment success email:', emailError);
+      // Don't fail the payment process if email fails
+    }
+
+    res.json({
+      success: true,
+      message: 'Payment processed successfully',
+      order: {
+        id: orderId,
+        payment_status: 'completed'
+      }
+    });
+
+  } catch (error) {
+    console.error('Process payment success error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error processing payment: ' + error.message
+    });
+  }
+};
+
+// Process payment failure - NEW: With email notification
+const processPaymentFailure = async (req, res) => {
+  try {
+    const { orderId, paymentMethod, errorMessage } = req.body;
+    const user_id = req.user.id;
+
+    console.log(`❌ Processing payment failure for order ${orderId}`);
+
+    // Get order details
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: 'Order not found'
+      });
+    }
+
+    // Check authorization
+    if (req.user.role !== 'admin' && order.user_id !== user_id) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to update this order'
+      });
+    }
+
+    // Update payment status
+    await Order.updatePaymentStatus(orderId, 'failed');
+
+    // Get user details for email
+    const user = await User.findById(user_id);
+
+    // Send payment failed email
+    try {
+      await sendPaymentFailed(order, user, errorMessage);
+      console.log('✅ Payment failed email sent');
+    } catch (emailError) {
+      console.error('⚠️ Failed to send payment failed email:', emailError);
+      // Don't fail the process if email fails
+    }
+
+    res.json({
+      success: true,
+      message: 'Payment failure processed',
+      order: {
+        id: orderId,
+        payment_status: 'failed'
+      }
+    });
+
+  } catch (error) {
+    console.error('Process payment failure error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error processing payment failure: ' + error.message
+    });
+  }
+};
+
+// Cancel order - NEW: With email notification
+const cancelOrder = async (req, res) => {
+  try {
+    const orderId = req.params.id;
+    const { cancellation_reason } = req.body;
+    const user_id = req.user.id;
+
+    console.log(`❌ Cancelling order ${orderId}`);
+
+    // Get order details
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: 'Order not found'
+      });
+    }
+
+    // Check authorization
+    if (req.user.role !== 'admin' && order.user_id !== user_id) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to cancel this order'
+      });
+    }
+
+    // Cancel the order
+    await Order.cancelOrder(orderId, cancellation_reason);
+
+    // Get user details for email
+    const user = await User.findById(order.user_id);
+
+    // Send order cancelled email
+    try {
+      await sendOrderCancelled(order, user, cancellation_reason);
+      console.log('✅ Order cancelled email sent');
+    } catch (emailError) {
+      console.error('⚠️ Failed to send order cancelled email:', emailError);
+      // Don't fail the cancellation if email fails
+    }
+
+    res.json({
+      success: true,
+      message: 'Order cancelled successfully'
+    });
+
+  } catch (error) {
+    console.error('Cancel order error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error cancelling order: ' + error.message
+    });
+  }
+};
+
 module.exports = {
   createOrder,
   getUserOrders,
@@ -260,5 +465,8 @@ module.exports = {
   getAllOrders,
   updateOrderStatus,
   getSalesStats,
-  getOrderAnalytics
+  getOrderAnalytics,
+  processPaymentSuccess,   
+  processPaymentFailure,   
+  cancelOrder              
 };

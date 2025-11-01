@@ -1,4 +1,3 @@
-// controllers/paymentController.js - COMPLETELY FIXED VERSION
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const axios = require('axios');
 const crypto = require('crypto');
@@ -6,7 +5,14 @@ const Order = require('../models/orderModel');
 const Payment = require('../models/paymentModel');
 const Product = require('../models/productModel');
 const Cart = require('../models/cartModel');
-const { sendOrderConfirmationEmail, sendPaymentFailedEmail } = require('./emailController');
+const User = require('../models/userModel'); // ADDED
+
+const { 
+  sendOrderConfirmation, 
+  sendPaymentSuccess, 
+  sendPaymentFailed,
+  sendOrderCancelled 
+} = require('./emailController');
 const { recordPromoUsage } = require('./promoController');
 
 // ✅ FIXED: Enhanced eSewa Configuration
@@ -131,7 +137,7 @@ const calculateEstimatedDelivery = () => {
   return deliveryDate;
 };
 
-// ✅ FIXED: Enhanced order processing with PROPER cart clearing
+// ✅ FIXED: Enhanced order processing with PROPER cart clearing and EMAIL INTEGRATION
 const completeOrderProcessing = async (orderId, userId, items = []) => {
   try {
     console.log(`🔄 Completing order processing for order ${orderId}, user ${userId}`);
@@ -145,11 +151,14 @@ const completeOrderProcessing = async (orderId, userId, items = []) => {
     await Cart.clearCart(userId);
     console.log(`✅ Cart cleared for user ${userId}`);
     
-    // ✅ FIXED: Send order confirmation email
+    // ✅ FIXED: Send order confirmation email with user details
     try {
       const order = await Order.findById(orderId);
-      if (order) {
-        await sendOrderConfirmationEmail(order);
+      const user = await User.findById(userId); // ADDED
+      if (order && user) {
+        const orderItems = await Order.getOrderItems(orderId); // ADDED
+        await sendOrderConfirmation(order, user, orderItems); // UPDATED
+        console.log('✅ Order confirmation email sent');
       }
     } catch (emailError) {
       console.error('❌ Order confirmation email error:', emailError);
@@ -160,6 +169,74 @@ const completeOrderProcessing = async (orderId, userId, items = []) => {
   } catch (error) {
     console.error('❌ Error in order completion processing:', error);
     return false;
+  }
+};
+
+// ✅ NEW: Enhanced payment success processing with EMAIL
+const processSuccessfulPayment = async (orderId, session) => {
+  try {
+    console.log(`🔄 Processing successful payment for order ${orderId}`);
+    
+    // Update order status
+    await Order.update(orderId, {
+      payment_status: 'completed',
+      status: 'confirmed',
+      tracking_number: generateTrackingNumber(),
+      estimated_delivery: calculateEstimatedDelivery()
+    });
+    
+    // Update payment record
+    await Payment.updateStatus(orderId, 'completed', session.payment_intent || session.id);
+    
+    // Get order and complete processing
+    const order = await Order.findById(orderId);
+    if (order) {
+      // ✅ ADDED: Send payment success email
+      try {
+        const user = await User.findById(order.user_id);
+        const paymentDetails = {
+          transaction_id: session.payment_intent || session.id,
+          payment_method: 'stripe'
+        };
+        if (user) {
+          await sendPaymentSuccess(order, user, paymentDetails);
+          console.log('✅ Payment success email sent');
+        }
+      } catch (emailError) {
+        console.error('❌ Payment success email error:', emailError);
+      }
+      
+      await completeOrderProcessing(orderId, order.user_id, order.items);
+    }
+    
+    console.log(`✅ Order ${orderId} successfully processed via Stripe`);
+  } catch (error) {
+    console.error('❌ Error processing successful payment:', error);
+    throw error;
+  }
+};
+
+// ✅ UPDATED: Enhanced payment failure processing with EMAIL
+const restoreStockForFailedPayment = async (orderId) => {
+  try {
+    const order = await Order.findById(orderId);
+    if (order && order.items && order.items.length > 0) {
+      await updateStockOnPayment(order.items, 'restore');
+      console.log(`✅ Stock restored for failed order ${orderId}`);
+      
+      // ✅ UPDATED: Send payment failed email with user details
+      try {
+        const user = await User.findById(order.user_id);
+        if (user) {
+          await sendPaymentFailed(order, user, 'Payment processing failed');
+          console.log('✅ Payment failed email sent');
+        }
+      } catch (emailError) {
+        console.error('❌ Payment failed email error:', emailError);
+      }
+    }
+  } catch (error) {
+    console.error('❌ Error restoring stock:', error);
   }
 };
 
@@ -193,24 +270,6 @@ const updateStockOnPayment = async (items, action = 'deduct') => {
   } catch (error) {
     console.error('❌ Stock update error:', error);
     throw error;
-  }
-};
-
-const restoreStockForFailedPayment = async (orderId) => {
-  try {
-    const order = await Order.findById(orderId);
-    if (order && order.items && order.items.length > 0) {
-      await updateStockOnPayment(order.items, 'restore');
-      console.log(`✅ Stock restored for failed order ${orderId}`);
-      
-      try {
-        await sendPaymentFailedEmail(order);
-      } catch (emailError) {
-        console.error('❌ Payment failed email error:', emailError);
-      }
-    }
-  } catch (error) {
-    console.error('❌ Error restoring stock:', error);
   }
 };
 
@@ -414,35 +473,6 @@ const handleStripeWebhook = async (req, res) => {
   } catch (err) {
     console.error('❌ Stripe webhook error:', err.message);
     res.status(400).send(`Webhook Error: ${err.message}`);
-  }
-};
-
-// ✅ Helper function to process successful payments
-const processSuccessfulPayment = async (orderId, session) => {
-  try {
-    console.log(`🔄 Processing successful payment for order ${orderId}`);
-    
-    // Update order status
-    await Order.update(orderId, {
-      payment_status: 'completed',
-      status: 'confirmed',
-      tracking_number: generateTrackingNumber(),
-      estimated_delivery: calculateEstimatedDelivery()
-    });
-    
-    // Update payment record
-    await Payment.updateStatus(orderId, 'completed', session.payment_intent || session.id);
-    
-    // Get order and complete processing
-    const order = await Order.findById(orderId);
-    if (order) {
-      await completeOrderProcessing(orderId, order.user_id, order.items);
-    }
-    
-    console.log(`✅ Order ${orderId} successfully processed via Stripe`);
-  } catch (error) {
-    console.error('❌ Error processing successful payment:', error);
-    throw error;
   }
 };
 
@@ -723,6 +753,21 @@ const handleKhaltiCallback = async (req, res) => {
       // ✅ FIXED: Get order and clear cart
       const order = await Order.findById(orderId);
       if (order) {
+        // ✅ ADDED: Send payment success email for Khalti
+        try {
+          const user = await User.findById(order.user_id);
+          const paymentDetails = {
+            transaction_id: pidx || `khalti_callback_${Date.now()}`,
+            payment_method: 'khalti'
+          };
+          if (user) {
+            await sendPaymentSuccessEmail(order, user, paymentDetails);
+            console.log('✅ Khalti payment success email sent');
+          }
+        } catch (emailError) {
+          console.error('❌ Khalti payment success email error:', emailError);
+        }
+        
         await completeOrderProcessing(orderId, order.user_id, order.items);
       }
 
@@ -942,6 +987,21 @@ const handleEsewaSuccess = async (req, res) => {
       // ✅ FIXED: Get order and complete processing
       const order = await Order.findById(orderId);
       if (order) {
+        // ✅ ADDED: Send payment success email for eSewa
+        try {
+          const user = await User.findById(order.user_id);
+          const paymentDetails = {
+            transaction_id: transactionId,
+            payment_method: 'esewa'
+          };
+          if (user) {
+            await sendPaymentSuccessEmail(order, user, paymentDetails);
+            console.log('✅ eSewa payment success email sent');
+          }
+        } catch (emailError) {
+          console.error('❌ eSewa payment success email error:', emailError);
+        }
+        
         await completeOrderProcessing(orderId, order.user_id, order.items);
       }
 
@@ -988,6 +1048,21 @@ const handleEsewaSuccess = async (req, res) => {
         // ✅ FIXED: Get order and complete processing
         const order = await Order.findById(orderId);
         if (order) {
+          // ✅ ADDED: Send payment success email for eSewa
+          try {
+            const user = await User.findById(order.user_id);
+            const paymentDetails = {
+              transaction_id: transactionId,
+              payment_method: 'esewa'
+            };
+            if (user) {
+              await sendPaymentSuccessEmail(order, user, paymentDetails);
+              console.log('✅ eSewa payment success email sent');
+            }
+          } catch (emailError) {
+            console.error('❌ eSewa payment success email error:', emailError);
+          }
+          
           await completeOrderProcessing(orderId, order.user_id, order.items);
         }
 
