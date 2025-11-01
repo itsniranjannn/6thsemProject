@@ -53,7 +53,11 @@ import {
   RefreshCw,
   Send,
   Key,
-  AlertTriangle
+  AlertTriangle,
+  Save,
+  Upload,
+  UserCheck,
+  MailCheck
 } from 'lucide-react';
 
 // Enhanced Dashboard Stats Component
@@ -149,17 +153,34 @@ const DashboardStats = ({ stats, user }) => {
 const ProfileSection = ({ user, onUpdate }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [isVerifyingEmail, setIsVerifyingEmail] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveConfirmation, setSaveConfirmation] = useState(false);
   const [formData, setFormData] = useState({
-    name: user?.name || '',
-    email: user?.email || '',
-    phone: user?.phone || '',
-    address: user?.address || '',
-    city: user?.city || '',
-    country: user?.country || 'Nepal'
+    name: '',
+    email: '',
+    phone: '',
+    address: '',
+    city: '',
+    country: 'Nepal'
   });
+
+  // Initialize form data when user changes
+  useEffect(() => {
+    if (user) {
+      setFormData({
+        name: user.name || '',
+        email: user.email || '',
+        phone: user.phone || '',
+        address: user.address || '',
+        city: user.city || '',
+        country: user.country || 'Nepal'
+      });
+    }
+  }, [user]);
 
   const handleSave = async () => {
     try {
+      setIsSaving(true);
       const token = localStorage.getItem('token');
       const response = await fetch('http://localhost:5000/api/users/profile', {
         method: 'PUT',
@@ -177,20 +198,26 @@ const ProfileSection = ({ user, onUpdate }) => {
         // Update both local state and localStorage
         const updatedUser = { ...user, ...data.user };
         onUpdate(updatedUser);
-        setIsEditing(false);
         
-        // Update localStorage
+        // Update localStorage immediately
         const currentUserData = JSON.parse(localStorage.getItem('user'));
         const updatedUserData = { ...currentUserData, ...data.user };
         localStorage.setItem('user', JSON.stringify(updatedUserData));
         
-        alert('Profile updated successfully!');
+        // Show confirmation and reset editing
+        setSaveConfirmation(true);
+        setTimeout(() => {
+          setSaveConfirmation(false);
+          setIsEditing(false);
+        }, 2000);
       } else {
         alert(data.message || 'Failed to update profile');
       }
     } catch (error) {
       console.error('Error updating profile:', error);
       alert('Error updating profile. Please try again.');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -211,7 +238,16 @@ const ProfileSection = ({ user, onUpdate }) => {
       if (data.success) {
         alert('Verification email sent! Please check your inbox.');
       } else {
-        alert(data.message || 'Failed to send verification email');
+        // Check if email is already verified
+        if (data.message?.includes('already verified')) {
+          // Update local state to show verified status
+          const updatedUser = { ...user, email_verified: true };
+          onUpdate(updatedUser);
+          localStorage.setItem('user', JSON.stringify(updatedUser));
+          alert('Email is already verified!');
+        } else {
+          alert(data.message || 'Failed to send verification email');
+        }
       }
     } catch (error) {
       console.error('Error sending verification email:', error);
@@ -234,6 +270,27 @@ const ProfileSection = ({ user, onUpdate }) => {
     return `${Math.floor(diffDays / 365)} years`;
   };
 
+  const handleCancelEdit = () => {
+    // Reset form data to original user data
+    setFormData({
+      name: user?.name || '',
+      email: user?.email || '',
+      phone: user?.phone || '',
+      address: user?.address || '',
+      city: user?.city || '',
+      country: user?.country || 'Nepal'
+    });
+    setIsEditing(false);
+  };
+
+  const hasChanges = () => {
+    return formData.name !== user?.name ||
+           formData.phone !== user?.phone ||
+           formData.address !== user?.address ||
+           formData.city !== user?.city ||
+           formData.country !== user?.country;
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, x: -20 }}
@@ -245,13 +302,25 @@ const ProfileSection = ({ user, onUpdate }) => {
           <h3 className="text-xl font-bold text-gray-900">Profile Information</h3>
           <p className="text-sm text-gray-600">Manage your personal details and preferences</p>
         </div>
-        <button
-          onClick={() => setIsEditing(!isEditing)}
-          className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl hover:shadow-lg transition-all duration-200"
-        >
-          <Edit size={16} />
-          <span>{isEditing ? 'Cancel' : 'Edit Profile'}</span>
-        </button>
+        <div className="flex items-center space-x-3">
+          {saveConfirmation && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="flex items-center space-x-2 px-3 py-1 bg-green-100 text-green-700 rounded-full"
+            >
+              <CheckCircle size={16} />
+              <span className="text-sm font-medium">Saved!</span>
+            </motion.div>
+          )}
+          <button
+            onClick={() => isEditing ? handleCancelEdit() : setIsEditing(true)}
+            className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl hover:shadow-lg transition-all duration-200"
+          >
+            {isEditing ? <X size={16} /> : <Edit size={16} />}
+            <span>{isEditing ? 'Cancel' : 'Edit Profile'}</span>
+          </button>
+        </div>
       </div>
 
       <div className="space-y-6">
@@ -332,7 +401,9 @@ const ProfileSection = ({ user, onUpdate }) => {
                   placeholder="Enter your full name"
                 />
               ) : (
-                <p className="text-gray-900 font-medium py-3">{user?.name}</p>
+                <p className="text-gray-900 font-medium py-3 px-2 bg-gray-50 rounded-lg">
+                  {user?.name || 'Not provided'}
+                </p>
               )}
             </div>
 
@@ -341,15 +412,20 @@ const ProfileSection = ({ user, onUpdate }) => {
                 Email Address
               </label>
               {isEditing ? (
-                <input
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                  placeholder="Enter your email"
-                />
+                <div className="relative">
+                  <input
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 pr-10"
+                    placeholder="Enter your email"
+                  />
+                  {user?.email_verified && (
+                    <CheckCircle className="absolute right-3 top-1/2 transform -translate-y-1/2 text-green-500" size={20} />
+                  )}
+                </div>
               ) : (
-                <div className="flex items-center justify-between py-3">
+                <div className="flex items-center justify-between py-3 px-2 bg-gray-50 rounded-lg">
                   <p className="text-gray-900 font-medium">{user?.email}</p>
                   {user?.email_verified ? (
                     <CheckCircle size={20} className="text-green-500" />
@@ -373,7 +449,7 @@ const ProfileSection = ({ user, onUpdate }) => {
                   placeholder="+977 98XXXXXXXX"
                 />
               ) : (
-                <p className="text-gray-900 font-medium py-3">
+                <p className="text-gray-900 font-medium py-3 px-2 bg-gray-50 rounded-lg">
                   {user?.phone || 'Not provided'}
                 </p>
               )}
@@ -400,7 +476,7 @@ const ProfileSection = ({ user, onUpdate }) => {
                   placeholder="Enter your street address"
                 />
               ) : (
-                <p className="text-gray-900 font-medium py-3">
+                <p className="text-gray-900 font-medium py-3 px-2 bg-gray-50 rounded-lg min-h-[60px]">
                   {user?.address || 'Not provided'}
                 </p>
               )}
@@ -420,7 +496,7 @@ const ProfileSection = ({ user, onUpdate }) => {
                     placeholder="Enter your city"
                   />
                 ) : (
-                  <p className="text-gray-900 font-medium py-3">
+                  <p className="text-gray-900 font-medium py-3 px-2 bg-gray-50 rounded-lg">
                     {user?.city || 'Not provided'}
                   </p>
                 )}
@@ -431,15 +507,19 @@ const ProfileSection = ({ user, onUpdate }) => {
                   Country
                 </label>
                 {isEditing ? (
-                  <input
-                    type="text"
+                  <select
                     value={formData.country}
                     onChange={(e) => setFormData({ ...formData, country: e.target.value })}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                    placeholder="Enter your country"
-                  />
+                  >
+                    <option value="Nepal">Nepal</option>
+                    <option value="India">India</option>
+                    <option value="Bangladesh">Bangladesh</option>
+                    <option value="Sri Lanka">Sri Lanka</option>
+                    <option value="Other">Other</option>
+                  </select>
                 ) : (
-                  <p className="text-gray-900 font-medium py-3">
+                  <p className="text-gray-900 font-medium py-3 px-2 bg-gray-50 rounded-lg">
                     {user?.country || 'Nepal'}
                   </p>
                 )}
@@ -457,13 +537,20 @@ const ProfileSection = ({ user, onUpdate }) => {
           >
             <button
               onClick={handleSave}
-              className="flex-1 flex items-center justify-center space-x-2 px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl hover:shadow-lg transition-all duration-200"
+              disabled={isSaving || !hasChanges()}
+              className="flex-1 flex items-center justify-center space-x-2 px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl hover:shadow-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <CheckCircle size={18} />
-              <span className="font-semibold">Save Changes</span>
+              {isSaving ? (
+                <RefreshCw size={18} className="animate-spin" />
+              ) : (
+                <Save size={18} />
+              )}
+              <span className="font-semibold">
+                {isSaving ? 'Saving...' : 'Save Changes'}
+              </span>
             </button>
             <button
-              onClick={() => setIsEditing(false)}
+              onClick={handleCancelEdit}
               className="flex-1 flex items-center justify-center space-x-2 px-6 py-3 bg-gray-500 text-white rounded-xl hover:bg-gray-600 transition-colors"
             >
               <X size={18} />
@@ -476,13 +563,14 @@ const ProfileSection = ({ user, onUpdate }) => {
   );
 };
 
-// Change Password Component
+// Enhanced Change Password Component with Confirmation Modal
 const ChangePasswordSection = () => {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState('');
+  const [showConfirmation, setShowConfirmation] = useState(false);
 
   const handleChangePassword = async (e) => {
     e.preventDefault();
@@ -497,8 +585,13 @@ const ChangePasswordSection = () => {
       return;
     }
 
+    setShowConfirmation(true);
+  };
+
+  const handleConfirmPasswordChange = async () => {
     setIsLoading(true);
     setMessage('');
+    setShowConfirmation(false);
 
     try {
       const token = localStorage.getItem('token');
@@ -533,78 +626,93 @@ const ChangePasswordSection = () => {
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, x: 20 }}
-      animate={{ opacity: 1, x: 0 }}
-      className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100"
-    >
-      <h3 className="text-xl font-bold text-gray-900 mb-6">Change Password</h3>
-      
-      <form onSubmit={handleChangePassword} className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Current Password
-          </label>
-          <input
-            type="password"
-            value={currentPassword}
-            onChange={(e) => setCurrentPassword(e.target.value)}
-            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-            placeholder="Enter current password"
-            required
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            New Password
-          </label>
-          <input
-            type="password"
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-            placeholder="Enter new password"
-            required
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Confirm New Password
-          </label>
-          <input
-            type="password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-            placeholder="Confirm new password"
-            required
-          />
-        </div>
-
-        {message && (
-          <div className={`p-3 rounded-xl ${
-            message.includes('successfully') 
-              ? 'bg-green-50 text-green-700 border border-green-200' 
-              : 'bg-red-50 text-red-700 border border-red-200'
-          }`}>
-            {message}
+    <>
+      <motion.div
+        initial={{ opacity: 0, x: 20 }}
+        animate={{ opacity: 1, x: 0 }}
+        className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100"
+      >
+        <h3 className="text-xl font-bold text-gray-900 mb-6">Change Password</h3>
+        
+        <form onSubmit={handleChangePassword} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Current Password
+            </label>
+            <input
+              type="password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+              placeholder="Enter current password"
+              required
+            />
           </div>
-        )}
 
-        <button
-          type="submit"
-          disabled={isLoading}
-          className="w-full flex items-center justify-center space-x-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl hover:shadow-lg transition-all duration-200 disabled:opacity-50"
-        >
-          <Key size={18} />
-          <span className="font-semibold">
-            {isLoading ? 'Changing Password...' : 'Change Password'}
-          </span>
-        </button>
-      </form>
-    </motion.div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              New Password
+            </label>
+            <input
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+              placeholder="Enter new password"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Confirm New Password
+            </label>
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+              placeholder="Confirm new password"
+              required
+            />
+          </div>
+
+          {message && (
+            <div className={`p-3 rounded-xl ${
+              message.includes('successfully') 
+                ? 'bg-green-50 text-green-700 border border-green-200' 
+                : 'bg-red-50 text-red-700 border border-red-200'
+            }`}>
+              {message}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="w-full flex items-center justify-center space-x-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl hover:shadow-lg transition-all duration-200 disabled:opacity-50"
+          >
+            <Key size={18} />
+            <span className="font-semibold">
+              {isLoading ? 'Changing Password...' : 'Change Password'}
+            </span>
+          </button>
+        </form>
+      </motion.div>
+
+      {/* Password Change Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showConfirmation}
+        onClose={() => setShowConfirmation(false)}
+        onConfirm={handleConfirmPasswordChange}
+        title="Change Password"
+        message="Are you sure you want to change your password? You will need to use your new password for future logins."
+        confirmText="Yes, Change Password"
+        cancelText="Cancel"
+        type="warning"
+        isLoading={isLoading}
+      />
+    </>
   );
 };
 
@@ -1006,7 +1114,7 @@ const OrderDetailsModal = ({ order, isOpen, onClose }) => {
 
 // Main Dashboard Component
 const UserDashboard = () => {
-  const { user, logout } = useAuth();
+  const { user, logout, updateUser } = useAuth();
   const [activeTab, setActiveTab] = useState('overview');
   const [dashboardStats, setDashboardStats] = useState({});
   const [orders, setOrders] = useState([]);
@@ -1016,6 +1124,7 @@ const UserDashboard = () => {
   const [orderToCancel, setOrderToCancel] = useState(null);
   const [isCancelling, setIsCancelling] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: LayoutDashboard },
@@ -1133,7 +1242,21 @@ const UserDashboard = () => {
   };
 
   const handleProfileUpdate = (updatedUser) => {
+    // Update both local state and AuthContext
+    updateUser(updatedUser);
+    // Also update localStorage
+    localStorage.setItem('user', JSON.stringify(updatedUser));
+    // Refresh dashboard data to ensure consistency
     fetchDashboardData();
+  };
+
+  const handleLogout = () => {
+    setShowLogoutModal(true);
+  };
+
+  const handleConfirmLogout = () => {
+    logout();
+    setShowLogoutModal(false);
   };
 
   if (loading) {
@@ -1261,7 +1384,7 @@ const UserDashboard = () => {
                       <CheckCircle className="text-green-600" size={24} />
                     </div>
                     <button
-                      onClick={logout}
+                      onClick={handleLogout}
                       className="w-full flex items-center justify-center space-x-2 px-6 py-4 bg-gradient-to-r from-red-500 to-rose-600 text-white rounded-2xl hover:shadow-lg transition-all duration-200 font-semibold"
                     >
                       <LogOut size={20} />
@@ -1305,6 +1428,18 @@ const UserDashboard = () => {
         cancelText="No, Keep Order"
         type="danger"
         isLoading={isCancelling}
+      />
+
+      {/* Logout Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showLogoutModal}
+        onClose={() => setShowLogoutModal(false)}
+        onConfirm={handleConfirmLogout}
+        title="Sign Out"
+        message="Are you sure you want to sign out? You'll need to log in again to access your account."
+        confirmText="Yes, Sign Out"
+        cancelText="Cancel"
+        type="warning"
       />
     </div>
   );
