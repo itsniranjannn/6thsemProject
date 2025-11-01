@@ -339,7 +339,7 @@ const CartPage = () => {
           transition={{ duration: 0.8, ease: "easeOut" }}
         >
           <motion.h1 
-            className="text-5xl font-black bg-gradient-to-r from-cyan-400 via-blue-400 to-purple-400 bg-clip-text text-transparent mb-4 relative"
+            className="text-5xl font-black bg-gradient-to-r from-cyan-400 via-blue-400 to-purple-400 p-4 bg-clip-text text-transparent mb-4 relative"
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.3, duration: 0.8 }}

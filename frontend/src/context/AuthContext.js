@@ -26,7 +26,7 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     try {
-      const response = await fetch('http://localhost:5000/api/users/login', {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/users/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -40,18 +40,19 @@ export const AuthProvider = ({ children }) => {
         localStorage.setItem('token', data.token);
         localStorage.setItem('user', JSON.stringify(data));
         setUser(data);
-        return { success: true };
+        return { success: true, data };
       } else {
-        return { success: false, error: data.message };
+        return { success: false, error: data.message || 'Login failed' };
       }
     } catch (error) {
-      return { success: false, error: 'Network error' };
+      console.error('Login error:', error);
+      return { success: false, error: 'Network error. Please try again.' };
     }
   };
 
   const register = async (name, email, password) => {
     try {
-      const response = await fetch('http://localhost:5000/api/users/register', {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/users/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -62,15 +63,121 @@ export const AuthProvider = ({ children }) => {
       const data = await response.json();
 
       if (response.ok) {
-        localStorage.setItem('token', data.token);
-        localStorage.setItem('user', JSON.stringify(data));
-        setUser(data);
-        return { success: true };
+        // Store token but don't set user as active until email verification
+        if (data.token) {
+          localStorage.setItem('token', data.token);
+          localStorage.setItem('user', JSON.stringify(data.user || data));
+          setUser(data.user || data);
+        }
+        return { 
+          success: true, 
+          data,
+          requiresVerification: !data.user?.emailVerified 
+        };
       } else {
-        return { success: false, error: data.message };
+        return { success: false, error: data.message || 'Registration failed' };
       }
     } catch (error) {
-      return { success: false, error: 'Network error' };
+      console.error('Registration error:', error);
+      return { success: false, error: 'Network error. Please try again.' };
+    }
+  };
+
+  const verifyEmail = async (token) => {
+    try {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/users/verify-email`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ token }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // Update user verification status
+        if (user) {
+          const updatedUser = { ...user, emailVerified: true };
+          localStorage.setItem('user', JSON.stringify(updatedUser));
+          setUser(updatedUser);
+        }
+        return { success: true, data };
+      } else {
+        return { success: false, error: data.message || 'Verification failed' };
+      }
+    } catch (error) {
+      console.error('Email verification error:', error);
+      return { success: false, error: 'Network error. Please try again.' };
+    }
+  };
+
+  const resendVerification = async (email) => {
+    try {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/users/resend-verification`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        return { success: true, data };
+      } else {
+        return { success: false, error: data.message || 'Failed to resend verification' };
+      }
+    } catch (error) {
+      console.error('Resend verification error:', error);
+      return { success: false, error: 'Network error. Please try again.' };
+    }
+  };
+
+  const forgotPassword = async (email) => {
+    try {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/users/forgot-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        return { success: true, data };
+      } else {
+        return { success: false, error: data.message || 'Failed to send reset email' };
+      }
+    } catch (error) {
+      console.error('Forgot password error:', error);
+      return { success: false, error: 'Network error. Please try again.' };
+    }
+  };
+
+  const resetPassword = async (token, newPassword) => {
+    try {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/users/reset-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ token, newPassword }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        return { success: true, data };
+      } else {
+        return { success: false, error: data.message || 'Password reset failed' };
+      }
+    } catch (error) {
+      console.error('Reset password error:', error);
+      return { success: false, error: 'Network error. Please try again.' };
     }
   };
 
@@ -80,14 +187,48 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
+  const updateProfile = async (profileData) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/users/profile`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(profileData),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        const updatedUser = { ...user, ...profileData };
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+        setUser(updatedUser);
+        return { success: true, data };
+      } else {
+        return { success: false, error: data.message || 'Profile update failed' };
+      }
+    } catch (error) {
+      console.error('Update profile error:', error);
+      return { success: false, error: 'Network error. Please try again.' };
+    }
+  };
+
   const value = {
     user,
     login,
     register,
+    verifyEmail,
+    resendVerification,
+    forgotPassword,
+    resetPassword,
     logout,
+    updateProfile,
     loading,
     isAuthenticated: !!user,
-    isAdmin: user?.role === 'admin'
+    isAdmin: user?.role === 'admin',
+    isEmailVerified: user?.emailVerified || false
   };
 
   return (
