@@ -236,18 +236,17 @@ const ProfileSection = ({ user, onUpdate }) => {
 
       const data = await response.json();
       if (data.success) {
-        alert('Verification email sent! Please check your inbox.');
-      } else {
-        // Check if email is already verified
-        if (data.message?.includes('already verified')) {
+        if (data.alreadyVerified) {
           // Update local state to show verified status
           const updatedUser = { ...user, email_verified: true };
           onUpdate(updatedUser);
           localStorage.setItem('user', JSON.stringify(updatedUser));
           alert('Email is already verified!');
         } else {
-          alert(data.message || 'Failed to send verification email');
+          alert('Verification email sent! Please check your inbox.');
         }
+      } else {
+        alert(data.message || 'Failed to send verification email');
       }
     } catch (error) {
       console.error('Error sending verification email:', error);
@@ -419,6 +418,7 @@ const ProfileSection = ({ user, onUpdate }) => {
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 pr-10"
                     placeholder="Enter your email"
+                    disabled // Don't allow email editing
                   />
                   {user?.email_verified && (
                     <CheckCircle className="absolute right-3 top-1/2 transform -translate-y-1/2 text-green-500" size={20} />
