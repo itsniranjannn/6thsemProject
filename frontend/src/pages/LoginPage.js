@@ -10,7 +10,8 @@ import {
   ArrowLeft,
   Send,
   CheckCircle,
-  XCircle
+  XCircle,
+  Shield
 } from 'lucide-react';
 
 const LoginPage = () => {
@@ -31,8 +32,9 @@ const LoginPage = () => {
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false);
+  const [passwordStrength, setPasswordStrength] = useState({ strength: 0, text: '', color: '' });
   
-  const { login, forgotPassword: authForgotPassword, resetPassword } = useAuth();
+  const { login, forgotPassword: authForgotPassword, resetPassword: authResetPassword } = useAuth();
   const navigate = useNavigate();
 
   // Floating animation for background elements
@@ -42,6 +44,37 @@ const LoginPage = () => {
       el.style.animationDelay = `${index * 0.5}s`;
     });
   }, []);
+
+  // Calculate password strength
+  useEffect(() => {
+    if (!newPassword) {
+      setPasswordStrength({ strength: 0, text: '', color: '' });
+      return;
+    }
+    
+    const checks = {
+      length: newPassword.length >= 8,
+      uppercase: /[A-Z]/.test(newPassword),
+      number: /[0-9]/.test(newPassword),
+      special: /[^A-Za-z0-9]/.test(newPassword)
+    };
+    
+    const strength = Object.values(checks).filter(Boolean).length;
+    
+    const strengthMap = {
+      0: { text: 'Very Weak', color: 'text-red-500', bg: 'bg-red-500' },
+      1: { text: 'Weak', color: 'text-red-400', bg: 'bg-red-400' },
+      2: { text: 'Fair', color: 'text-orange-500', bg: 'bg-orange-500' },
+      3: { text: 'Good', color: 'text-yellow-500', bg: 'bg-yellow-500' },
+      4: { text: 'Strong', color: 'text-green-500', bg: 'bg-green-500' }
+    };
+    
+    setPasswordStrength({ 
+      ...strengthMap[strength], 
+      strength,
+      checks 
+    });
+  }, [newPassword]);
 
   const handleChange = (e) => {
     setFormData({
@@ -113,8 +146,8 @@ const LoginPage = () => {
     setResetLoading(true);
     setResetMessage('');
 
-    // Verify the code (this would typically be an API call)
-    // For now, we'll assume the code is valid and move to next step
+    // For security, we don't verify the code until the actual password reset
+    // This prevents revealing if the code is valid before password confirmation
     setResetStep(3);
     setResetLoading(false);
   };
@@ -137,10 +170,17 @@ const LoginPage = () => {
       return;
     }
 
+    // Additional password strength check
+    if (passwordStrength.strength < 2) {
+      setResetMessage('Please choose a stronger password');
+      return;
+    }
+
     setResetLoading(true);
     setResetMessage('');
 
-    const result = await resetPassword(resetCode, newPassword, resetEmail);
+    // Call the actual reset password API with code, new password, and email
+    const result = await authResetPassword(resetCode, newPassword, resetEmail);
     
     if (result.success) {
       setResetMessage('Password reset successfully! You can now login with your new password.');
@@ -151,9 +191,12 @@ const LoginPage = () => {
         setResetCode('');
         setNewPassword('');
         setConfirmNewPassword('');
+        setResetMessage('');
       }, 3000);
     } else {
-      setResetMessage(result.error || 'Failed to reset password');
+      setResetMessage(result.error || 'Failed to reset password. The code may be invalid or expired.');
+      // If reset fails, go back to code entry
+      setResetStep(2);
     }
     
     setResetLoading(false);
@@ -506,10 +549,52 @@ const LoginPage = () => {
                             {showNewPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                           </motion.button>
                         </div>
-                        {newPassword && newPassword.length < 6 && (
-                          <p className="text-red-400 text-xs mt-1">
-                            Password must be at least 6 characters
-                          </p>
+                        
+                        {/* Password Strength Indicator */}
+                        {newPassword && (
+                          <motion.div 
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            className="mt-3 space-y-2"
+                          >
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="text-gray-400">Password strength:</span>
+                              <span className={passwordStrength.color}>{passwordStrength.text}</span>
+                            </div>
+                            <div className="w-full bg-gray-600 rounded-full h-2">
+                              <motion.div 
+                                className={`h-2 rounded-full transition-all duration-500 ${passwordStrength.bg}`}
+                                initial={{ width: 0 }}
+                                animate={{ 
+                                  width: passwordStrength.strength === 0 ? '5%' :
+                                  passwordStrength.strength === 1 ? '25%' :
+                                  passwordStrength.strength === 2 ? '50%' :
+                                  passwordStrength.strength === 3 ? '75%' : '100%'
+                                }}
+                              />
+                            </div>
+                            
+                            {/* Password Requirements */}
+                            <div className="grid grid-cols-2 gap-1 text-xs">
+                              {[
+                                { key: 'length', text: 'At least 8 characters' },
+                                { key: 'uppercase', text: 'One uppercase letter' },
+                                { key: 'number', text: 'One number' },
+                                { key: 'special', text: 'One special character' }
+                              ].map(req => (
+                                <div key={req.key} className="flex items-center gap-1">
+                                  {passwordStrength.checks && passwordStrength.checks[req.key] ? (
+                                    <CheckCircle className="w-3 h-3 text-green-500" />
+                                  ) : (
+                                    <XCircle className="w-3 h-3 text-gray-500" />
+                                  )}
+                                  <span className={passwordStrength.checks && passwordStrength.checks[req.key] ? 'text-green-400' : 'text-gray-400'}>
+                                    {req.text}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </motion.div>
                         )}
                       </div>
 
@@ -545,8 +630,15 @@ const LoginPage = () => {
                           </motion.button>
                         </div>
                         {confirmNewPassword && newPassword !== confirmNewPassword && (
-                          <p className="text-red-400 text-xs mt-1">
+                          <p className="text-red-400 text-xs mt-1 flex items-center gap-1">
+                            <XCircle className="w-3 h-3" />
                             Passwords do not match
+                          </p>
+                        )}
+                        {confirmNewPassword && newPassword === confirmNewPassword && (
+                          <p className="text-green-400 text-xs mt-1 flex items-center gap-1">
+                            <CheckCircle className="w-3 h-3" />
+                            Passwords match
                           </p>
                         )}
                       </div>
@@ -574,8 +666,9 @@ const LoginPage = () => {
                     <motion.button
                       type="submit"
                       disabled={resetLoading || 
+                        (resetStep === 1 && !resetEmail) ||
                         (resetStep === 2 && resetCode.length !== 6) ||
-                        (resetStep === 3 && (!newPassword || !confirmNewPassword || newPassword !== confirmNewPassword || newPassword.length < 6))
+                        (resetStep === 3 && (!newPassword || !confirmNewPassword || newPassword !== confirmNewPassword || newPassword.length < 6 || passwordStrength.strength < 2))
                       }
                       className="flex-1 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-semibold py-3 px-4 rounded-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                       whileHover={{ scale: 1.02 }}
