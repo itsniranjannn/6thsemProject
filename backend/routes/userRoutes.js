@@ -8,7 +8,8 @@ const {
   requestPasswordReset,
   resetPassword,
   changePassword,
-  checkEmailVerification
+  checkEmailVerification,
+  updateProfile
 } = require('../controllers/userController');
 const { protect } = require('../middleware/authMiddleware');
 
@@ -31,6 +32,9 @@ router.post('/check-verification', checkEmailVerification);
 router.post('/forgot-password', requestPasswordReset);
 router.post('/reset-password', resetPassword);
 router.post('/change-password', protect, changePassword);
+
+// Profile update route - ADDED THIS MISSING ROUTE
+router.put('/profile', protect, updateProfile);
 
 // Notifications route
 router.get('/notifications', protect, async (req, res) => {

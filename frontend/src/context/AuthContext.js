@@ -19,7 +19,13 @@ export const AuthProvider = ({ children }) => {
     const userData = localStorage.getItem('user');
     
     if (token && userData) {
-      setUser(JSON.parse(userData));
+      try {
+        setUser(JSON.parse(userData));
+      } catch (error) {
+        console.error('Error parsing user data:', error);
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+      }
     }
     setLoading(false);
   }, []);
@@ -36,12 +42,20 @@ export const AuthProvider = ({ children }) => {
 
       const data = await response.json();
 
-      if (response.ok) {
+      if (response.ok && data.success) {
         localStorage.setItem('token', data.token);
         localStorage.setItem('user', JSON.stringify(data));
         setUser(data);
         return { success: true, data };
       } else {
+        // Check if email verification is required
+        if (data.requiresVerification) {
+          return { 
+            success: false, 
+            error: data.message || 'Email verification required',
+            requiresVerification: true 
+          };
+        }
         return { success: false, error: data.message || 'Login failed' };
       }
     } catch (error) {
@@ -50,29 +64,37 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const register = async (name, email, password) => {
+  const register = async (name, email, password, phone = '', address = '', city = '', country = 'Nepal') => {
     try {
       const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/users/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ name, email, password }),
+        body: JSON.stringify({ 
+          name, 
+          email, 
+          password,
+          phone,
+          address, 
+          city,
+          country
+        }),
       });
 
       const data = await response.json();
 
-      if (response.ok) {
+      if (response.ok && data.success) {
         // Store token but don't set user as active until email verification
         if (data.token) {
           localStorage.setItem('token', data.token);
-          localStorage.setItem('user', JSON.stringify(data.user || data));
-          setUser(data.user || data);
+          localStorage.setItem('user', JSON.stringify(data.user));
+          setUser(data.user);
         }
         return { 
           success: true, 
           data,
-          requiresVerification: !data.user?.emailVerified 
+          requiresVerification: data.requiresVerification || !data.user?.emailVerified 
         };
       } else {
         return { success: false, error: data.message || 'Registration failed' };
@@ -83,25 +105,24 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const verifyEmail = async (token) => {
+  const verifyEmail = async (code, email) => {
     try {
       const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/users/verify-email`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ token }),
+        body: JSON.stringify({ code, email }),
       });
 
       const data = await response.json();
 
-      if (response.ok) {
+      if (response.ok && data.success) {
         // Update user verification status
-        if (user) {
-          const updatedUser = { ...user, emailVerified: true };
-          localStorage.setItem('user', JSON.stringify(updatedUser));
-          setUser(updatedUser);
-        }
+        const updatedUser = { ...data.user, email_verified: true };
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+        localStorage.setItem('token', data.token);
+        setUser(updatedUser);
         return { success: true, data };
       } else {
         return { success: false, error: data.message || 'Verification failed' };
@@ -150,7 +171,7 @@ export const AuthProvider = ({ children }) => {
       if (response.ok) {
         return { success: true, data };
       } else {
-        return { success: false, error: data.message || 'Failed to send reset email' };
+        return { success: false, error: data.message || 'Failed to send reset code' };
       }
     } catch (error) {
       console.error('Forgot password error:', error);
@@ -158,14 +179,14 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const resetPassword = async (token, newPassword) => {
+  const resetPassword = async (code, newPassword, email) => {
     try {
       const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/users/reset-password`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ token, newPassword }),
+        body: JSON.stringify({ code, newPassword, email }),
       });
 
       const data = await response.json();
@@ -187,6 +208,11 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
+  const updateUser = (updatedUser) => {
+    setUser(updatedUser);
+    localStorage.setItem('user', JSON.stringify(updatedUser));
+  };
+
   const updateProfile = async (profileData) => {
     try {
       const token = localStorage.getItem('token');
@@ -201,8 +227,8 @@ export const AuthProvider = ({ children }) => {
 
       const data = await response.json();
 
-      if (response.ok) {
-        const updatedUser = { ...user, ...profileData };
+      if (response.ok && data.success) {
+        const updatedUser = { ...user, ...data.user };
         localStorage.setItem('user', JSON.stringify(updatedUser));
         setUser(updatedUser);
         return { success: true, data };
@@ -224,11 +250,12 @@ export const AuthProvider = ({ children }) => {
     forgotPassword,
     resetPassword,
     logout,
+    updateUser,
     updateProfile,
     loading,
     isAuthenticated: !!user,
     isAdmin: user?.role === 'admin',
-    isEmailVerified: user?.emailVerified || false
+    isEmailVerified: user?.email_verified || false
   };
 
   return (
