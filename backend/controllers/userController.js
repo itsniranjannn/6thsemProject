@@ -14,9 +14,17 @@ const generateToken = (id) => {
 // Enhanced register user with 6-digit code
 const registerUser = async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, phone, address, city, country } = req.body;
 
-    console.log('📝 Registration attempt for:', email);
+    console.log('📝 Registration attempt for:', email, 'with data:', { name, email, phone, address, city, country });
+
+    // Validate required fields
+    if (!name || !email || !password) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Name, email, and password are required' 
+      });
+    }
 
     const userExists = await User.findByEmail(email);
     if (userExists) {
@@ -26,9 +34,18 @@ const registerUser = async (req, res) => {
       });
     }
 
-    const user = await User.create({ name, email, password });
+    // Create user in database
+    const user = await User.create({ 
+      name, 
+      email, 
+      password, 
+      phone, 
+      address, 
+      city, 
+      country 
+    });
     
-    if (user) {
+    if (user && user.insertId) {
       console.log('✅ User created with ID:', user.insertId);
       
       // Send email verification with 6-digit code
@@ -55,17 +72,23 @@ const registerUser = async (req, res) => {
           id: user.insertId,
           name,
           email,
+          phone: phone || '',
+          address: address || '',
+          city: city || '',
+          country: country || 'Nepal',
           emailVerified: false
         },
         token: generateToken(user.insertId),
         requiresVerification: true
       });
+    } else {
+      throw new Error('Failed to create user - no insert ID returned');
     }
   } catch (error) {
     console.error('❌ Registration error:', error);
     res.status(400).json({ 
       success: false,
-      message: error.message 
+      message: error.message || 'Registration failed. Please try again.'
     });
   }
 };
@@ -74,6 +97,13 @@ const registerUser = async (req, res) => {
 const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email and password are required'
+      });
+    }
 
     const user = await User.findByEmail(email);
     if (user && (await User.comparePassword(password, user.password))) {
@@ -87,18 +117,22 @@ const loginUser = async (req, res) => {
         });
       }
 
+      // Generate token for verified user
+      const token = generateToken(user.id);
+
       res.json({
+        success: true,
         id: user.id,
         name: user.name,
         email: user.email,
         role: user.role,
-        emailVerified: user.email_verified || false,
+        emailVerified: user.email_verified,
         phone: user.phone || '',
         address: user.address || '',
         city: user.city || '',
         country: user.country || '',
         created_at: user.created_at,
-        token: generateToken(user.id)
+        token: token
       });
     } else {
       res.status(401).json({ 
@@ -107,9 +141,10 @@ const loginUser = async (req, res) => {
       });
     }
   } catch (error) {
+    console.error('❌ Login error:', error);
     res.status(400).json({ 
       success: false,
-      message: error.message 
+      message: error.message || 'Login failed'
     });
   }
 };
@@ -127,7 +162,18 @@ const getUserProfile = async (req, res) => {
     
     res.json({
       success: true,
-      user: user
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        email_verified: user.email_verified,
+        phone: user.phone || '',
+        address: user.address || '',
+        city: user.city || '',
+        country: user.country || '',
+        created_at: user.created_at
+      }
     });
   } catch (error) {
     console.error('❌ Get user profile error:', error);
@@ -138,7 +184,7 @@ const getUserProfile = async (req, res) => {
   }
 };
 
-// Verify email with 6-digit code
+// Verify email with 6-digit code - FIXED
 const verifyEmail = async (req, res) => {
   try {
     const { code, email } = req.body;
@@ -150,18 +196,10 @@ const verifyEmail = async (req, res) => {
       });
     }
 
-    // Verify the code
-    const result = await User.verifyEmail(code);
+    // Verify the code with email
+    const result = await User.verifyEmail(code, email);
 
     if (result.success) {
-      // Check if the email matches
-      if (result.user.email !== email) {
-        return res.status(400).json({
-          success: false,
-          message: 'Email does not match verification code'
-        });
-      }
-
       // Send welcome email
       try {
         await sendWelcome({ 
@@ -173,15 +211,25 @@ const verifyEmail = async (req, res) => {
         console.error('❌ Failed to send welcome email:', emailError);
       }
 
+      // Generate token for the verified user
+      const token = generateToken(result.user.id);
+
       res.json({
         success: true,
-        message: 'Email verified successfully! Welcome to 6thShop!',
+        message: 'Email verified successfully! Welcome to Nexus Store!',
         user: {
           id: result.user.id,
           name: result.user.name,
           email: result.user.email,
-          emailVerified: true
-        }
+          role: result.user.role,
+          emailVerified: true,
+          phone: result.user.phone || '',
+          address: result.user.address || '',
+          city: result.user.city || '',
+          country: result.user.country || '',
+          created_at: result.user.created_at
+        },
+        token: token
       });
     } else {
       res.status(400).json({
@@ -213,6 +261,15 @@ const resendVerificationEmail = async (req, res) => {
     const result = await User.resendVerificationEmail(email);
 
     if (result.success) {
+      // If already verified, return success
+      if (result.message === 'Email is already verified') {
+        return res.json({
+          success: true,
+          message: 'Email is already verified',
+          alreadyVerified: true
+        });
+      }
+
       // Send new verification email with 6-digit code
       try {
         await sendEmailVerification({ 
@@ -234,14 +291,6 @@ const resendVerificationEmail = async (req, res) => {
         message: 'Verification code sent successfully'
       });
     } else {
-      // If email is already verified, return success
-      if (result.message === 'Email is already verified') {
-        return res.json({
-          success: true,
-          message: 'Email is already verified'
-        });
-      }
-      
       res.status(400).json({
         success: false,
         message: result.message
@@ -274,29 +323,28 @@ const requestPasswordReset = async (req, res) => {
       // Get user data for email
       const user = await User.findByEmail(email);
       
-      // Send password reset email with 6-digit code
-      try {
-        await sendPasswordReset({ 
-          email: email, 
-          name: user.name 
-        }, result.token);
-        
-        console.log(`✅ Password reset code sent to ${email}`);
-      } catch (emailError) {
-        console.error('❌ Failed to send password reset email:', emailError);
-        return res.status(500).json({
-          success: false,
-          message: 'Failed to send password reset code'
-        });
+      if (user) {
+        // Send password reset email with 6-digit code
+        try {
+          await sendPasswordReset({ 
+            email: email, 
+            name: user.name 
+          }, result.token);
+          
+          console.log(`✅ Password reset code sent to ${email}`);
+        } catch (emailError) {
+          console.error('❌ Failed to send password reset email:', emailError);
+          // Don't return error for security
+        }
       }
 
-      // Don't reveal if user exists or not for security
+      // Always return success for security (don't reveal if user exists)
       res.json({
         success: true,
         message: 'If an account with that email exists, a password reset code has been sent'
       });
     } else {
-      // Still return success for security (don't reveal if user exists)
+      // Still return success for security
       res.json({
         success: true,
         message: 'If an account with that email exists, a password reset code has been sent'
@@ -311,7 +359,7 @@ const requestPasswordReset = async (req, res) => {
   }
 };
 
-// Reset password with 6-digit code
+// Reset password with 6-digit code - FIXED
 const resetPassword = async (req, res) => {
   try {
     const { code, newPassword, email } = req.body;
@@ -330,18 +378,10 @@ const resetPassword = async (req, res) => {
       });
     }
 
-    // Verify the reset code
-    const result = await User.resetPassword(code, newPassword);
+    // Verify the reset code with email
+    const result = await User.resetPassword(code, newPassword, email);
 
     if (result.success) {
-      // Check if email matches
-      if (result.user.email !== email) {
-        return res.status(400).json({
-          success: false,
-          message: 'Email does not match reset code'
-        });
-      }
-
       // Send password changed confirmation email
       try {
         await sendPasswordChanged({ 
@@ -455,7 +495,7 @@ const checkEmailVerification = async (req, res) => {
   }
 };
 
-// Update user profile
+// Update user profile - FIXED
 const updateProfile = async (req, res) => {
   try {
     const { name, phone, address, city, country } = req.body;
