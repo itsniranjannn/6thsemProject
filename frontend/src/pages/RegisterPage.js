@@ -26,7 +26,7 @@ const RegisterPage = () => {
     phone: '',
     address: '',
     city: '',
-    country: 'Nepal' // Default to Nepal
+    country: 'Nepal'
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -156,7 +156,16 @@ const RegisterPage = () => {
       return;
     }
 
-    const result = await register(formData.name, formData.email, formData.password);
+    // Send ALL form data to registration
+    const result = await register(
+      formData.name, 
+      formData.email, 
+      formData.password,
+      formData.phone,
+      formData.address,
+      formData.city,
+      formData.country
+    );
     
     if (result.success) {
       if (result.requiresVerification) {
@@ -186,7 +195,8 @@ const RegisterPage = () => {
     setVerificationLoading(true);
     setVerificationMessage('');
 
-    const result = await verifyEmail(verificationCode);
+    // Pass both code and email to verifyEmail
+    const result = await verifyEmail(verificationCode, formData.email);
     
     if (result.success) {
       setVerificationMessage('Email verified successfully! Welcome to Nexus Store!');
