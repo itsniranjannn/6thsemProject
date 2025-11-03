@@ -25,10 +25,10 @@ const HomePage = () => {
   const [specialOffers, setSpecialOffers] = useState([]);
   const [newArrivals, setNewArrivals] = useState([]);
   const [stats, setStats] = useState({
-    totalProducts: 0,
-    happyCustomers: 0,
-    satisfactionRate: 0,
-    deliveryTime: 0
+    totalProducts: 100,
+    happyCustomers: 1000,
+    satisfactionRate:98,
+    deliveryTime: 72
   });
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState({ message: '', type: 'success' });
