@@ -504,7 +504,7 @@ const OffersPage = () => {
                         {offerDetails.description}
                       </p>
                       <div className="flex items-center text-sm text-gray-500 mb-2">
-                        <span className="bg-white/10 px-3 py-1 rounded-full border border-white/10 backdrop-blur-sm">
+                        <span className="bg-white/10 text-white px-3 py-1 rounded-full border border-white/10 backdrop-blur-sm">
                           📦 {offer.category}
                         </span>
                       </div>
