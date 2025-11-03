@@ -59,7 +59,7 @@ const UsersManagement = () => {
     <div className="p-8">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">User Management</h2>
+          <h2 className="text-2xl font-bold text-white">User Management</h2>
           <p className="text-gray-600">Manage user accounts and permissions</p>
         </div>
         <button
