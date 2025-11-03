@@ -11,14 +11,12 @@ import CheckoutPage from './pages/CheckoutPage.js';
 import AdminDashboard from './pages/AdminDashboard.js';
 import LoginPage from './pages/LoginPage.js';
 import RegisterPage from './pages/RegisterPage.js';
-import PasswordResetPage from './pages/PasswordResetPage.js';
 import OrderSuccessPage from './pages/OrderSuccessPage.js';
 import PaymentFailedPage from './pages/PaymentFailedPage.js';
 import EsewaPaymentPage from './pages/EsewaPaymentPage.js';
 import OffersPage from './pages/OffersPage.js';
 import AboutPage from './pages/AboutPage.js';
 import UserDashboard from './pages/UserDashboard.js';
-import VerifyEmailPage from './pages/VerifyEmailPage.js';
 import './index.css';
 
 // ✅ Layout wrapper to conditionally render Navbar/Footer
@@ -57,8 +55,7 @@ function App() {
               {/* Auth routes */}
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
-              <Route path="/reset-password" element={<PasswordResetPage />} />
-              <Route path="/verify-email" element={<VerifyEmailPage />} />
+
 
               {/* Admin route */}
               <Route path="/admin" element={<AdminDashboard />} />
