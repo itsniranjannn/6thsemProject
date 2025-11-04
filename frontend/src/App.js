@@ -19,10 +19,15 @@ import AboutPage from './pages/AboutPage.js';
 import UserDashboard from './pages/UserDashboard.js';
 import './index.css';
 
-// ✅ Layout wrapper to conditionally render Navbar/Footer
+// ✅ Layout wrapper with conditional Navbar/Footer
 function Layout({ children }) {
   const location = useLocation();
-  const hideLayout = location.pathname.startsWith('/admin'); // hide navbar/footer for admin routes
+
+  // Hide Navbar/Footer on admin, login, and register pages
+  const hideLayout =
+    location.pathname.startsWith('/admin') ||
+    location.pathname === '/login' ||
+    location.pathname === '/register';
 
   return (
     <div className="App min-h-screen flex flex-col">
@@ -55,7 +60,6 @@ function App() {
               {/* Auth routes */}
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
-
 
               {/* Admin route */}
               <Route path="/admin" element={<AdminDashboard />} />
