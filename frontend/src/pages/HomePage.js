@@ -95,24 +95,7 @@ const HomePage = () => {
     } catch (error) {
       console.error('Error fetching special offers:', error);
       // Fallback sample offers
-      setSpecialOffers([
-        {
-          id: 1,
-          title: "Summer Sale",
-          description: "Up to 50% off on electronics",
-          discount: "50%",
-          bgGradient: "from-orange-500 to-red-500",
-          expires: "2024-12-31"
-        },
-        {
-          id: 2,
-          title: "Flash Deal",
-          description: "Limited time offers on fashion",
-          discount: "30%",
-          bgGradient: "from-purple-500 to-pink-500",
-          expires: "2024-12-25"
-        }
-      ]);
+      
     }
   };
 
