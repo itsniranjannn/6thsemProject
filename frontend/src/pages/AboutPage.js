@@ -81,8 +81,8 @@ const AboutPage = () => {
 
   // Store Statistics
   const stats = [
-    { number: '75K+', label: 'Digital Shoppers', icon: Users, color: 'from-cyan-500 to-blue-500' },
-    { number: '250K+', label: 'Products Available', icon: ShoppingBag, color: 'from-purple-500 to-pink-500' },
+    { number: '100+', label: 'Digital Shoppers', icon: Users, color: 'from-cyan-500 to-blue-500' },
+    { number: '1000+', label: 'Products Available', icon: ShoppingBag, color: 'from-purple-500 to-pink-500' },
     { number: '98%', label: 'Satisfaction Rate', icon: Star, color: 'from-amber-500 to-orange-500' },
     { number: '24/7', label: 'AI Support', icon: Cpu, color: 'from-green-500 to-emerald-500' }
   ];
