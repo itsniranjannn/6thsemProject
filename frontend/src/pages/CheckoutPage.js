@@ -263,15 +263,18 @@ const CheckoutPage = () => {
       const result = await response.json();
 
       if (result.success) {
-        setDiscount(result.discount);
+        // ✅ FIXED: Ensure discount is a number
+        const discountAmount = parseFloat(result.discount) || 0;
+        setDiscount(discountAmount);
         setAppliedPromo(result.promo);
         setPromoCode(codeToApply);
         setShowPromoDropdown(false);
-        showToast(result.promo.description || `🎉 Promo code applied! Rs. ${result.discount} discount`, 'success');
+        showToast(result.promo.description || `🎉 Promo code applied! Rs. ${discountAmount.toFixed(2)} discount`, 'success');
       } else {
         showToast(result.message || '❌ Invalid promo code', 'error');
       }
     } catch (error) {
+      console.error('Promo code apply error:', error);
       showToast('❌ Error applying promo code', 'error');
     } finally {
       setApplyingPromo(false);
@@ -316,12 +319,17 @@ const CheckoutPage = () => {
       
       const shippingCharge = 50;
       
+      // ✅ FIXED: Ensure all amounts are numbers
+      const subtotalNum = parseFloat(cartSummary.subtotal) || 0;
+      const discountNum = parseFloat(discount) || 0;
+      const totalAmount = subtotalNum + shippingCharge - discountNum;
+      
       const orderData = {
         items: cartItemsForCheckout,
-        totalAmount: parseFloat(cartSummary.subtotal) + shippingCharge - discount,
-        subtotal: parseFloat(cartSummary.subtotal),
+        totalAmount: totalAmount,
+        subtotal: subtotalNum,
         shipping: shippingCharge,
-        discount: discount,
+        discount: discountNum, // ✅ Now a number, not string
         promoCode: appliedPromo ? promoCode : null,
         promoCodeId: appliedPromo ? appliedPromo.id : null,
         shippingAddress: {
@@ -335,6 +343,8 @@ const CheckoutPage = () => {
           notes: formData.notes
         }
       };
+
+      console.log('📦 Order Data:', orderData);
 
       const token = localStorage.getItem('token');
       const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
@@ -351,7 +361,7 @@ const CheckoutPage = () => {
             shippingAddress: orderData.shippingAddress,
             subtotal: orderData.subtotal,
             shipping: orderData.shipping,
-            discount: orderData.discount,
+            discount: orderData.discount, // ✅ Now a number
             promoCode: orderData.promoCode,
             promoCodeId: orderData.promoCodeId
           };
@@ -365,7 +375,7 @@ const CheckoutPage = () => {
             shippingAddress: orderData.shippingAddress,
             subtotal: orderData.subtotal,
             shipping: orderData.shipping,
-            discount: orderData.discount,
+            discount: orderData.discount, // ✅ Now a number
             promoCode: orderData.promoCode,
             promoCodeId: orderData.promoCodeId,
             customer_info: {
@@ -384,7 +394,7 @@ const CheckoutPage = () => {
             shippingAddress: orderData.shippingAddress,
             subtotal: orderData.subtotal,
             shipping: orderData.shipping,
-            discount: orderData.discount,
+            discount: orderData.discount, // ✅ Now a number
             promoCode: orderData.promoCode,
             promoCodeId: orderData.promoCodeId
           };
@@ -397,7 +407,7 @@ const CheckoutPage = () => {
             totalAmount: orderData.totalAmount,
             subtotal: orderData.subtotal,
             shipping: orderData.shipping,
-            discount: orderData.discount,
+            discount: orderData.discount, // ✅ Now a number
             promoCode: orderData.promoCode,
             promoCodeId: orderData.promoCodeId,
             shippingAddress: orderData.shippingAddress
@@ -407,6 +417,8 @@ const CheckoutPage = () => {
         default:
           throw new Error('Invalid payment method');
       }
+
+      console.log('📤 Payment Data:', paymentData);
 
       const response = await fetch(`${API_BASE_URL}${paymentEndpoint}`, {
         method: 'POST',
@@ -432,6 +444,7 @@ const CheckoutPage = () => {
       }
 
       const result = await response.json();
+      console.log('✅ Payment Response:', result);
 
       if (result.success) {
         if (selectedPayment === 'stripe' && result.sessionUrl) {
@@ -451,12 +464,22 @@ const CheckoutPage = () => {
         } else if (selectedPayment === 'esewa' && result.formData) {
           showToast('💳 Redirecting to eSewa...', 'success');
           
-          navigate('/esewa-payment', {
-            state: {
-              formData: result.formData,
-              submitUrl: result.submit_url
-            }
+          // Create and submit eSewa form
+          const form = document.createElement('form');
+          form.method = 'POST';
+          form.action = result.submit_url || 'https://rc-epay.esewa.com.np/api/epay/main/v2/form';
+          form.style.display = 'none';
+          
+          Object.keys(result.formData).forEach(key => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = key;
+            input.value = result.formData[key];
+            form.appendChild(input);
           });
+          
+          document.body.appendChild(form);
+          form.submit();
           return;
         
         } else if (selectedPayment === 'cod' || result.redirect_url) {
@@ -480,6 +503,7 @@ const CheckoutPage = () => {
       }
 
     } catch (error) {
+      console.error('❌ Payment processing error:', error);
       showToast(error.message || '❌ Payment processing failed. Please try again.', 'error');
     } finally {
       setLoading(false);
@@ -508,10 +532,10 @@ const CheckoutPage = () => {
   }, [navigate, clearCart]);
 
   const cartSummary = getCartSummary();
-  const subtotal = parseFloat(cartSummary.subtotal);
+  const subtotal = parseFloat(cartSummary.subtotal) || 0;
   const shipping = 50;
   const totalBeforeDiscount = subtotal + shipping;
-  const total = totalBeforeDiscount - discount;
+  const total = Math.max(0, totalBeforeDiscount - discount); // ✅ Ensure no negative total
 
   const getCategoryBadge = (promo) => {
     if (!promo.categories || promo.categories.length === 0) {
@@ -758,182 +782,182 @@ const CheckoutPage = () => {
               </div>
             </motion.div>
 
-          {/* Payment Method */}
-<motion.div 
-  className="bg-white/10 backdrop-blur-md rounded-3xl p-6 border border-cyan-500/20 shadow-2xl"
-  initial={{ opacity: 0, x: -30 }}
-  animate={{ opacity: 1, x: 0 }}
-  transition={{ delay: 0.6 }}
->
-  <div className="flex items-center mb-6">
-    <div className="w-10 h-10 bg-gradient-to-r from-green-500 to-emerald-500 rounded-2xl flex items-center justify-center mr-4">
-      <span className="text-white text-lg font-bold">2</span>
-    </div>
-    <h2 className="text-2xl font-bold text-white">Payment Method *</h2>
-  </div>
+            {/* Payment Method */}
+            <motion.div 
+              className="bg-white/10 backdrop-blur-md rounded-3xl p-6 border border-cyan-500/20 shadow-2xl"
+              initial={{ opacity: 0, x: -30 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.6 }}
+            >
+              <div className="flex items-center mb-6">
+                <div className="w-10 h-10 bg-gradient-to-r from-green-500 to-emerald-500 rounded-2xl flex items-center justify-center mr-4">
+                  <span className="text-white text-lg font-bold">2</span>
+                </div>
+                <h2 className="text-2xl font-bold text-white">Payment Method *</h2>
+              </div>
 
-  <div className="space-y-4">
-    {/* Stripe */}
-    <motion.label 
-      whileHover={{ scale: 1.02 }}
-      whileTap={{ scale: 0.98 }}
-      className={`flex items-center p-4 rounded-2xl cursor-pointer transition-all duration-300 border-2 ${
-        selectedPayment === 'stripe'
-          ? 'bg-gradient-to-r from-purple-500/20 to-blue-500/20 border-cyan-500 shadow-2xl'
-          : 'bg-white/5 border-cyan-500/30 hover:border-cyan-500 hover:bg-cyan-500/10'
-      }`}
-    >
-      <input
-        type="radio"
-        name="payment"
-        value="stripe"
-        checked={selectedPayment === 'stripe'}
-        onChange={(e) => setSelectedPayment(e.target.value)}
-        className="w-5 h-5 text-cyan-500 focus:ring-cyan-500"
-      />
-      <div className="ml-4 flex items-center gap-4">
-        <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center overflow-hidden p-2 border border-gray-300">
-          <img
-            src="/images/stripe.png"
-            alt="Stripe"
-            className="w-full h-full object-contain"
-            onError={(e) => {
-              e.target.style.display = 'none';
-              e.target.nextElementSibling.style.display = 'flex';
-            }}
-          />
-          <div className="w-12 h-12 bg-gradient-to-r from-purple-500 to-blue-500 rounded-2xl flex items-center justify-center text-white font-bold text-xs hidden">
-            <CreditCard className="w-6 h-6" />
-          </div>
-        </div>
-        <div>
-          <span className="font-bold text-white">Credit/Debit Card</span>
-          <p className="text-cyan-200 text-sm">Secure payment via Stripe</p>
-        </div>
-      </div>
-    </motion.label>
+              <div className="space-y-4">
+                {/* Stripe */}
+                <motion.label 
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className={`flex items-center p-4 rounded-2xl cursor-pointer transition-all duration-300 border-2 ${
+                    selectedPayment === 'stripe'
+                      ? 'bg-gradient-to-r from-purple-500/20 to-blue-500/20 border-cyan-500 shadow-2xl'
+                      : 'bg-white/5 border-cyan-500/30 hover:border-cyan-500 hover:bg-cyan-500/10'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="payment"
+                    value="stripe"
+                    checked={selectedPayment === 'stripe'}
+                    onChange={(e) => setSelectedPayment(e.target.value)}
+                    className="w-5 h-5 text-cyan-500 focus:ring-cyan-500"
+                  />
+                  <div className="ml-4 flex items-center gap-4">
+                    <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center overflow-hidden p-2 border border-gray-300">
+                      <img
+                        src="/images/stripe.png"
+                        alt="Stripe"
+                        className="w-full h-full object-contain"
+                        onError={(e) => {
+                          e.target.style.display = 'none';
+                          e.target.nextElementSibling.style.display = 'flex';
+                        }}
+                      />
+                      <div className="w-12 h-12 bg-gradient-to-r from-purple-500 to-blue-500 rounded-2xl flex items-center justify-center text-white font-bold text-xs hidden">
+                        <CreditCard className="w-6 h-6" />
+                      </div>
+                    </div>
+                    <div>
+                      <span className="font-bold text-white">Credit/Debit Card</span>
+                      <p className="text-cyan-200 text-sm">Secure payment via Stripe</p>
+                    </div>
+                  </div>
+                </motion.label>
 
-    {/* Khalti */}
-    <motion.label 
-      whileHover={{ scale: 1.02 }}
-      whileTap={{ scale: 0.98 }}
-      className={`flex items-center p-4 rounded-2xl cursor-pointer transition-all duration-300 border-2 ${
-        selectedPayment === 'khalti'
-          ? 'bg-gradient-to-r from-purple-500/20 to-pink-500/20 border-purple-500 shadow-2xl'
-          : 'bg-white/5 border-purple-500/30 hover:border-purple-500 hover:bg-purple-500/10'
-      }`}
-    >
-      <input
-        type="radio"
-        name="payment"
-        value="khalti"
-        checked={selectedPayment === 'khalti'}
-        onChange={(e) => setSelectedPayment(e.target.value)}
-        className="w-5 h-5 text-purple-500 focus:ring-purple-500"
-      />
-      <div className="ml-4 flex items-center gap-4">
-        <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center overflow-hidden p-2 border border-gray-300">
-          <img
-            src="/images/khalti.png"
-            alt="Khalti"
-            className="w-full h-full object-contain"
-            onError={(e) => {
-              e.target.style.display = 'none';
-              e.target.nextElementSibling.style.display = 'flex';
-            }}
-          />
-          <div className="w-12 h-12 bg-gradient-to-r from-purple-500 to-pink-500 rounded-2xl flex items-center justify-center text-white font-bold text-xs hidden">
-            <Smartphone className="w-6 h-6" />
-          </div>
-        </div>
-        <div>
-          <span className="font-bold text-white">Khalti Wallet</span>
-          <p className="text-purple-200 text-sm">Fast and secure mobile payment</p>
-        </div>
-      </div>
-    </motion.label>
+                {/* Khalti */}
+                <motion.label 
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className={`flex items-center p-4 rounded-2xl cursor-pointer transition-all duration-300 border-2 ${
+                    selectedPayment === 'khalti'
+                      ? 'bg-gradient-to-r from-purple-500/20 to-pink-500/20 border-purple-500 shadow-2xl'
+                      : 'bg-white/5 border-purple-500/30 hover:border-purple-500 hover:bg-purple-500/10'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="payment"
+                    value="khalti"
+                    checked={selectedPayment === 'khalti'}
+                    onChange={(e) => setSelectedPayment(e.target.value)}
+                    className="w-5 h-5 text-purple-500 focus:ring-purple-500"
+                  />
+                  <div className="ml-4 flex items-center gap-4">
+                    <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center overflow-hidden p-2 border border-gray-300">
+                      <img
+                        src="/images/khalti.png"
+                        alt="Khalti"
+                        className="w-full h-full object-contain"
+                        onError={(e) => {
+                          e.target.style.display = 'none';
+                          e.target.nextElementSibling.style.display = 'flex';
+                        }}
+                      />
+                      <div className="w-12 h-12 bg-gradient-to-r from-purple-500 to-pink-500 rounded-2xl flex items-center justify-center text-white font-bold text-xs hidden">
+                        <Smartphone className="w-6 h-6" />
+                      </div>
+                    </div>
+                    <div>
+                      <span className="font-bold text-white">Khalti Wallet</span>
+                      <p className="text-purple-200 text-sm">Fast and secure mobile payment</p>
+                    </div>
+                  </div>
+                </motion.label>
 
-    {/* eSewa */}
-    <motion.label 
-      whileHover={{ scale: 1.02 }}
-      whileTap={{ scale: 0.98 }}
-      className={`flex items-center p-4 rounded-2xl cursor-pointer transition-all duration-300 border-2 ${
-        selectedPayment === 'esewa'
-          ? 'bg-gradient-to-r from-green-500/20 to-emerald-500/20 border-green-500 shadow-2xl'
-          : 'bg-white/5 border-green-500/30 hover:border-green-500 hover:bg-green-500/10'
-      }`}
-    >
-      <input
-        type="radio"
-        name="payment"
-        value="esewa"
-        checked={selectedPayment === 'esewa'}
-        onChange={(e) => setSelectedPayment(e.target.value)}
-        className="w-5 h-5 text-green-500 focus:ring-green-500"
-      />
-      <div className="ml-4 flex items-center gap-4">
-        <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center overflow-hidden p-2 border border-gray-300">
-          <img
-            src="/images/esewa.png"
-            alt="eSewa"
-            className="w-full h-full object-contain"
-            onError={(e) => {
-              e.target.style.display = 'none';
-              e.target.nextElementSibling.style.display = 'flex';
-            }}
-          />
-          <div className="w-12 h-12 bg-gradient-to-r from-green-500 to-emerald-500 rounded-2xl flex items-center justify-center text-white font-bold text-xs hidden">
-            <Wallet className="w-6 h-6" />
-          </div>
-        </div>
-        <div>
-          <span className="font-bold text-white">eSewa Wallet</span>
-          <p className="text-green-200 text-sm">Popular digital wallet in Nepal</p>
-        </div>
-      </div>
-    </motion.label>
+                {/* eSewa */}
+                <motion.label 
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className={`flex items-center p-4 rounded-2xl cursor-pointer transition-all duration-300 border-2 ${
+                    selectedPayment === 'esewa'
+                      ? 'bg-gradient-to-r from-green-500/20 to-emerald-500/20 border-green-500 shadow-2xl'
+                      : 'bg-white/5 border-green-500/30 hover:border-green-500 hover:bg-green-500/10'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="payment"
+                    value="esewa"
+                    checked={selectedPayment === 'esewa'}
+                    onChange={(e) => setSelectedPayment(e.target.value)}
+                    className="w-5 h-5 text-green-500 focus:ring-green-500"
+                  />
+                  <div className="ml-4 flex items-center gap-4">
+                    <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center overflow-hidden p-2 border border-gray-300">
+                      <img
+                        src="/images/esewa.png"
+                        alt="eSewa"
+                        className="w-full h-full object-contain"
+                        onError={(e) => {
+                          e.target.style.display = 'none';
+                          e.target.nextElementSibling.style.display = 'flex';
+                        }}
+                      />
+                      <div className="w-12 h-12 bg-gradient-to-r from-green-500 to-emerald-500 rounded-2xl flex items-center justify-center text-white font-bold text-xs hidden">
+                        <Wallet className="w-6 h-6" />
+                      </div>
+                    </div>
+                    <div>
+                      <span className="font-bold text-white">eSewa Wallet</span>
+                      <p className="text-green-200 text-sm">Popular digital wallet in Nepal</p>
+                    </div>
+                  </div>
+                </motion.label>
 
-    {/* Cash on Delivery */}
-    <motion.label 
-      whileHover={{ scale: 1.02 }}
-      whileTap={{ scale: 0.98 }}
-      className={`flex items-center p-4 rounded-2xl cursor-pointer transition-all duration-300 border-2 ${
-        selectedPayment === 'cod'
-          ? 'bg-gradient-to-r from-orange-500/20 to-red-500/20 border-orange-500 shadow-2xl'
-          : 'bg-white/5 border-orange-500/30 hover:border-orange-500 hover:bg-orange-500/10'
-      }`}
-    >
-      <input
-        type="radio"
-        name="payment"
-        value="cod"
-        checked={selectedPayment === 'cod'}
-        onChange={(e) => setSelectedPayment(e.target.value)}
-        className="w-5 h-5 text-orange-500 focus:ring-orange-500"
-      />
-      <div className="ml-4 flex items-center gap-4">
-        <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center overflow-hidden p-2 border border-gray-300">
-          <img
-            src="/images/cod.png"
-            alt="Cash on Delivery"
-            className="w-full h-full object-contain"
-            onError={(e) => {
-              e.target.style.display = 'none';
-              e.target.nextElementSibling.style.display = 'flex';
-            }}
-          />
-          <div className="w-12 h-12 bg-gradient-to-r from-orange-500 to-red-500 rounded-2xl flex items-center justify-center text-white font-bold text-xs hidden">
-            <Package className="w-6 h-6" />
-          </div>
-        </div>
-        <div>
-          <span className="font-bold text-white">Cash on Delivery</span>
-          <p className="text-orange-200 text-sm">Pay when you receive your order</p>
-        </div>
-      </div>
-    </motion.label>
-  </div>
-</motion.div>
+                {/* Cash on Delivery */}
+                <motion.label 
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className={`flex items-center p-4 rounded-2xl cursor-pointer transition-all duration-300 border-2 ${
+                    selectedPayment === 'cod'
+                      ? 'bg-gradient-to-r from-orange-500/20 to-red-500/20 border-orange-500 shadow-2xl'
+                      : 'bg-white/5 border-orange-500/30 hover:border-orange-500 hover:bg-orange-500/10'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="payment"
+                    value="cod"
+                    checked={selectedPayment === 'cod'}
+                    onChange={(e) => setSelectedPayment(e.target.value)}
+                    className="w-5 h-5 text-orange-500 focus:ring-orange-500"
+                  />
+                  <div className="ml-4 flex items-center gap-4">
+                    <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center overflow-hidden p-2 border border-gray-300">
+                      <img
+                        src="/images/cod.png"
+                        alt="Cash on Delivery"
+                        className="w-full h-full object-contain"
+                        onError={(e) => {
+                          e.target.style.display = 'none';
+                          e.target.nextElementSibling.style.display = 'flex';
+                        }}
+                      />
+                      <div className="w-12 h-12 bg-gradient-to-r from-orange-500 to-red-500 rounded-2xl flex items-center justify-center text-white font-bold text-xs hidden">
+                        <Package className="w-6 h-6" />
+                      </div>
+                    </div>
+                    <div>
+                      <span className="font-bold text-white">Cash on Delivery</span>
+                      <p className="text-orange-200 text-sm">Pay when you receive your order</p>
+                    </div>
+                  </div>
+                </motion.label>
+              </div>
+            </motion.div>
           </div>
 
           {/* Right Column - Order Summary */}
@@ -1140,7 +1164,7 @@ const CheckoutPage = () => {
                     className="flex justify-between text-green-300 bg-gradient-to-r from-green-500/20 to-emerald-500/20 p-3 rounded-xl border border-green-400/30"
                   >
                     <span className="font-bold">Discount Applied</span>
-                    <span className="font-bold text-lg">- Rs. {discount.toFixed(2)}</span>
+                    <span className="font-bold text-lg">- Rs. {parseFloat(discount).toFixed(2)}</span>
                   </motion.div>
                 )}
                 
