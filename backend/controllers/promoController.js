@@ -154,11 +154,15 @@ const validatePromoCode = async (req, res) => {
     const validation = await PromoCode.validatePromoCode(code, parseFloat(totalAmount), categoriesArray);
     
     if (validation.valid) {
+      // ✅ FIXED: Ensure discount is returned as a number
+      const discountAmount = parseFloat(validation.discountAmount) || 0;
+      const finalAmount = parseFloat(validation.finalAmount) || 0;
+      
       res.json({
         success: true,
         promo: validation.promo,
-        discount: validation.discountAmount,
-        finalAmount: validation.finalAmount
+        discount: discountAmount, // ✅ Now a number, not string
+        finalAmount: finalAmount
       });
     } else {
       res.json({
