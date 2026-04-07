@@ -1,5 +1,18 @@
 const db = require('../config/db');
 
+// Simple in-memory cache for ML recommendations (5-minute expiry)
+const mlCache = {
+  data: null,
+  timestamp: 0,
+  TTL: 5 * 60 * 1000  // 5 minutes in milliseconds
+};
+
+// Invalidate cache (call this when products are updated)
+function invalidateMLCache() {
+  mlCache.data = null;
+  mlCache.timestamp = 0;
+}
+
 class RecommendationEngine {
   
   // Content-based filtering based on product categories and features
@@ -15,19 +28,25 @@ class RecommendationEngine {
         return await this.getPopularProducts(limit);
       }
 
-      // Find similar products based on category and price range
+      // Find similar products based on category and price range, with rating and reviewCount
       const similarProducts = await this.executeQuery(
-        `SELECT p.*, 
+        `SELECT p.id, p.name, p.description, p.price, p.category, 
+                p.image_url, p.image_urls, p.tags, p.is_featured, p.is_new,
+                p.discount_percentage, p.stock_quantity, p.created_at,
+                COALESCE(AVG(r.rating), 0) as rating,
+                COUNT(r.id) as reviewCount,
                 (CASE WHEN p.category = ? THEN 3 ELSE 0 END) +
                 (CASE WHEN ABS(p.price - ?) / ? < 0.3 THEN 2 ELSE 0 END) as similarity_score
          FROM products p 
+         LEFT JOIN reviews r ON p.id = r.product_id
          WHERE p.id != ? AND p.stock_quantity > 0
+         GROUP BY p.id
          ORDER BY similarity_score DESC, p.created_at DESC 
          LIMIT ?`,
         [
           targetProduct.category,
           targetProduct.price,
-          targetProduct.price,
+          targetProduct.price || 1,
           productId,
           limit
         ]
@@ -41,7 +60,8 @@ class RecommendationEngine {
   }
 
   // Collaborative filtering based on user purchase history
-  static async getUserRecommendations(userId, limit = 4) {
+  // Returns { recommendations: [], fallback: boolean, fallbackReason: string }
+  static async getUserRecommendations(userId, limit = 4, returnMetadata = false) {
     try {
       // Get user's purchase history
       const userPurchases = await this.executeQuery(
@@ -52,53 +72,101 @@ class RecommendationEngine {
       );
 
       if (userPurchases.length === 0) {
-        return await this.getPopularProducts(limit);
+        const popular = await this.getPopularProducts(limit);
+        if (returnMetadata) {
+          return { 
+            recommendations: popular, 
+            fallback: true, 
+            fallbackReason: 'no_purchases',
+            algorithm_used: 'popularity'
+          };
+        }
+        return popular;
       }
+
+      const purchasedProductIds = userPurchases.map(p => p.product_id);
+      
+      // Build dynamic placeholders for IN clause (mysql2 fix)
+      const purchasePlaceholders = purchasedProductIds.map(() => '?').join(',');
 
       // Find users who bought similar products
       const similarUsers = await this.executeQuery(
         `SELECT DISTINCT o.user_id 
          FROM order_items oi 
          JOIN orders o ON oi.order_id = o.id 
-         WHERE oi.product_id IN (?) AND o.user_id != ?
+         WHERE oi.product_id IN (${purchasePlaceholders}) AND o.user_id != ?
          LIMIT 10`,
-        [userPurchases.map(p => p.product_id), userId]
+        [...purchasedProductIds, userId]
       );
 
       if (similarUsers.length === 0) {
-        return await this.getPopularProducts(limit);
+        const popular = await this.getPopularProducts(limit);
+        if (returnMetadata) {
+          return { 
+            recommendations: popular, 
+            fallback: true, 
+            fallbackReason: 'no_similar_users',
+            algorithm_used: 'popularity'
+          };
+        }
+        return popular;
       }
 
-      // Get products bought by similar users
+      const similarUserIds = similarUsers.map(u => u.user_id);
+      const userPlaceholders = similarUserIds.map(() => '?').join(',');
+
+      // Get products bought by similar users, with rating and reviewCount
       const recommendations = await this.executeQuery(
-        `SELECT p.*, COUNT(oi.product_id) as purchase_count
+        `SELECT p.id, p.name, p.description, p.price, p.category, 
+                p.image_url, p.image_urls, p.tags, p.is_featured, p.is_new,
+                p.discount_percentage, p.stock_quantity, p.created_at,
+                COALESCE(AVG(rev.rating), 0) as rating,
+                COUNT(DISTINCT rev.id) as reviewCount,
+                COUNT(oi.product_id) as purchase_count
          FROM products p
          JOIN order_items oi ON p.id = oi.product_id
          JOIN orders o ON oi.order_id = o.id
-         WHERE o.user_id IN (?) AND p.id NOT IN (?)
+         LEFT JOIN reviews rev ON p.id = rev.product_id
+         WHERE o.user_id IN (${userPlaceholders}) AND p.id NOT IN (${purchasePlaceholders})
          GROUP BY p.id
          ORDER BY purchase_count DESC, p.created_at DESC
          LIMIT ?`,
-        [
-          similarUsers.map(u => u.user_id),
-          userPurchases.map(p => p.product_id),
-          limit
-        ]
+        [...similarUserIds, ...purchasedProductIds, limit]
       );
 
+      if (returnMetadata) {
+        return { 
+          recommendations, 
+          fallback: false, 
+          algorithm_used: 'collaborative'
+        };
+      }
       return recommendations;
     } catch (error) {
       console.error('Error in getUserRecommendations:', error);
-      return await this.getPopularProducts(limit);
+      const popular = await this.getPopularProducts(limit);
+      if (returnMetadata) {
+        return { 
+          recommendations: popular, 
+          fallback: true, 
+          fallbackReason: 'error',
+          algorithm_used: 'popularity'
+        };
+      }
+      return popular;
     }
   }
 
   // Popular products based on sales and ratings
   static async getPopularProducts(limit = 4) {
     try {
-      // Calculate popularity based on sales count and featured status
+      // Calculate popularity based on sales count, featured status, with rating and reviewCount
       const popularProducts = await this.executeQuery(
-        `SELECT p.*, 
+        `SELECT p.id, p.name, p.description, p.price, p.category, 
+                p.image_url, p.image_urls, p.tags, p.is_featured, p.is_new,
+                p.discount_percentage, p.stock_quantity, p.created_at,
+                COALESCE(AVG(r.rating), 0) as rating,
+                COUNT(r.id) as reviewCount,
                 (COALESCE(oi.purchase_count, 0) * 2) + 
                 (CASE WHEN p.is_featured = 1 THEN 3 ELSE 0 END) +
                 (CASE WHEN p.is_new = 1 THEN 2 ELSE 0 END) as popularity_score
@@ -108,7 +176,9 @@ class RecommendationEngine {
            FROM order_items 
            GROUP BY product_id
          ) oi ON p.id = oi.product_id
+         LEFT JOIN reviews r ON p.id = r.product_id
          WHERE p.stock_quantity > 0
+         GROUP BY p.id
          ORDER BY popularity_score DESC, p.created_at DESC
          LIMIT ?`,
         [limit]
@@ -124,22 +194,42 @@ class RecommendationEngine {
   // Enhanced Machine Learning-based recommendations using multiple features
   static async getMLRecommendations(productId, limit = 4) {
     try {
-      // Get all products with their features (using only existing columns)
-      const allProducts = await this.executeQuery(
-        `SELECT 
-          id, 
-          name, 
-          category, 
-          price, 
-          description,
-          is_featured,
-          is_new,
-          stock_quantity,
-          discount_percentage,
-          created_at
-         FROM products 
-         WHERE stock_quantity > 0`
-      );
+      const now = Date.now();
+      let allProducts;
+      
+      // Check cache for product data
+      if (mlCache.data && (now - mlCache.timestamp) < mlCache.TTL) {
+        console.log('📦 Using cached ML product data');
+        allProducts = mlCache.data;
+      } else {
+        // Get all products with their features (including image_url for consistency)
+        allProducts = await this.executeQuery(
+          `SELECT 
+            p.id, 
+            p.name, 
+            p.category, 
+            p.price, 
+            p.description,
+            p.image_url,
+            p.image_urls,
+            p.is_featured,
+            p.is_new,
+            p.stock_quantity,
+            p.discount_percentage,
+            p.created_at,
+            COALESCE(AVG(r.rating), 0) as rating,
+            COUNT(r.id) as reviewCount
+           FROM products p
+           LEFT JOIN reviews r ON p.id = r.product_id
+           WHERE p.stock_quantity > 0
+           GROUP BY p.id`
+        );
+        
+        // Update cache
+        mlCache.data = allProducts;
+        mlCache.timestamp = now;
+        console.log('🔄 ML product data cached');
+      }
 
       if (allProducts.length === 0) {
         return [];
@@ -282,9 +372,16 @@ class RecommendationEngine {
   static async getFallbackProducts(limit = 4) {
     try {
       const fallbackProducts = await this.executeQuery(
-        `SELECT * FROM products 
-         WHERE stock_quantity > 0 
-         ORDER BY is_featured DESC, created_at DESC 
+        `SELECT p.id, p.name, p.description, p.price, p.category, 
+                p.image_url, p.image_urls, p.tags, p.is_featured, p.is_new,
+                p.discount_percentage, p.stock_quantity, p.created_at,
+                COALESCE(AVG(r.rating), 0) as rating,
+                COUNT(r.id) as reviewCount
+         FROM products p
+         LEFT JOIN reviews r ON p.id = r.product_id
+         WHERE p.stock_quantity > 0 
+         GROUP BY p.id
+         ORDER BY p.is_featured DESC, p.created_at DESC 
          LIMIT ?`,
         [limit]
       );
@@ -336,6 +433,11 @@ class RecommendationEngine {
         }
       });
     });
+  }
+  
+  // Invalidate ML cache (call when products are updated)
+  static invalidateCache() {
+    invalidateMLCache();
   }
 }
 

@@ -1,6 +1,20 @@
 const db = require('../config/db');
 
 class PromoCode {
+  static parseCategories(rawCategories) {
+    if (!rawCategories) return [];
+    if (Array.isArray(rawCategories)) return rawCategories.filter(Boolean);
+    if (typeof rawCategories === 'string') {
+      try {
+        const parsed = JSON.parse(rawCategories);
+        return Array.isArray(parsed) ? parsed.filter(Boolean) : [];
+      } catch (error) {
+        return [];
+      }
+    }
+    return [];
+  }
+
   // Create new promo code
   static async create(promoData) {
     try {
@@ -30,7 +44,7 @@ class PromoCode {
           valid_from,
           valid_until,
           is_active !== undefined ? is_active : true,
-          categories ? JSON.stringify(categories) : null
+          Array.isArray(categories) && categories.length > 0 ? JSON.stringify(categories) : null
         ]
       );
       
@@ -159,7 +173,7 @@ class PromoCode {
   }
 
   // Validate promo code
-  static async validatePromoCode(code, orderAmount, cartCategories = []) {
+  static async validatePromoCode(code, orderAmount, cartCategories = [], cartItems = []) {
     try {
       const promo = await this.findByCode(code);
       
@@ -167,42 +181,56 @@ class PromoCode {
         return { valid: false, message: 'Invalid promo code' };
       }
       
-      // Check minimum order amount
-      if (orderAmount < promo.min_order_amount) {
-        return { 
-          valid: false, 
-          message: `Minimum order amount of Rs. ${promo.min_order_amount} required` 
+      const promoCategories = this.parseCategories(promo.categories);
+      const hasCategoryRestriction = promoCategories.length > 0;
+
+      const normalizedItems = Array.isArray(cartItems)
+        ? cartItems
+            .map((item) => ({
+              category: item.category || null,
+              quantity: Math.max(0, parseInt(item.quantity, 10) || 0),
+              price: Math.max(0, parseFloat(item.price || 0))
+            }))
+            .filter((item) => item.quantity > 0 && item.price >= 0)
+        : [];
+
+      const eligibleItems = normalizedItems.filter((item) => {
+        if (!hasCategoryRestriction) return true;
+        return item.category && promoCategories.includes(item.category);
+      });
+
+      const eligibleSubtotal =
+        normalizedItems.length > 0
+          ? eligibleItems.reduce((sum, item) => sum + item.price * item.quantity, 0)
+          : parseFloat(orderAmount) || 0;
+
+      const ineligibleSubtotal = Math.max(0, (parseFloat(orderAmount) || 0) - eligibleSubtotal);
+      const eligibleItemCount = eligibleItems.reduce((sum, item) => sum + item.quantity, 0);
+
+      if (hasCategoryRestriction && normalizedItems.length > 0 && eligibleItemCount === 0) {
+        return {
+          valid: false,
+          message: `This promo code is only valid for: ${promoCategories.join(', ')}`
+        };
+      }
+
+      const minimumValidationAmount = hasCategoryRestriction ? eligibleSubtotal : (parseFloat(orderAmount) || 0);
+      if (minimumValidationAmount < (parseFloat(promo.min_order_amount) || 0)) {
+        return {
+          valid: false,
+          message: `Minimum order amount of Rs. ${promo.min_order_amount} required`
         };
       }
       
-      // Check category restrictions
-      if (promo.categories && promo.categories.trim() !== '') {
-        try {
-          const promoCategories = JSON.parse(promo.categories);
-          if (promoCategories.length > 0) {
-            const hasMatchingCategory = cartCategories.some(cartCategory => 
-              promoCategories.includes(cartCategory)
-            );
-            if (!hasMatchingCategory) {
-              return { 
-                valid: false, 
-                message: `This promo code is only valid for: ${promoCategories.join(', ')}` 
-              };
-            }
-          }
-        } catch (e) {
-          console.error('Error parsing promo categories:', e);
-        }
-      }
-      
       // Check usage limit
-      if (promo.max_uses) {
+      const usageLimit = promo.max_uses || promo.usage_limit;
+      if (usageLimit) {
         const [usageCount] = await db.execute(
           'SELECT COUNT(*) as count FROM order_promo_codes WHERE promo_code_id = ?',
           [promo.id]
         );
         
-        if (usageCount[0].count >= promo.max_uses) {
+        if (usageCount[0].count >= usageLimit) {
           return { valid: false, message: 'Promo code usage limit exceeded' };
         }
       }
@@ -210,16 +238,28 @@ class PromoCode {
       // Calculate discount
       let discountAmount = 0;
       if (promo.discount_type === 'percentage') {
-        discountAmount = (orderAmount * promo.discount_value) / 100;
+        discountAmount = (eligibleSubtotal * promo.discount_value) / 100;
+        if (promo.max_discount_amount) {
+          discountAmount = Math.min(discountAmount, parseFloat(promo.max_discount_amount) || discountAmount);
+        }
       } else {
-        discountAmount = promo.discount_value;
+        discountAmount = parseFloat(promo.discount_value) || 0;
       }
+
+      discountAmount = Math.min(discountAmount, eligibleSubtotal);
       
       return {
         valid: true,
         promo: promo,
         discountAmount: discountAmount,
-        finalAmount: Math.max(0, orderAmount - discountAmount)
+        finalAmount: Math.max(0, (parseFloat(orderAmount) || 0) - discountAmount),
+        breakdown: {
+          eligibleSubtotal,
+          ineligibleSubtotal,
+          eligibleItemCount,
+          appliesToAllCategories: !hasCategoryRestriction,
+          categories: hasCategoryRestriction ? promoCategories : []
+        }
       };
     } catch (error) {
       console.error('❌ Promo code validation error:', error);
