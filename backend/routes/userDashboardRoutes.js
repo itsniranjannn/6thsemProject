@@ -142,6 +142,7 @@ router.get('/orders/:id', protect, async (req, res) => {
     // Get order details
     const [orders] = await db.execute(`
       SELECT o.*, 
+             oi.product_id,
              p.name as product_name,
              p.description as product_description,
              p.image_url as product_image,
@@ -162,9 +163,9 @@ router.get('/orders/:id', protect, async (req, res) => {
     }
 
     // Format order data
-    const order = {
-      id: orders[0].id,
-      user_id: orders[0].user_id,
+      const order = {
+        id: orders[0].id,
+        user_id: orders[0].user_id,
       total_amount: orders[0].total_amount,
       status: orders[0].status,
       payment_method: orders[0].payment_method,
@@ -173,18 +174,21 @@ router.get('/orders/:id', protect, async (req, res) => {
       tracking_number: orders[0].tracking_number,
       estimated_delivery: orders[0].estimated_delivery,
       subtotal: orders[0].subtotal,
-      shipping_fee: orders[0].shipping_fee,
-      discount: orders[0].discount,
-      created_at: orders[0].created_at,
-      items: orders.map(row => ({
-        id: row.item_id,
-        product_name: row.product_name,
-        product_description: row.product_description,
-        product_image: row.product_image,
-        quantity: row.quantity,
-        price: row.price
-      })).filter(item => item.id && item.product_name) // Remove null items
-    };
+        shipping_fee: orders[0].shipping_fee,
+        discount: orders[0].discount,
+        created_at: orders[0].created_at,
+        items: orders
+          .map(row => ({
+            id: row.item_id,
+            product_id: row.product_id,
+            product_name: row.product_name || `Product #${row.product_id || 'N/A'}`,
+            product_description: row.product_description || '',
+            product_image: row.product_image || '',
+            quantity: parseInt(row.quantity, 10) || 0,
+            price: parseFloat(row.price || 0)
+          }))
+          .filter(item => item.id && item.quantity > 0)
+      };
 
     console.log(`✅ Order details retrieved for order ${orderId}`);
 

@@ -5,6 +5,30 @@ const upload = require('../middleware/uploadMiddleware');
 
 const router = express.Router();
 
+const normalizePromoCategories = (categories, applyToAllCategories = false) => {
+  if (applyToAllCategories) return null;
+  if (categories === null || categories === undefined) return null;
+
+  if (Array.isArray(categories)) {
+    const cleaned = categories.filter(Boolean);
+    return cleaned.length > 0 ? cleaned : null;
+  }
+
+  if (typeof categories === 'string' && categories.trim() !== '') {
+    try {
+      const parsed = JSON.parse(categories);
+      if (Array.isArray(parsed)) {
+        const cleaned = parsed.filter(Boolean);
+        return cleaned.length > 0 ? cleaned : null;
+      }
+    } catch (error) {
+      return null;
+    }
+  }
+
+  return null;
+};
+
 // Get all users - FIXED: Using 'name' instead of 'username'
 router.get('/users', protect, admin, async (req, res) => {
   try {
@@ -63,6 +87,8 @@ router.get('/orders', protect, admin, async (req, res) => {
         FROM order_items oi 
         LEFT JOIN products p ON oi.product_id = p.id 
         WHERE oi.order_id = ?
+          AND oi.product_id IS NOT NULL
+          AND oi.quantity > 0
       `, [order.id]);
       order.items = items || [];
     }
@@ -463,7 +489,8 @@ router.post('/promo-codes', protect, admin, async (req, res) => {
       valid_from,
       valid_until,
       is_active = true,
-      categories
+      categories,
+      apply_to_all_categories
     } = req.body;
 
     if (!code || !discount_type || !discount_value) {
@@ -482,6 +509,8 @@ router.post('/promo-codes', protect, admin, async (req, res) => {
       });
     }
 
+    const normalizedCategories = normalizePromoCategories(categories, apply_to_all_categories);
+
     const [result] = await db.execute(
       `INSERT INTO promo_codes 
        (code, description, discount_type, discount_value, min_order_amount, usage_limit, max_discount_amount, valid_from, valid_until, is_active, categories) 
@@ -497,7 +526,7 @@ router.post('/promo-codes', protect, admin, async (req, res) => {
         valid_from || new Date(),
         valid_until,
         is_active,
-        categories && categories.length > 0 ? JSON.stringify(categories) : null
+        normalizedCategories ? JSON.stringify(normalizedCategories) : null
       ]
     );
 
@@ -527,8 +556,11 @@ router.put('/promo-codes/:id', protect, admin, async (req, res) => {
       valid_from,
       valid_until,
       is_active,
-      categories
+      categories,
+      apply_to_all_categories
     } = req.body;
+
+    const normalizedCategories = normalizePromoCategories(categories, apply_to_all_categories);
 
     const [result] = await db.execute(
       `UPDATE promo_codes SET 
@@ -546,7 +578,7 @@ router.put('/promo-codes/:id', protect, admin, async (req, res) => {
         valid_from,
         valid_until,
         is_active,
-        categories && categories.length > 0 ? JSON.stringify(categories) : null,
+        normalizedCategories ? JSON.stringify(normalizedCategories) : null,
         promoId
       ]
     );

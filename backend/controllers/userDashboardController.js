@@ -276,6 +276,8 @@ const getUserOrderHistory = async (req, res) => {
         FROM order_items oi
         LEFT JOIN products p ON oi.product_id = p.id
         WHERE oi.order_id = ?
+          AND oi.product_id IS NOT NULL
+          AND oi.quantity > 0
       `, [order.id]);
 
       order.items = items;
@@ -339,6 +341,8 @@ const getOrderDetails = async (req, res) => {
       FROM order_items oi
       LEFT JOIN products p ON oi.product_id = p.id
       WHERE oi.order_id = ?
+        AND oi.product_id IS NOT NULL
+        AND oi.quantity > 0
     `, [orderId]);
 
     order.items = items;
