@@ -129,10 +129,57 @@ const ProductCard = ({ product, onAddToCart, onViewDetails, onAddReview, compact
     );
   }
 
-  // FIXED: Proper badge rendering
+  // FIXED: Proper badge rendering with offer type support
   const showFeaturedBadge = Boolean(product.is_featured);
   const showNewBadge = Boolean(product.is_new);
-  const showDiscountBadge = product.discount_percentage > 0;
+  
+  // Check for offer badges - prioritize offer_type over discount_percentage
+  const hasActiveOffer = product.offer_is_active && (product.offer_valid_until === null || new Date(product.offer_valid_until) > new Date());
+  const offerType = hasActiveOffer ? product.offer_type : null;
+  
+  const getOfferBadge = () => {
+    if (!hasActiveOffer) return null;
+    
+    if (offerType === 'Bogo' || offerType === 'bogo' || offerType === 'buy_one_get_one') {
+      return {
+        text: 'BUY 1 GET 1 FREE',
+        className: 'bg-gradient-to-r from-purple-500 to-pink-600 text-white px-2 py-1 rounded-full text-xs font-bold shadow-lg'
+      };
+    } else if (offerType === 'percentage_discount' || product.discount_percentage > 0) {
+      const discountValue = product.offer_discount_percentage || product.discount_percentage;
+      return {
+        text: `${Math.round(discountValue)}% OFF`,
+        className: 'bg-gradient-to-r from-red-500 to-orange-500 text-white px-2 py-1 rounded-full text-xs font-bold shadow-lg'
+      };
+    } else if (offerType === 'flat_discount') {
+      return {
+        text: `Rs. ${Math.round(product.offer_discount_amount)} OFF`,
+        className: 'bg-gradient-to-r from-green-500 to-emerald-500 text-white px-2 py-1 rounded-full text-xs font-bold shadow-lg'
+      };
+    } else if (offerType === 'bulk_discount') {
+      const discountValue = product.offer_discount_percentage || product.discount_percentage;
+      return {
+        text: `BULK ${Math.round(discountValue)}% OFF`,
+        className: 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white px-2 py-1 rounded-full text-xs font-bold shadow-lg'
+      };
+    } else if (offerType === 'clearance_sale') {
+      const discountValue = product.offer_discount_percentage || product.discount_percentage;
+      return {
+        text: `CLEARANCE ${Math.round(discountValue)}% OFF`,
+        className: 'bg-gradient-to-r from-orange-600 to-red-600 text-white px-2 py-1 rounded-full text-xs font-bold shadow-lg'
+      };
+    } else if (offerType === 'flash_sale') {
+      const discountValue = product.offer_discount_percentage || product.discount_percentage;
+      return {
+        text: `FLASH ${Math.round(discountValue)}% OFF`,
+        className: 'bg-gradient-to-r from-yellow-500 to-orange-600 text-white px-2 py-1 rounded-full text-xs font-bold shadow-lg'
+      };
+    }
+    return null;
+  };
+  
+  const offerBadge = getOfferBadge();
+  const showDiscountBadge = Boolean(offerBadge);
 
   if (compact) {
     return (
@@ -181,13 +228,13 @@ const ProductCard = ({ product, onAddToCart, onViewDetails, onAddReview, compact
                 🆕 New
               </motion.span>
             )}
-            {showDiscountBadge && (
+            {showDiscountBadge && offerBadge && (
               <motion.span 
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
-                className="bg-gradient-to-r from-red-500 to-orange-500 text-white px-2 py-1 rounded-full text-xs font-bold shadow-lg"
+                className={offerBadge.className}
               >
-                {product.discount_percentage}% OFF
+                {offerBadge.text}
               </motion.span>
             )}
           </div>
@@ -267,9 +314,20 @@ const ProductCard = ({ product, onAddToCart, onViewDetails, onAddReview, compact
             <span className="text-lg font-bold text-gray-900">
               {formatNPR(product.price)}
             </span>
-            {showDiscountBadge && (
+            {showDiscountBadge && offerBadge && (
               <span className="text-sm text-green-600 font-semibold">
-                Save {product.discount_percentage}%
+                {offerType === 'Bogo' 
+                  ? 'Get 1 FREE!' 
+                  : offerType === 'flat_discount'
+                    ? `Save Rs. ${Math.round(product.offer_discount_amount)}`
+                    : offerType === 'bulk_discount'
+                      ? `Bulk: ${Math.round(product.offer_discount_percentage || product.discount_percentage)}% off`
+                      : offerType === 'clearance_sale'
+                        ? `Clearance: ${Math.round(product.offer_discount_percentage || product.discount_percentage)}% off`
+                        : offerType === 'flash_sale'
+                          ? `Flash: ${Math.round(product.offer_discount_percentage || product.discount_percentage)}% off`
+                          : `Save ${Math.round(product.offer_discount_percentage || product.discount_percentage)}%`
+                }
               </span>
             )}
           </div>
@@ -351,13 +409,13 @@ const ProductCard = ({ product, onAddToCart, onViewDetails, onAddReview, compact
               🆕 New
             </motion.span>
           )}
-          {showDiscountBadge && (
+          {showDiscountBadge && offerBadge && (
             <motion.span 
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
-              className="bg-gradient-to-r from-red-500 to-orange-500 text-white px-3 py-1 rounded-full text-sm font-bold shadow-lg"
+              className={offerBadge.className}
             >
-              {product.discount_percentage}% OFF
+              {offerBadge.text}
             </motion.span>
           )}
         </div>
@@ -461,9 +519,20 @@ const ProductCard = ({ product, onAddToCart, onViewDetails, onAddReview, compact
               </span>
             )}
           </div>
-          {showDiscountBadge && (
+          {showDiscountBadge && offerBadge && (
             <span className="text-sm bg-green-100 text-green-800 px-2 py-1 rounded-full font-semibold">
-              Save {product.discount_percentage}%
+              {offerType === 'Bogo' 
+                ? 'Get 1 FREE!' 
+                : offerType === 'flat_discount'
+                  ? `Save Rs. ${Math.round(product.offer_discount_amount)}`
+                  : offerType === 'bulk_discount'
+                    ? `Bulk: ${Math.round(product.offer_discount_percentage || product.discount_percentage)}% off`
+                    : offerType === 'clearance_sale'
+                      ? `Clearance: ${Math.round(product.offer_discount_percentage || product.discount_percentage)}% off`
+                      : offerType === 'flash_sale'
+                        ? `Flash: ${Math.round(product.offer_discount_percentage || product.discount_percentage)}% off`
+                        : `Save ${Math.round(product.offer_discount_percentage || product.discount_percentage)}%`
+              }
             </span>
           )}
         </div>

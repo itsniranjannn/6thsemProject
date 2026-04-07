@@ -53,6 +53,7 @@ function App() {
               <Route path="/order-success" element={<OrderSuccessPage />} />
               <Route path="/esewa-payment" element={<EsewaPaymentPage />} />
               <Route path="/payment-failure" element={<PaymentFailedPage />} />
+              <Route path="/payment-failed" element={<PaymentFailedPage />} />
               <Route path="/offers" element={<OffersPage />} />
               <Route path="/about" element={<AboutPage />} />
               <Route path="/dashboard" element={<UserDashboard />} />
