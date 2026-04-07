@@ -1,5 +1,26 @@
 const PromoCode = require('../models/promoModel');
 
+const normalizePromoCategories = (categories, applyToAllCategories = false) => {
+  if (applyToAllCategories) return null;
+  if (categories === null || categories === undefined) return null;
+  if (Array.isArray(categories)) {
+    const cleaned = categories.filter(Boolean);
+    return cleaned.length > 0 ? cleaned : null;
+  }
+  if (typeof categories === 'string' && categories.trim() !== '') {
+    try {
+      const parsed = JSON.parse(categories);
+      if (Array.isArray(parsed)) {
+        const cleaned = parsed.filter(Boolean);
+        return cleaned.length > 0 ? cleaned : null;
+      }
+    } catch (error) {
+      return null;
+    }
+  }
+  return null;
+};
+
 // Get all promo codes
 const getPromoCodes = async (req, res) => {
   try {
@@ -39,7 +60,8 @@ const createPromoCode = async (req, res) => {
       valid_from, 
       valid_until, 
       is_active,
-      categories
+      categories,
+      apply_to_all_categories
     } = req.body;
     
     // Validate required fields
@@ -69,21 +91,7 @@ const createPromoCode = async (req, res) => {
       });
     }
 
-    // Validate categories if provided
-    let categoriesArray = null;
-    if (categories) {
-      if (Array.isArray(categories)) {
-        categoriesArray = categories;
-      } else if (typeof categories === 'string') {
-        try {
-          categoriesArray = JSON.parse(categories);
-        } catch (e) {
-          return res.status(400).json({ 
-            message: 'Invalid categories format. Must be an array or valid JSON string.' 
-          });
-        }
-      }
-    }
+    const categoriesArray = normalizePromoCategories(categories, apply_to_all_categories);
 
     const result = await PromoCode.create({
       code: code.toUpperCase(),
@@ -133,7 +141,7 @@ const deletePromoCode = async (req, res) => {
 // Validate promo code
 const validatePromoCode = async (req, res) => {
   try {
-    const { code, totalAmount, categories } = req.body;
+    const { code, totalAmount, categories, cartItems = [] } = req.body;
     
     if (!code || !totalAmount) {
       return res.status(400).json({ 
@@ -151,7 +159,20 @@ const validatePromoCode = async (req, res) => {
       }
     }
 
-    const validation = await PromoCode.validatePromoCode(code, parseFloat(totalAmount), categoriesArray);
+    const normalizedCartItems = Array.isArray(cartItems)
+      ? cartItems.map((item) => ({
+          category: item.category || null,
+          quantity: item.quantity,
+          price: item.price
+        }))
+      : [];
+
+    const validation = await PromoCode.validatePromoCode(
+      code,
+      parseFloat(totalAmount),
+      categoriesArray,
+      normalizedCartItems
+    );
     
     if (validation.valid) {
       // ✅ FIXED: Ensure discount is returned as a number
@@ -162,7 +183,8 @@ const validatePromoCode = async (req, res) => {
         success: true,
         promo: validation.promo,
         discount: discountAmount, // ✅ Now a number, not string
-        finalAmount: finalAmount
+        finalAmount: finalAmount,
+        breakdown: validation.breakdown || null
       });
     } else {
       res.json({
@@ -229,6 +251,16 @@ const getAvailablePromoCodes = async (req, res) => {
   }
 };
 
+const recordPromoUsage = async (promoCodeId, userId, orderId) => {
+  const db = require('../config/db');
+  if (!promoCodeId || !userId || !orderId) return;
+  await db.execute(
+    `INSERT INTO order_promo_codes (promo_code_id, user_id, order_id, used_at)
+     VALUES (?, ?, ?, NOW())`,
+    [promoCodeId, userId, orderId]
+  );
+};
+
 module.exports = {
   getPromoCodes,
   getPromoCodeById,
@@ -237,5 +269,6 @@ module.exports = {
   deletePromoCode,
   validatePromoCode,
   getActivePromoCodes,
-  getAvailablePromoCodes
+  getAvailablePromoCodes,
+  recordPromoUsage
 };

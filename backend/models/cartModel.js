@@ -56,7 +56,7 @@ class Cart {
         return {
           ...item,
           original_price: originalPrice,
-          final_price: finalPrice,
+          final_price: unitPrice, // ✅ FIXED: Return per-unit price, not total price
           unit_price: unitPrice,
           quantity: quantity,
           display_quantity: displayQuantity,
@@ -93,6 +93,8 @@ class Cart {
 
     switch (offer.offer_type) {
       case 'Bogo':
+      case 'bogo':
+      case 'buy_one_get_one':
         // ✅ FIXED BOGO LOGIC: Buy 1 Get 1 Free
         // For BOGO: Display 2 items but charge for only 1
         if (finalQuantity >= 1) {
@@ -126,6 +128,42 @@ class Cart {
         }
         break;
 
+      case 'bulk_discount':
+        if (offer.min_quantity && finalQuantity >= parseInt(offer.min_quantity)) {
+          // Apply bulk discount only if quantity meets minimum
+          if (offer.discount_percentage && parseFloat(offer.discount_percentage) > 0) {
+            finalPrice = originalPrice * (1 - parseFloat(offer.discount_percentage) / 100);
+            unitPrice = finalPrice;
+          }
+          console.log('📦 Bulk Discount Applied:', {
+            minQuantity: offer.min_quantity,
+            actualQuantity: finalQuantity,
+            discountPercent: offer.discount_percentage,
+            finalPrice,
+            unitPrice
+          });
+        } else {
+          console.log('📦 Bulk Discount NOT Applied - quantity too low:', {
+            minQuantity: offer.min_quantity,
+            actualQuantity: finalQuantity
+          });
+        }
+        break;
+
+      case 'clearance_sale':
+      case 'flash_sale':
+        // Handle time-limited offers
+        if (offer.discount_percentage && parseFloat(offer.discount_percentage) > 0) {
+          finalPrice = originalPrice * (1 - parseFloat(offer.discount_percentage) / 100);
+          unitPrice = finalPrice;
+          console.log(`🔥 ${offer.offer_type} Applied:`, {
+            discountPercent: offer.discount_percentage,
+            finalPrice,
+            unitPrice
+          });
+        }
+        break;
+
       default:
         // Handle other discount types
         if (offer.discount_percentage && parseFloat(offer.discount_percentage) > 0) {
@@ -156,6 +194,41 @@ class Cart {
   static async addToCart(userId, productId, quantity = 1, offerId = null) {
     try {
       console.log('➕ Adding to cart:', { userId, productId, quantity, offerId });
+      const parsedQuantity = Math.max(1, parseInt(quantity, 10) || 1);
+      let normalizedQuantity = parsedQuantity;
+
+      // Ensure bulk offers are added with at least min_quantity
+      if (offerId) {
+        const [offerRows] = await db.execute(
+          `SELECT offer_type, min_quantity
+           FROM product_offers
+           WHERE id = ?`,
+          [offerId]
+        );
+
+        const offer = offerRows[0];
+        if (offer && offer.offer_type === 'bulk_discount') {
+          const minQty = parseInt(offer.min_quantity, 10) || 1;
+          if (normalizedQuantity < minQty) {
+            normalizedQuantity = minQty;
+          }
+        }
+      }
+
+      const [productRows] = await db.execute(
+        'SELECT name, stock_quantity FROM products WHERE id = ?',
+        [productId]
+      );
+
+      if (productRows.length === 0) {
+        throw new Error('Product not found');
+      }
+
+      const product = productRows[0];
+      const availableStock = parseInt(product.stock_quantity, 10) || 0;
+      if (availableStock <= 0) {
+        throw new Error(`${product.name} is out of stock`);
+      }
 
       // Check if item already exists in cart with same offer
       const [existing] = await db.execute(
@@ -165,7 +238,13 @@ class Cart {
 
       if (existing.length > 0) {
         // Update quantity if exists
-        const newQuantity = existing[0].quantity + quantity;
+        const newQuantity = existing[0].quantity + normalizedQuantity;
+        if (newQuantity > availableStock) {
+          throw new Error(
+            `Only ${availableStock} items in stock for ${product.name}. You already have ${existing[0].quantity} in cart.`
+          );
+        }
+
         const [result] = await db.execute(
           'UPDATE cart SET quantity = ? WHERE user_id = ? AND product_id = ? AND (offer_id <=> ?)',
           [newQuantity, userId, productId, offerId]
@@ -173,12 +252,16 @@ class Cart {
         console.log(`➕ Updated cart item quantity for user ${userId}, product ${productId}, offer ${offerId} to ${newQuantity}`);
         return result;
       } else {
+        if (normalizedQuantity > availableStock) {
+          throw new Error(`Only ${availableStock} items in stock for ${product.name}`);
+        }
+
         // Add new item
         const [result] = await db.execute(
           'INSERT INTO cart (user_id, product_id, quantity, offer_id) VALUES (?, ?, ?, ?)',
-          [userId, productId, quantity, offerId]
+          [userId, productId, normalizedQuantity, offerId]
         );
-        console.log(`🆕 Added new cart item for user ${userId}, product ${productId}, offer ${offerId}, quantity ${quantity}`);
+        console.log(`🆕 Added new cart item for user ${userId}, product ${productId}, offer ${offerId}, quantity ${normalizedQuantity}`);
         return result;
       }
     } catch (error) {
@@ -194,11 +277,44 @@ class Cart {
         return await this.removeFromCart(userId, productId, offerId);
       }
 
+      let parsedQuantity = Math.max(1, parseInt(quantity, 10) || 1);
+
+      if (offerId) {
+        const [offerRows] = await db.execute(
+          `SELECT offer_type, min_quantity
+           FROM product_offers
+           WHERE id = ?`,
+          [offerId]
+        );
+        const offer = offerRows[0];
+        if (offer && offer.offer_type === 'bulk_discount') {
+          const minQty = parseInt(offer.min_quantity, 10) || 1;
+          if (parsedQuantity < minQty) {
+            throw new Error(`Bulk discount requires minimum quantity of ${minQty}`);
+          }
+        }
+      }
+
+      const [productRows] = await db.execute(
+        'SELECT name, stock_quantity FROM products WHERE id = ?',
+        [productId]
+      );
+
+      if (productRows.length === 0) {
+        throw new Error('Product not found');
+      }
+
+      const product = productRows[0];
+      const availableStock = parseInt(product.stock_quantity, 10) || 0;
+      if (parsedQuantity > availableStock) {
+        throw new Error(`Only ${availableStock} items in stock for ${product.name}`);
+      }
+
       const [result] = await db.execute(
         'UPDATE cart SET quantity = ? WHERE user_id = ? AND product_id = ? AND (offer_id <=> ?)',
-        [quantity, userId, productId, offerId]
+        [parsedQuantity, userId, productId, offerId]
       );
-      console.log(`✏️ Updated cart item for user ${userId}, product ${productId}, offer ${offerId} to quantity ${quantity}`);
+      console.log(`✏️ Updated cart item for user ${userId}, product ${productId}, offer ${offerId} to quantity ${parsedQuantity}`);
       return result;
     } catch (error) {
       console.error('❌ Update cart item error:', error);

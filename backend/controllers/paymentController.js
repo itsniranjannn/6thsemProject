@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const Order = require('../models/orderModel');
 const Payment = require('../models/paymentModel');
 const Product = require('../models/productModel');
+const PromoCode = require('../models/promoModel');
 const Cart = require('../models/cartModel');
 const User = require('../models/userModel'); // ADDED
 
@@ -141,10 +142,19 @@ const calculateEstimatedDelivery = () => {
 const completeOrderProcessing = async (orderId, userId, items = []) => {
   try {
     console.log(`🔄 Completing order processing for order ${orderId}, user ${userId}`);
-    
-    // Update stock for successful orders only
-    if (items && items.length > 0) {
+    const order = await Order.findById(orderId);
+
+    // Only deduct stock when payment is completed and order is confirmed
+    if (
+      order &&
+      order.payment_status === 'completed' &&
+      order.status === 'confirmed' &&
+      items &&
+      items.length > 0
+    ) {
       await updateStockOnPayment(items, 'deduct');
+    } else {
+      console.log(`ℹ️ Skipping stock deduction for order ${orderId}: payment/status not eligible`);
     }
     
     // ✅ FIXED: Clear user's cart - IMPORTANT!
@@ -154,10 +164,10 @@ const completeOrderProcessing = async (orderId, userId, items = []) => {
     // ✅ FIXED: Send order confirmation email with user details
     try {
       const order = await Order.findById(orderId);
-      const user = await User.findById(userId); // ADDED
+      const user = await User.findById(userId);
       if (order && user) {
-        const orderItems = await Order.getOrderItems(orderId); // ADDED
-        await sendOrderConfirmation(order, user, orderItems); // UPDATED
+        const orderItems = await Order.getOrderItems(orderId);
+        await sendOrderConfirmation(order, user, orderItems);
         console.log('✅ Order confirmation email sent');
       }
     } catch (emailError) {
@@ -173,7 +183,7 @@ const completeOrderProcessing = async (orderId, userId, items = []) => {
 };
 
 // ✅ NEW: Enhanced payment success processing with EMAIL
-const processSuccessfulPayment = async (orderId, session) => {
+const processSuccessfulPayment = async (orderId, session, paymentMethod = 'stripe') => {
   try {
     console.log(`🔄 Processing successful payment for order ${orderId}`);
     
@@ -186,7 +196,7 @@ const processSuccessfulPayment = async (orderId, session) => {
     });
     
     // Update payment record
-    await Payment.updateStatus(orderId, 'completed', session.payment_intent || session.id);
+    await Payment.updateStatus(orderId, 'completed', session.payment_intent || session.id || session.transaction_id || `txn_${Date.now()}`);
     
     // Get order and complete processing
     const order = await Order.findById(orderId);
@@ -195,8 +205,8 @@ const processSuccessfulPayment = async (orderId, session) => {
       try {
         const user = await User.findById(order.user_id);
         const paymentDetails = {
-          transaction_id: session.payment_intent || session.id,
-          payment_method: 'stripe'
+          transaction_id: session.payment_intent || session.id || session.transaction_id || `txn_${Date.now()}`,
+          payment_method: paymentMethod
         };
         if (user) {
           await sendPaymentSuccess(order, user, paymentDetails);
@@ -209,7 +219,7 @@ const processSuccessfulPayment = async (orderId, session) => {
       await completeOrderProcessing(orderId, order.user_id, order.items);
     }
     
-    console.log(`✅ Order ${orderId} successfully processed via Stripe`);
+    console.log(`✅ Order ${orderId} successfully processed via ${paymentMethod}`);
   } catch (error) {
     console.error('❌ Error processing successful payment:', error);
     throw error;
@@ -217,18 +227,24 @@ const processSuccessfulPayment = async (orderId, session) => {
 };
 
 // ✅ UPDATED: Enhanced payment failure processing with EMAIL
-const restoreStockForFailedPayment = async (orderId) => {
+const processFailedPayment = async (orderId, errorMessage = 'Payment processing failed') => {
   try {
+    console.log(`🔄 Processing failed payment for order ${orderId}`);
+    
     const order = await Order.findById(orderId);
-    if (order && order.items && order.items.length > 0) {
-      await updateStockOnPayment(order.items, 'restore');
-      console.log(`✅ Stock restored for failed order ${orderId}`);
+    if (order) {
+      await Order.update(orderId, {
+        payment_status: 'failed',
+        status: 'cancelled'
+      });
+      
+      // Do NOT restore stock here because failed payments never deduct stock.
       
       // ✅ UPDATED: Send payment failed email with user details
       try {
         const user = await User.findById(order.user_id);
         if (user) {
-          await sendPaymentFailed(order, user, 'Payment processing failed');
+          await sendPaymentFailed(order, user, errorMessage);
           console.log('✅ Payment failed email sent');
         }
       } catch (emailError) {
@@ -236,7 +252,7 @@ const restoreStockForFailedPayment = async (orderId) => {
       }
     }
   } catch (error) {
-    console.error('❌ Error restoring stock:', error);
+    console.error('❌ Error processing failed payment:', error);
   }
 };
 
@@ -244,12 +260,18 @@ const restoreStockForFailedPayment = async (orderId) => {
 const reserveStock = async (items) => {
   try {
     for (const item of items) {
-      const product = await Product.findById(item.id);
-      if (!product) {
-        throw new Error(`Product ${item.id} not found`);
+      const productId = item.productId || item.product_id || item.id;
+      const quantity = parseInt(item.quantity, 10) || 0;
+      if (!productId || quantity <= 0) {
+        throw new Error('Invalid order item detected while reserving stock');
       }
-      if (product.stock_quantity < item.quantity) {
-        throw new Error(`Insufficient stock for ${product.name}. Available: ${product.stock_quantity}, Requested: ${item.quantity}`);
+
+      const product = await Product.findById(productId);
+      if (!product) {
+        throw new Error(`Product ${productId} not found`);
+      }
+      if (product.stock_quantity < quantity) {
+        throw new Error(`Insufficient stock for ${product.name}. Available: ${product.stock_quantity}, Requested: ${quantity}`);
       }
     }
     return true;
@@ -262,9 +284,13 @@ const reserveStock = async (items) => {
 const updateStockOnPayment = async (items, action = 'deduct') => {
   try {
     for (const item of items) {
-      const quantityChange = action === 'deduct' ? -item.quantity : item.quantity;
-      await Product.updateStock(item.id, quantityChange);
-      console.log(`📦 Stock updated for product ${item.id}: ${quantityChange} units`);
+      const productId = item.productId || item.product_id || item.id;
+      const quantity = parseInt(item.quantity, 10) || 0;
+      if (!productId || quantity <= 0) continue;
+
+      const quantityChange = action === 'deduct' ? -quantity : quantity;
+      await Product.updateStock(productId, quantityChange);
+      console.log(`📦 Stock updated for product ${productId}: ${quantityChange} units`);
     }
   } catch (error) {
     console.error('❌ Stock update error:', error);
@@ -272,25 +298,91 @@ const updateStockOnPayment = async (items, action = 'deduct') => {
   }
 };
 
+const normalizeCheckoutItems = (items = []) => {
+  return items.map((item) => ({
+    productId: item.productId || item.product_id || item.id,
+    quantity: parseInt(item.quantity, 10) || 0,
+    price: parseFloat(item.price || 0)
+  })).filter(item => item.productId && item.quantity > 0 && item.price >= 0);
+};
+
 const calculateFinalAmount = (subtotal, shipping, discount = 0) => {
   const finalAmount = parseFloat(subtotal) + parseFloat(shipping) - parseFloat(discount);
   return Math.max(0, finalAmount);
 };
 
-// ✅ FIXED: Stripe Payment with DIRECT success handling (no webhook dependency)
+const resolvePromoForOrder = async ({ promoCode, subtotal, normalizedItems = [] }) => {
+  if (!promoCode) {
+    return { discount: 0, promoCode: null, promoCodeId: null, breakdown: null };
+  }
+
+  const enrichedItems = [];
+  const categories = new Set();
+
+  for (const item of normalizedItems) {
+    const product = await Product.findById(item.productId);
+    const category = product?.category || null;
+    if (category) categories.add(category);
+    enrichedItems.push({
+      category,
+      quantity: item.quantity,
+      price: item.price
+    });
+  }
+
+  const validation = await PromoCode.validatePromoCode(
+    promoCode,
+    parseFloat(subtotal) || 0,
+    Array.from(categories),
+    enrichedItems
+  );
+
+  if (!validation.valid) {
+    const error = new Error(validation.message || 'Invalid promo code');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return {
+    discount: parseFloat(validation.discountAmount) || 0,
+    promoCode: validation.promo?.code || promoCode,
+    promoCodeId: validation.promo?.id || null,
+    breakdown: validation.breakdown || null
+  };
+};
+
+const blockAdminPurchase = (req, res) => {
+  if (req.user?.role === 'admin') {
+    res.status(403).json({
+      success: false,
+      message: 'Admin accounts are not allowed to place orders. Please use a customer account.'
+    });
+    return true;
+  }
+  return false;
+};
+
+// ✅ FIXED: Stripe Payment with DIRECT success handling and EMAIL
 const createStripePayment = async (req, res) => {
   let orderCreated = false;
   let orderId = null;
 
   try {
-    const { amount, items, shippingAddress, subtotal = 0, shipping = 0, discount = 0, promoCode, promoCodeId } = req.body;
+    if (blockAdminPurchase(req, res)) return;
+
+    const { amount, items, shippingAddress, subtotal = 0, shipping = 0, promoCode } = req.body;
+    const normalizedItems = normalizeCheckoutItems(items);
     const user_id = req.user.id;
+    const promoResolution = await resolvePromoForOrder({ promoCode, subtotal, normalizedItems });
+    const effectiveDiscount = promoResolution.discount;
+    const effectivePromoCode = promoResolution.promoCode;
+    const effectivePromoCodeId = promoResolution.promoCodeId;
 
     console.log('💳 Creating Stripe payment');
-    console.log('📊 Order details:', { subtotal, shipping, discount, promoCode, promoCodeId });
+    console.log('📊 Order details:', { subtotal, shipping, discount: effectiveDiscount, promoCode: effectivePromoCode, promoCodeId: effectivePromoCodeId });
     console.log('🛒 Items:', items);
 
-    if (!items || items.length === 0) {
+    if (!normalizedItems.length) {
       return res.status(400).json({
         success: false,
         message: 'Your cart is empty'
@@ -298,10 +390,10 @@ const createStripePayment = async (req, res) => {
     }
 
     // Validate and reserve stock
-    await reserveStock(items);
+    await reserveStock(normalizedItems);
 
     // ✅ FIXED: Calculate final amount with discount
-    const finalAmount = calculateFinalAmount(subtotal, shipping, discount);
+    const finalAmount = calculateFinalAmount(subtotal, shipping, effectiveDiscount);
 
     // Create order
     const orderData = {
@@ -309,12 +401,12 @@ const createStripePayment = async (req, res) => {
       total_amount: finalAmount,
       subtotal: parseFloat(subtotal),
       shipping_fee: parseFloat(shipping),
-      discount: parseFloat(discount),
+      discount: parseFloat(effectiveDiscount),
       payment_method: 'stripe',
       payment_status: 'pending',
       shipping_address: shippingAddress,
       status: 'pending',
-      promo_code: promoCode || null
+      promo_code: effectivePromoCode || null
     };
 
     const order = await Order.create(orderData);
@@ -324,20 +416,20 @@ const createStripePayment = async (req, res) => {
     console.log('✅ Created order for Stripe:', orderId);
 
     // Add order items
-    for (const item of items) {
+    for (const item of normalizedItems) {
       await Order.addOrderItem({
         order_id: orderId,
-        product_id: item.id,
+        product_id: item.productId,
         quantity: item.quantity,
-        price: parseFloat(item.price)
+        price: item.price
       });
     }
 
     // ✅ FIXED: Record promo code usage if applicable
-    if (promoCodeId) {
+    if (effectivePromoCodeId) {
       try {
-        await recordPromoUsage(promoCodeId, user_id, orderId);
-        console.log('✅ Promo code usage recorded:', promoCode);
+        await recordPromoUsage(effectivePromoCodeId, user_id, orderId);
+        console.log('✅ Promo code usage recorded:', effectivePromoCode);
       } catch (promoError) {
         console.error('❌ Promo code recording error:', promoError);
         // Don't fail the payment if promo recording fails
@@ -353,7 +445,7 @@ const createStripePayment = async (req, res) => {
             currency: 'npr',
             product_data: {
               name: 'Order Total',
-              description: `Items: ${items.length} | Discount: Rs. ${discount}`,
+              description: `Items: ${normalizedItems.length} | Discount: Rs. ${effectiveDiscount}`,
             },
             unit_amount: Math.round(finalAmount * 100), // Convert to cents
           },
@@ -367,10 +459,10 @@ const createStripePayment = async (req, res) => {
       metadata: {
         order_id: orderId.toString(),
         user_id: user_id.toString(),
-        discount: discount.toString(),
+        discount: effectiveDiscount.toString(),
         subtotal: subtotal.toString(),
         shipping: shipping.toString(),
-        promo_code: promoCode || ''
+        promo_code: effectivePromoCode || ''
       }
     });
 
@@ -384,9 +476,10 @@ const createStripePayment = async (req, res) => {
       payment_data: { 
         session_id: session.id, 
         session_url: session.url,
-        discount: discount,
+        discount: effectiveDiscount,
         final_amount: finalAmount,
-        promo_code: promoCode
+        promo_code: effectivePromoCode,
+        promo_breakdown: promoResolution.breakdown
       }
     });
 
@@ -405,16 +498,16 @@ const createStripePayment = async (req, res) => {
     // Cleanup on error
     if (orderCreated && orderId) {
       try {
-        await Order.update(orderId, { status: 'cancelled', payment_status: 'failed' });
-        await restoreStockForFailedPayment(orderId);
+        await processFailedPayment(orderId, error.message);
       } catch (cleanupError) {
         console.error('❌ Stripe order cleanup error:', cleanupError);
       }
     }
 
-    res.status(500).json({
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({
       success: false,
-      message: 'Stripe payment processing failed',
+      message: error.statusCode ? error.message : 'Stripe payment processing failed',
       error: error.message
     });
   }
@@ -450,7 +543,7 @@ const handleStripeWebhook = async (req, res) => {
       
       if (orderId) {
         console.log('✅ Processing Stripe payment for order:', orderId);
-        await processSuccessfulPayment(orderId, session);
+        await processSuccessfulPayment(orderId, session, 'stripe');
       } else {
         console.error('❌ No orderId found in session metadata');
       }
@@ -460,11 +553,7 @@ const handleStripeWebhook = async (req, res) => {
       
       if (orderId) {
         console.log('❌ Stripe session expired for order:', orderId);
-        await Order.update(orderId, { 
-          status: 'cancelled', 
-          payment_status: 'failed' 
-        });
-        await restoreStockForFailedPayment(orderId);
+        await processFailedPayment(orderId, 'Payment session expired');
       }
     }
 
@@ -504,17 +593,13 @@ const handleStripeSuccess = async (req, res) => {
       console.log('✅ Stripe payment confirmed as paid');
       
       // Process the successful payment
-      await processSuccessfulPayment(orderId, session);
+      await processSuccessfulPayment(orderId, session, 'stripe');
       
       console.log(`✅ Order ${orderId} successfully processed via Stripe direct callback`);
       return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/order-success?orderId=${orderId}&payment=stripe&success=true`);
     } else {
       console.error('❌ Stripe payment not completed, status:', session.payment_status);
-      await Order.update(orderId, { 
-        payment_status: 'failed', 
-        status: 'cancelled' 
-      });
-      await restoreStockForFailedPayment(orderId);
+      await processFailedPayment(orderId, 'Payment not completed');
       
       return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/payment-failed?orderId=${orderId}&reason=payment_not_completed`);
     }
@@ -525,11 +610,7 @@ const handleStripeSuccess = async (req, res) => {
     const orderId = req.query.orderId;
     if (orderId) {
       try {
-        await Order.update(orderId, { 
-          payment_status: 'failed', 
-          status: 'cancelled' 
-        });
-        await restoreStockForFailedPayment(orderId);
+        await processFailedPayment(orderId, 'Callback error');
       } catch (updateError) {
         console.error('❌ Error updating order status:', updateError);
       }
@@ -539,18 +620,25 @@ const handleStripeSuccess = async (req, res) => {
   }
 };
 
-// ✅ FIXED: Khalti Payment with PROPER cart clearing
+// ✅ FIXED: Khalti Payment with PROPER cart clearing and EMAIL
 const createKhaltiPayment = async (req, res) => {
   let orderId = null;
 
   try {
-    const { amount, items, shippingAddress, subtotal = 0, shipping = 0, discount = 0, customer_info, promoCode, promoCodeId } = req.body;
+    if (blockAdminPurchase(req, res)) return;
+
+    const { amount, items, shippingAddress, subtotal = 0, shipping = 0, customer_info, promoCode } = req.body;
+    const normalizedItems = normalizeCheckoutItems(items);
     const user_id = req.user.id;
+    const promoResolution = await resolvePromoForOrder({ promoCode, subtotal, normalizedItems });
+    const effectiveDiscount = promoResolution.discount;
+    const effectivePromoCode = promoResolution.promoCode;
+    const effectivePromoCodeId = promoResolution.promoCodeId;
 
     console.log('💰 Creating Khalti payment');
-    console.log('📊 Order details:', { subtotal, shipping, discount, promoCode });
+    console.log('📊 Order details:', { subtotal, shipping, discount: effectiveDiscount, promoCode: effectivePromoCode });
 
-    if (!items || items.length === 0) {
+    if (!normalizedItems.length) {
       return res.status(400).json({
         success: false,
         message: 'Your cart is empty'
@@ -558,10 +646,10 @@ const createKhaltiPayment = async (req, res) => {
     }
 
     // Validate and reserve stock
-    await reserveStock(items);
+    await reserveStock(normalizedItems);
 
     // Calculate final amount with discount
-    const finalAmount = calculateFinalAmount(subtotal, shipping, discount);
+    const finalAmount = calculateFinalAmount(subtotal, shipping, effectiveDiscount);
 
     // Create order
     const order = await Order.create({
@@ -569,32 +657,32 @@ const createKhaltiPayment = async (req, res) => {
       total_amount: finalAmount,
       subtotal: parseFloat(subtotal),
       shipping_fee: parseFloat(shipping),
-      discount: parseFloat(discount),
+      discount: parseFloat(effectiveDiscount),
       payment_method: 'khalti',
       payment_status: 'pending',
       shipping_address: shippingAddress,
       status: 'pending',
-      promo_code: promoCode || null
+      promo_code: effectivePromoCode || null
     });
     orderId = order.id;
 
     console.log('✅ Created Khalti order:', orderId);
 
     // Add order items
-    for (const item of items) {
+    for (const item of normalizedItems) {
       await Order.addOrderItem({
         order_id: orderId,
-        product_id: item.id,
+        product_id: item.productId,
         quantity: item.quantity,
-        price: parseFloat(item.price)
+        price: item.price
       });
     }
 
     // ✅ FIXED: Record promo code usage if applicable
-    if (promoCodeId) {
+    if (effectivePromoCodeId) {
       try {
-        await recordPromoUsage(promoCodeId, user_id, orderId);
-        console.log('✅ Promo code usage recorded:', promoCode);
+        await recordPromoUsage(effectivePromoCodeId, user_id, orderId);
+        console.log('✅ Promo code usage recorded:', effectivePromoCode);
       } catch (promoError) {
         console.error('❌ Promo code recording error:', promoError);
       }
@@ -615,7 +703,7 @@ const createKhaltiPayment = async (req, res) => {
       await Payment.updateStatus(orderId, 'completed', `khalti_test_${Date.now()}`);
       
       // ✅ FIXED: Complete order processing for successful payment
-      await completeOrderProcessing(orderId, user_id, items);
+      await completeOrderProcessing(orderId, user_id, normalizedItems);
 
       return res.json({
         success: true,
@@ -660,8 +748,9 @@ const createKhaltiPayment = async (req, res) => {
       transaction_id: response.data.pidx,
       payment_data: {
         ...response.data,
-        discount: discount,
-        promo_code: promoCode
+        discount: effectiveDiscount,
+        promo_code: effectivePromoCode,
+        promo_breakdown: promoResolution.breakdown
       }
     });
 
@@ -679,8 +768,7 @@ const createKhaltiPayment = async (req, res) => {
     // Cleanup on error
     if (orderId) {
       try {
-        await Order.update(orderId, { status: 'cancelled', payment_status: 'failed' });
-        await restoreStockForFailedPayment(orderId);
+        await processFailedPayment(orderId, error.message);
       } catch (cleanupError) {
         console.error('❌ Khalti order cleanup error:', cleanupError);
       }
@@ -688,15 +776,16 @@ const createKhaltiPayment = async (req, res) => {
 
     const errorMessage = error.response?.data?.detail || error.message || 'Khalti payment creation failed';
     
-    res.status(500).json({
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({
       success: false,
-      message: errorMessage,
+      message: error.statusCode ? error.message : errorMessage,
       error: error.message
     });
   }
 };
 
-// ✅ FIXED: Khalti Callback with PROPER cart clearing
+// ✅ FIXED: Khalti Callback with PROPER cart clearing and EMAIL
 const handleKhaltiCallback = async (req, res) => {
   try {
     const { orderId, pidx } = req.query;
@@ -786,11 +875,7 @@ const handleKhaltiCallback = async (req, res) => {
       return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/order-success?orderId=${orderId}&payment=khalti&success=true`);
     } else {
       console.error('❌ Khalti payment verification failed');
-      await Order.update(orderId, {
-        payment_status: 'failed',
-        status: 'cancelled'
-      });
-      await restoreStockForFailedPayment(orderId);
+      await processFailedPayment(orderId, 'Payment verification failed');
       
       return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/payment-failed?orderId=${orderId}&reason=payment_failed`);
     }
@@ -802,11 +887,7 @@ const handleKhaltiCallback = async (req, res) => {
     const orderId = req.query.orderId;
     if (orderId) {
       try {
-        await Order.update(orderId, { 
-          payment_status: 'failed', 
-          status: 'cancelled' 
-        });
-        await restoreStockForFailedPayment(orderId);
+        await processFailedPayment(orderId, 'Callback error');
       } catch (updateError) {
         console.error('❌ Error updating order status:', updateError);
       }
@@ -821,13 +902,20 @@ const createEsewaPayment = async (req, res) => {
   let orderId = null;
 
   try {
-    const { amount, items, shippingAddress, subtotal = 0, shipping = 0, discount = 0, promoCode, promoCodeId } = req.body;
+    if (blockAdminPurchase(req, res)) return;
+
+    const { amount, items, shippingAddress, subtotal = 0, shipping = 0, promoCode } = req.body;
+    const normalizedItems = normalizeCheckoutItems(items);
     const user_id = req.user.id;
+    const promoResolution = await resolvePromoForOrder({ promoCode, subtotal, normalizedItems });
+    const effectiveDiscount = promoResolution.discount;
+    const effectivePromoCode = promoResolution.promoCode;
+    const effectivePromoCodeId = promoResolution.promoCodeId;
 
     console.log('🎯 Creating eSewa payment');
-    console.log('📊 Order details:', { subtotal, shipping, discount, promoCode });
+    console.log('📊 Order details:', { subtotal, shipping, discount: effectiveDiscount, promoCode: effectivePromoCode });
 
-    if (!items || items.length === 0) {
+    if (!normalizedItems.length) {
       return res.status(400).json({
         success: false,
         message: 'Your cart is empty'
@@ -835,10 +923,10 @@ const createEsewaPayment = async (req, res) => {
     }
 
     // Validate and reserve stock
-    await reserveStock(items);
+    await reserveStock(normalizedItems);
 
     // Calculate final amount with discount
-    const finalAmount = calculateFinalAmount(subtotal, shipping, discount);
+    const finalAmount = calculateFinalAmount(subtotal, shipping, effectiveDiscount);
 
     // Create order
     const order = await Order.create({
@@ -846,32 +934,32 @@ const createEsewaPayment = async (req, res) => {
       total_amount: finalAmount,
       subtotal: parseFloat(subtotal),
       shipping_fee: parseFloat(shipping),
-      discount: parseFloat(discount),
+      discount: parseFloat(effectiveDiscount),
       payment_method: 'esewa',
       payment_status: 'pending',
       shipping_address: shippingAddress,
       status: 'pending',
-      promo_code: promoCode || null
+      promo_code: effectivePromoCode || null
     });
     orderId = order.id;
 
     console.log('✅ Created eSewa order:', orderId);
 
     // Add order items
-    for (const item of items) {
+    for (const item of normalizedItems) {
       await Order.addOrderItem({
         order_id: orderId,
-        product_id: item.id,
+        product_id: item.productId,
         quantity: item.quantity,
-        price: parseFloat(item.price)
+        price: item.price
       });
     }
 
     // ✅ FIXED: Record promo code usage if applicable
-    if (promoCodeId) {
+    if (effectivePromoCodeId) {
       try {
-        await recordPromoUsage(promoCodeId, user_id, orderId);
-        console.log('✅ Promo code usage recorded:', promoCode);
+        await recordPromoUsage(effectivePromoCodeId, user_id, orderId);
+        console.log('✅ Promo code usage recorded:', effectivePromoCode);
       } catch (promoError) {
         console.error('❌ Promo code recording error:', promoError);
       }
@@ -920,8 +1008,9 @@ const createEsewaPayment = async (req, res) => {
       transaction_id: transaction_uuid,
       payment_data: {
         ...esewaFormData,
-        discount: discount,
-        promo_code: promoCode
+        discount: effectiveDiscount,
+        promo_code: effectivePromoCode,
+        promo_breakdown: promoResolution.breakdown
       }
     });
 
@@ -939,22 +1028,22 @@ const createEsewaPayment = async (req, res) => {
     // Cleanup on error
     if (orderId) {
       try {
-        await Order.update(orderId, { status: 'cancelled', payment_status: 'failed' });
-        await restoreStockForFailedPayment(orderId);
+        await processFailedPayment(orderId, error.message);
       } catch (cleanupError) {
         console.error('❌ eSewa order cleanup error:', cleanupError);
       }
     }
     
-    res.status(500).json({
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({
       success: false,
-      message: 'eSewa payment failed',
+      message: error.statusCode ? error.message : 'eSewa payment failed',
       error: error.message
     });
   }
 };
 
-// ✅ FIXED: eSewa Success Callback - COMPLETELY REWRITTEN
+// ✅ FIXED: eSewa Success Callback - COMPLETELY REWRITTEN with EMAIL
 const handleEsewaSuccess = async (req, res) => {
   try {
     const { orderId, data } = req.query;
@@ -1031,11 +1120,7 @@ const handleEsewaSuccess = async (req, res) => {
       
       if (!isValid) {
         console.error('❌ PRODUCTION: eSewa signature verification FAILED');
-        await Order.update(orderId, { 
-          payment_status: 'failed', 
-          status: 'cancelled' 
-        });
-        await restoreStockForFailedPayment(orderId);
+        await processFailedPayment(orderId, 'Invalid signature');
         
         return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/payment-failed?orderId=${orderId}&reason=invalid_signature`);
       }
@@ -1073,11 +1158,7 @@ const handleEsewaSuccess = async (req, res) => {
         return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/order-success?orderId=${orderId}&payment=esewa&success=true`);
       } else {
         console.error('❌ PRODUCTION: eSewa payment failed or incomplete');
-        await Order.update(orderId, { 
-          payment_status: 'failed', 
-          status: 'cancelled' 
-        });
-        await restoreStockForFailedPayment(orderId);
+        await processFailedPayment(orderId, 'Payment failed');
         
         return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/payment-failed?orderId=${orderId}&reason=payment_failed`);
       }
@@ -1089,11 +1170,7 @@ const handleEsewaSuccess = async (req, res) => {
     const orderId = req.query.orderId;
     if (orderId) {
       try {
-        await Order.update(orderId, { 
-          payment_status: 'failed', 
-          status: 'cancelled' 
-        });
-        await restoreStockForFailedPayment(orderId);
+        await processFailedPayment(orderId, 'Callback error');
       } catch (updateError) {
         console.error('❌ Error updating order status:', updateError);
       }
@@ -1103,18 +1180,25 @@ const handleEsewaSuccess = async (req, res) => {
   }
 };
 
-// ✅ FIXED: COD Payment with proper status handling
+// ✅ FIXED: COD Payment with proper status handling and EMAIL
 const createCodPayment = async (req, res) => {
   let orderId = null;
 
   try {
-    const { items, totalAmount, subtotal = 0, shipping = 0, discount = 0, shippingAddress, promoCode, promoCodeId } = req.body;
+    if (blockAdminPurchase(req, res)) return;
+
+    const { items, totalAmount, subtotal = 0, shipping = 0, shippingAddress, promoCode } = req.body;
+    const normalizedItems = normalizeCheckoutItems(items);
     const user_id = req.user.id;
+    const promoResolution = await resolvePromoForOrder({ promoCode, subtotal, normalizedItems });
+    const effectiveDiscount = promoResolution.discount;
+    const effectivePromoCode = promoResolution.promoCode;
+    const effectivePromoCodeId = promoResolution.promoCodeId;
 
     console.log('📦 Creating COD order for amount:', totalAmount);
-    console.log('💰 Discount applied:', discount, 'Promo Code:', promoCode);
+    console.log('💰 Discount applied:', effectiveDiscount, 'Promo Code:', effectivePromoCode);
 
-    if (!items || items.length === 0) {
+    if (!normalizedItems.length) {
       return res.status(400).json({
         success: false,
         message: 'Your cart is empty'
@@ -1122,10 +1206,10 @@ const createCodPayment = async (req, res) => {
     }
 
     // Validate and reserve stock
-    await reserveStock(items);
+    await reserveStock(normalizedItems);
 
     // ✅ FIXED: Calculate final amount with discount
-    const finalAmount = calculateFinalAmount(subtotal, shipping, discount);
+    const finalAmount = calculateFinalAmount(subtotal, shipping, effectiveDiscount);
 
     // ✅ FIXED: Create COD order with proper status
     const order = await Order.create({
@@ -1133,34 +1217,34 @@ const createCodPayment = async (req, res) => {
       total_amount: finalAmount,
       subtotal: parseFloat(subtotal),
       shipping_fee: parseFloat(shipping),
-      discount: parseFloat(discount),
+      discount: parseFloat(effectiveDiscount),
       payment_method: 'cod',
       payment_status: 'pending', // COD payment is pending until delivery
       shipping_address: shippingAddress,
       status: 'confirmed', // Order is confirmed for COD
       tracking_number: generateTrackingNumber(), // Add tracking for COD
       estimated_delivery: calculateEstimatedDelivery(), // Add delivery date for COD
-      promo_code: promoCode || null
+      promo_code: effectivePromoCode || null
     });
     orderId = order.id;
 
     console.log('✅ Created COD order:', orderId);
 
     // Add order items
-    for (const item of items) {
+    for (const item of normalizedItems) {
       await Order.addOrderItem({
         order_id: orderId,
-        product_id: item.id,
+        product_id: item.productId,
         quantity: item.quantity,
-        price: parseFloat(item.price)
+        price: item.price
       });
     }
 
     // ✅ FIXED: Record promo code usage if applicable
-    if (promoCodeId) {
+    if (effectivePromoCodeId) {
       try {
-        await recordPromoUsage(promoCodeId, user_id, orderId);
-        console.log('✅ Promo code usage recorded:', promoCode);
+        await recordPromoUsage(effectivePromoCodeId, user_id, orderId);
+        console.log('✅ Promo code usage recorded:', effectivePromoCode);
       } catch (promoError) {
         console.error('❌ Promo code recording error:', promoError);
       }
@@ -1177,13 +1261,14 @@ const createCodPayment = async (req, res) => {
         method: 'cash_on_delivery',
         status: 'pending_payment',
         instructions: 'Payment to be collected upon delivery',
-        discount: discount,
-        promo_code: promoCode
+        discount: effectiveDiscount,
+        promo_code: effectivePromoCode,
+        promo_breakdown: promoResolution.breakdown
       }
     });
 
     // ✅ FIXED: Complete order processing for COD (confirmed order)
-    await completeOrderProcessing(orderId, user_id, items);
+    await completeOrderProcessing(orderId, user_id, normalizedItems);
 
     res.json({
       success: true,
@@ -1199,16 +1284,16 @@ const createCodPayment = async (req, res) => {
     // Cleanup on error
     if (orderId) {
       try {
-        await Order.update(orderId, { status: 'cancelled', payment_status: 'failed' });
-        await restoreStockForFailedPayment(orderId);
+        await processFailedPayment(orderId, error.message);
       } catch (cleanupError) {
         console.error('❌ COD order cleanup error:', cleanupError);
       }
     }
     
-    res.status(500).json({
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({
       success: false,
-      message: 'Failed to create COD order',
+      message: error.statusCode ? error.message : 'Failed to create COD order',
       error: error.message
     });
   }
@@ -1292,15 +1377,7 @@ const verifyKhaltiPayment = async (req, res) => {
         });
       } else {
         // ✅ FIXED: Mark as cancelled for failed payments
-        await Order.update(orderId, {
-          payment_status: 'failed',
-          status: 'cancelled'
-        });
-
-        await Payment.updateStatus(orderId, 'failed', pidx);
-        
-        // Restore stock for failed payment
-        await restoreStockForFailedPayment(orderId);
+        await processFailedPayment(orderId, 'Payment verification failed');
 
         res.json({
           success: false,
@@ -1352,16 +1429,6 @@ const getPaymentHealth = async (req, res) => {
         error: error.message
       }
     });
-  }
-};
-
-// ✅ ADDED: Helper function for sending payment success emails
-const sendPaymentSuccessEmail = async (order, user, paymentDetails) => {
-  try {
-    await sendPaymentSuccess(order, user, paymentDetails);
-    console.log('✅ Payment success email sent');
-  } catch (emailError) {
-    console.error('❌ Payment success email error:', emailError);
   }
 };
 

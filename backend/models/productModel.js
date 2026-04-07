@@ -7,10 +7,18 @@ class Product {
       const [rows] = await db.execute(
         `SELECT p.*, 
                 COALESCE(AVG(r.rating), 0) as average_rating,
-                COUNT(r.id) as review_count
+                COUNT(DISTINCT r.id) as review_count,
+                po.offer_type,
+                po.discount_percentage as offer_discount_percentage,
+                po.discount_amount as offer_discount_amount,
+                po.is_active as offer_is_active,
+                po.valid_until as offer_valid_until
          FROM products p
          LEFT JOIN reviews r ON p.id = r.product_id
-         GROUP BY p.id
+         LEFT JOIN product_offers po ON p.id = po.product_id 
+           AND po.is_active = 1 
+           AND (po.valid_until IS NULL OR po.valid_until > NOW())
+         GROUP BY p.id, po.id
          ORDER BY p.created_at DESC 
          LIMIT ? OFFSET ?`,
         [limit, offset]
@@ -30,11 +38,19 @@ class Product {
       const [rows] = await db.execute(
         `SELECT p.*, 
                 COALESCE(AVG(r.rating), 0) as average_rating,
-                COUNT(r.id) as review_count
+                COUNT(DISTINCT r.id) as review_count,
+                po.offer_type,
+                po.discount_percentage as offer_discount_percentage,
+                po.discount_amount as offer_discount_amount,
+                po.is_active as offer_is_active,
+                po.valid_until as offer_valid_until
          FROM products p
          LEFT JOIN reviews r ON p.id = r.product_id
+         LEFT JOIN product_offers po ON p.id = po.product_id 
+           AND po.is_active = 1 
+           AND (po.valid_until IS NULL OR po.valid_until > NOW())
          WHERE p.category = ? 
-         GROUP BY p.id
+         GROUP BY p.id, po.id
          ORDER BY p.created_at DESC 
          LIMIT ? OFFSET ?`,
         [category, limit, offset]
@@ -54,11 +70,19 @@ class Product {
       const [rows] = await db.execute(
         `SELECT p.*, 
                 COALESCE(AVG(r.rating), 0) as average_rating,
-                COUNT(r.id) as review_count
+                COUNT(DISTINCT r.id) as review_count,
+                po.offer_type,
+                po.discount_percentage as offer_discount_percentage,
+                po.discount_amount as offer_discount_amount,
+                po.is_active as offer_is_active,
+                po.valid_until as offer_valid_until
          FROM products p
          LEFT JOIN reviews r ON p.id = r.product_id
+         LEFT JOIN product_offers po ON p.id = po.product_id 
+           AND po.is_active = 1 
+           AND (po.valid_until IS NULL OR po.valid_until > NOW())
          WHERE p.name LIKE ? OR p.description LIKE ? OR p.category LIKE ?
-         GROUP BY p.id
+         GROUP BY p.id, po.id
          ORDER BY p.created_at DESC 
          LIMIT ? OFFSET ?`,
         [`%${query}%`, `%${query}%`, `%${query}%`, limit, offset]
@@ -93,11 +117,19 @@ class Product {
       const [rows] = await db.execute(
         `SELECT p.*, 
                 COALESCE(AVG(r.rating), 0) as average_rating,
-                COUNT(r.id) as review_count
+                COUNT(DISTINCT r.id) as review_count,
+                po.offer_type,
+                po.discount_percentage as offer_discount_percentage,
+                po.discount_amount as offer_discount_amount,
+                po.is_active as offer_is_active,
+                po.valid_until as offer_valid_until
          FROM products p
          LEFT JOIN reviews r ON p.id = r.product_id
+         LEFT JOIN product_offers po ON p.id = po.product_id 
+           AND po.is_active = 1 
+           AND (po.valid_until IS NULL OR po.valid_until > NOW())
          WHERE p.id = ?
-         GROUP BY p.id`,
+         GROUP BY p.id, po.id`,
         [productId]
       );
       

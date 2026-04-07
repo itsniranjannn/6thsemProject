@@ -1,6 +1,17 @@
 // backend/controllers/cartController.js - COMPLETE FIXED VERSION
 const Cart = require('../models/cartModel');
 
+const blockAdminCartMutation = (req, res) => {
+  if (req.user?.role === 'admin') {
+    res.status(403).json({
+      success: false,
+      message: 'Admin accounts cannot modify cart. Please use a customer account.'
+    });
+    return true;
+  }
+  return false;
+};
+
 // Get cart items
 const getCart = async (req, res) => {
   try {
@@ -25,6 +36,8 @@ const getCart = async (req, res) => {
 // Add to cart - UPDATED to handle offers properly
 const addToCart = async (req, res) => {
   try {
+    if (blockAdminCartMutation(req, res)) return;
+
     const { productId, quantity, offer_id, offer_type } = req.body;
     
     if (!productId) {
@@ -36,7 +49,7 @@ const addToCart = async (req, res) => {
 
     // For BOGO offers from offers page, ensure quantity is 2
     let finalQuantity = quantity || 1;
-    if (offer_type === 'Bogo' && offer_id) {
+    if ((offer_type === 'Bogo' || offer_type === 'bogo' || offer_type === 'buy_one_get_one') && offer_id) {
       finalQuantity = 2; // Force 2 items for BOGO deals
     }
 
@@ -57,7 +70,7 @@ const addToCart = async (req, res) => {
     console.error('Add to cart error:', error);
     res.status(400).json({ 
       success: false,
-      message: 'Error adding product to cart' 
+      message: error.message || 'Error adding product to cart' 
     });
   }
 };
@@ -65,6 +78,8 @@ const addToCart = async (req, res) => {
 // Update cart item quantity
 const updateCartItem = async (req, res) => {
   try {
+    if (blockAdminCartMutation(req, res)) return;
+
     const { productId } = req.params;
     const { quantity, offer_id } = req.body;
 
@@ -92,7 +107,7 @@ const updateCartItem = async (req, res) => {
     console.error('Update cart error:', error);
     res.status(400).json({ 
       success: false,
-      message: 'Error updating cart' 
+      message: error.message || 'Error updating cart' 
     });
   }
 };
@@ -100,6 +115,8 @@ const updateCartItem = async (req, res) => {
 // Remove from cart
 const removeFromCart = async (req, res) => {
   try {
+    if (blockAdminCartMutation(req, res)) return;
+
     const { productId } = req.params;
     const { offer_id } = req.body;
     
@@ -128,6 +145,8 @@ const removeFromCart = async (req, res) => {
 // Clear cart
 const clearCart = async (req, res) => {
   try {
+    if (blockAdminCartMutation(req, res)) return;
+
     await Cart.clearCart(req.user.id);
     res.json({ 
       success: true,
@@ -165,6 +184,8 @@ const validateCart = async (req, res) => {
 // Merge carts
 const mergeCarts = async (req, res) => {
   try {
+    if (blockAdminCartMutation(req, res)) return;
+
     const { items } = req.body;
     // Implementation for merging local and server carts
     let mergedCount = 0;

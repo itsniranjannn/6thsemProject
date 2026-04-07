@@ -257,7 +257,9 @@ class Order {
         promo_code: rows[0].promo_code,
         shipping_address: shippingAddress,
         created_at: rows[0].created_at,
-        items: rows.filter(row => row.product_id).map(row => ({
+        items: rows
+          .filter(row => row.product_id && parseInt(row.quantity, 10) > 0)
+          .map(row => ({
           id: row.item_id,
           product_id: row.product_id,
           product_name: row.product_name,
@@ -401,7 +403,9 @@ class Order {
           p.category as product_category
          FROM order_items oi
          JOIN products p ON oi.product_id = p.id
-         WHERE oi.order_id = ?`,
+         WHERE oi.order_id = ?
+           AND oi.product_id IS NOT NULL
+           AND oi.quantity > 0`,
         [orderId]
       );
       
@@ -766,7 +770,9 @@ static async findByIdWithItems(orderId) {
       `SELECT oi.*, p.name, p.image_url, p.category 
        FROM order_items oi 
        LEFT JOIN products p ON oi.product_id = p.id 
-       WHERE oi.order_id = ?`,
+       WHERE oi.order_id = ?
+         AND oi.product_id IS NOT NULL
+         AND oi.quantity > 0`,
       [orderId]
     );
     
