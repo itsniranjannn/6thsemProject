@@ -39,6 +39,7 @@ const CheckoutPage = () => {
   const [promoCode, setPromoCode] = useState('');
   const [discount, setDiscount] = useState(0);
   const [appliedPromo, setAppliedPromo] = useState(null);
+  const [promoBreakdown, setPromoBreakdown] = useState(null);
   const [applyingPromo, setApplyingPromo] = useState(false);
   const [availablePromos, setAvailablePromos] = useState([]);
   const [showPromoDropdown, setShowPromoDropdown] = useState(false);
@@ -254,7 +255,9 @@ const CheckoutPage = () => {
           code: codeToApply,
           totalAmount: getCartTotal(),
           cartItems: cartItems.map(item => ({
-            category: item.product?.category || item.category
+            category: item.product?.category || item.category,
+            quantity: item.quantity,
+            price: parseFloat(item.product?.price || item.price || 0)
           })),
           categories: cartCategories
         })
@@ -267,9 +270,14 @@ const CheckoutPage = () => {
         const discountAmount = parseFloat(result.discount) || 0;
         setDiscount(discountAmount);
         setAppliedPromo(result.promo);
+        setPromoBreakdown(result.breakdown || null);
         setPromoCode(codeToApply);
         setShowPromoDropdown(false);
-        showToast(result.promo.description || `🎉 Promo code applied! Rs. ${discountAmount.toFixed(2)} discount`, 'success');
+        const eligibleItems = result.breakdown?.eligibleItemCount || 0;
+        showToast(
+          result.promo.description || `🎉 Promo code applied! Rs. ${discountAmount.toFixed(2)} discount on ${eligibleItems} item(s)`,
+          'success'
+        );
       } else {
         showToast(result.message || '❌ Invalid promo code', 'error');
       }
@@ -285,6 +293,7 @@ const CheckoutPage = () => {
     setPromoCode('');
     setDiscount(0);
     setAppliedPromo(null);
+    setPromoBreakdown(null);
     showToast('🔤 Promo code removed', 'info');
   };
 
@@ -1096,6 +1105,12 @@ const CheckoutPage = () => {
                         <p className="text-green-200 text-sm mt-1">
                           {appliedPromo.description}
                         </p>
+                        {promoBreakdown && (
+                          <p className="text-green-200 text-xs mt-1">
+                            Promo applied to {promoBreakdown.eligibleItemCount || 0} item(s)
+                            {promoBreakdown.appliesToAllCategories ? ' across all categories' : ' in eligible categories'}.
+                          </p>
+                        )}
                       </div>
                       <span className="text-green-300 font-bold text-xl">
                         - Rs. {discount.toFixed(2)}
@@ -1166,6 +1181,13 @@ const CheckoutPage = () => {
                     <span className="font-bold">Discount Applied</span>
                     <span className="font-bold text-lg">- Rs. {parseFloat(discount).toFixed(2)}</span>
                   </motion.div>
+                )}
+
+                {promoBreakdown && discount > 0 && (
+                  <div className="text-xs text-cyan-300 bg-cyan-500/10 border border-cyan-400/20 rounded-xl p-3">
+                    <div>Eligible subtotal: Rs. {(parseFloat(promoBreakdown.eligibleSubtotal || 0)).toFixed(2)}</div>
+                    <div>Promo applied to {promoBreakdown.eligibleItemCount || 0} item(s)</div>
+                  </div>
                 )}
                 
                 <div className="border-t border-cyan-500/30 pt-4">

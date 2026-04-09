@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { Toast } from '../components/Toast.js';
 import { useCart } from '../context/CartContext.js';
 import { useAuth } from '../context/AuthContext.js';
+import ProductModal from '../components/ProductModal.js';
 import SupportWidget from '../components/SupportWidget.js';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -23,7 +24,11 @@ const OffersPage = () => {
   const [offers, setOffers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState({ message: '', type: 'success' });
-  const { addToCart } = useCart();
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [showProductModal, setShowProductModal] = useState(false);
+  const [productReviews, setProductReviews] = useState({});
+  const [reviewsLoading, setReviewsLoading] = useState({});
+  const { addToCart, getProductQuantity } = useCart();
   const { user } = useAuth();
   const navigate = useNavigate();
 
@@ -58,6 +63,49 @@ const OffersPage = () => {
     }
   };
 
+  const fetchProductReviews = async (productId) => {
+    try {
+      const response = await fetch(
+        `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/reviews/product/${productId}`
+      );
+
+      if (!response.ok) return [];
+      const data = await response.json();
+      return data?.reviews || [];
+    } catch (error) {
+      console.error('Error fetching product reviews:', error);
+      return [];
+    }
+  };
+
+  const openProductDetails = async (offer) => {
+    try {
+      const response = await fetch(
+        `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/products/${offer.product_id}`
+      );
+
+      if (!response.ok) {
+        showToast('Failed to load product details', 'error');
+        return;
+      }
+
+      const productData = await response.json();
+      setSelectedProduct(productData);
+
+      if (!productReviews[offer.product_id]) {
+        setReviewsLoading(prev => ({ ...prev, [offer.product_id]: true }));
+        const reviewsData = await fetchProductReviews(offer.product_id);
+        setProductReviews(prev => ({ ...prev, [offer.product_id]: reviewsData }));
+        setReviewsLoading(prev => ({ ...prev, [offer.product_id]: false }));
+      }
+
+      setShowProductModal(true);
+    } catch (error) {
+      console.error('Error loading product details:', error);
+      showToast('Error loading product details', 'error');
+    }
+  };
+
   // Calculate offer details
   const calculateOfferDetails = (offer) => {
     const originalPrice = parseFloat(offer.price);
@@ -73,6 +121,19 @@ const OffersPage = () => {
         savings = originalPrice; // Save the price of one item
         description = offer.description || 'Buy One Get One Free - Get 2 for price of 1!';
         break;
+
+      case 'bulk_discount': {
+        const minQty = parseInt(offer.min_quantity, 10) || 1;
+        quantity = minQty;
+        if (offer.discount_percentage && offer.discount_percentage > 0) {
+          finalPrice = originalPrice * (1 - offer.discount_percentage / 100);
+          savings = (originalPrice - finalPrice) * minQty;
+          description = offer.description || `Buy at least ${minQty} items and get ${offer.discount_percentage}% OFF`;
+        } else {
+          description = offer.description || `Bulk offer available from ${minQty} items`;
+        }
+        break;
+      }
         
       case 'flat_discount':
         if (offer.discount_amount) {
@@ -119,6 +180,25 @@ const OffersPage = () => {
 
     try {
       const offerDetails = calculateOfferDetails(offer);
+      const currentQtyInCart = getProductQuantity(offer.product_id, offer.id);
+      const requestedQty = parseInt(offerDetails.quantity, 10) || 1;
+      const availableStock = parseInt(offer.stock_quantity, 10) || 0;
+
+      if (availableStock <= 0) {
+        showToast(`${offer.product_name} is out of stock`, 'error');
+        return;
+      }
+
+      if (currentQtyInCart + requestedQty > availableStock) {
+        const canAdd = Math.max(0, availableStock - currentQtyInCart);
+        showToast(
+          canAdd > 0
+            ? `Only ${availableStock} in stock for ${offer.product_name}. You can add ${canAdd} more.`
+            : `Stock limit reached for ${offer.product_name}.`,
+          'warning'
+        );
+        return;
+      }
       
       // Prepare cart item with offer information
       const cartItem = {
@@ -130,7 +210,7 @@ const OffersPage = () => {
         stock_quantity: offer.stock_quantity,
         offer_id: offer.id,
         offer_type: offer.offer_type,
-        quantity: offerDetails.quantity,
+        quantity: requestedQty,
         discount_percentage: offer.discount_percentage,
         discount_amount: offer.discount_amount
       };
@@ -576,7 +656,7 @@ const OffersPage = () => {
                       </motion.button>
 
                       <motion.button
-                        onClick={() => navigate(`/product/${offer.product_id}`)}
+                        onClick={() => openProductDetails(offer)}
                         className="w-full bg-white/10 hover:bg-white/20 text-gray-300 hover:text-white py-3 rounded-2xl font-semibold transition-all duration-200 border border-white/10 hover:border-white/20 flex items-center justify-center gap-2 backdrop-blur-sm"
                         whileHover={{ scale: 1.02 }}
                         whileTap={{ scale: 0.98 }}
@@ -594,6 +674,26 @@ const OffersPage = () => {
 
         {/* Support Widget */}
         <SupportWidget />
+
+        {showProductModal && selectedProduct && (
+          <ProductModal
+            product={selectedProduct}
+            reviews={productReviews[selectedProduct.id]}
+            reviewsLoading={reviewsLoading[selectedProduct.id]}
+            onClose={() => setShowProductModal(false)}
+            onAddToCart={async (productWithQuantity) => {
+              const result = await addToCart(productWithQuantity);
+              if (result?.success) {
+                showToast(`🛒 ${productWithQuantity.name} added to cart!`, 'success');
+              } else {
+                showToast(result?.error || 'Failed to add to cart', 'error');
+              }
+            }}
+            onAddReview={() => {
+              showToast('Review feature available from product page.', 'info');
+            }}
+          />
+        )}
       </div>
     </div>
   );

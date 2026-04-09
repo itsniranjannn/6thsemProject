@@ -164,6 +164,7 @@ const CartPage = () => {
     navigate('/checkout');
   };
 
+
   const getProductData = (item) => {
     const finalPrice = parseFloat(item.final_price || item.product?.price || item.price || 0);
     const originalPrice = parseFloat(item.product?.price || item.price || 0);
@@ -186,6 +187,7 @@ const CartPage = () => {
       price: unitPrice,
       final_price: finalPrice,
       original_price: originalPrice,
+      stock_quantity: parseInt(item.product?.stock_quantity || item.stock_quantity || 0, 10),
       category: item.product?.category || item.category || 'Uncategorized',
       image_url: item.product?.image_url || item.image_url || '/api/placeholder/80/80',
       offer_id: item.offer_id,
@@ -481,6 +483,8 @@ const CartPage = () => {
                   const product = getProductData(item);
                   const productId = product.id;
                   const quantity = product.display_quantity;
+                  const stockQuantity = product.stock_quantity;
+                  const reachedStockLimit = stockQuantity > 0 && quantity >= stockQuantity;
                   const price = product.price;
                   const finalPrice = product.final_price;
                   const originalPrice = product.original_price;
@@ -569,6 +573,15 @@ const CartPage = () => {
                                   </span>
                                 </div>
                               )}
+
+                              {stockQuantity > 0 && (
+                                <div className="flex items-center gap-2 bg-slate-500/20 px-3 py-1.5 rounded-lg border border-slate-400/30 w-fit mt-2">
+                                  <span className="text-slate-200 text-sm font-medium">
+                                    Stock: {stockQuantity}
+                                    {reachedStockLimit && <span className="text-yellow-300"> (max reached)</span>}
+                                  </span>
+                                </div>
+                              )}
                             </div>
 
                             {/* Quantity Controls & Total */}
@@ -595,7 +608,7 @@ const CartPage = () => {
                                 
                                 <motion.button
                                   onClick={() => incrementQuantity(item)}
-                                  disabled={updatingItem === productId}
+                                  disabled={updatingItem === productId || reachedStockLimit}
                                   whileHover={{ scale: 1.1 }}
                                   whileTap={{ scale: 0.9 }}
                                   className="w-10 h-10 flex items-center justify-center bg-cyan-500/20 hover:bg-cyan-500/30 rounded-xl disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-200 text-cyan-300"
@@ -673,7 +686,7 @@ const CartPage = () => {
                       </span>
                     </div>
                   )}
-                  
+
                   <div className="border-t border-cyan-500/30 pt-4">
                     <div className="flex justify-between items-center">
                       <span className="text-xl font-bold text-white">Total Amount</span>
