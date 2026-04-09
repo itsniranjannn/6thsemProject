@@ -1,10 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ProductCard from '../components/ProductCard.js';
 import SearchBar from '../components/SearchBar.js';
 import ProductModal from '../components/ProductModal.js';
 import ReviewModal from '../components/ReviewModal.js';
-import SupportWidget from '../components/SupportWidget.js';
 import CategoryNavbar from '../components/CategoryNavbar.js';
 import { Toast } from '../components/Toast.js';
 import { useCart } from '../context/CartContext.js';
@@ -38,7 +37,8 @@ import {
   ChevronUp,
   Play,
   Pause,
-  RotateCcw
+  RotateCcw,
+  ArrowDown
 } from 'lucide-react';
 
 const ProductPage = () => {
@@ -76,6 +76,12 @@ const ProductPage = () => {
   const [expandedCategories, setExpandedCategories] = useState(true);
   const [autoRotateRecommendations, setAutoRotateRecommendations] = useState(true);
   const [currentRecommendationIndex, setCurrentRecommendationIndex] = useState(0);
+  const [algorithmUsed, setAlgorithmUsed] = useState(null); // Track actual algorithm used
+  const [collaborativeFallbackMessage, setCollaborativeFallbackMessage] = useState(''); // Message when collaborative falls back
+  
+  // NEW: Jump to Recommendations button state
+  const [showJumpButton, setShowJumpButton] = useState(false);
+  const recommendationsRef = useRef(null);
 
   const cartCount = getCartItemsCount();
 
@@ -105,6 +111,31 @@ const ProductPage = () => {
     }
     return () => clearInterval(interval);
   }, [autoRotateRecommendations, recommendations]);
+
+  // NEW: IntersectionObserver to show/hide jump button
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        // Show button when recommendations section is NOT visible
+        setShowJumpButton(!entry.isIntersecting);
+      },
+      {
+        root: null,
+        threshold: 0.1,
+        rootMargin: '0px'
+      }
+    );
+
+    if (recommendationsRef.current) {
+      observer.observe(recommendationsRef.current);
+    }
+
+    return () => {
+      if (recommendationsRef.current) {
+        observer.unobserve(recommendationsRef.current);
+      }
+    };
+  }, [recommendations]); // Re-run when recommendations change
 
   useEffect(() => {
     fetchAllData();
@@ -280,6 +311,7 @@ const ProductPage = () => {
   const fetchRecommendations = async () => {
     try {
       setRecommendationsLoading(true);
+      setCollaborativeFallbackMessage(''); // Reset fallback message
       const startTime = performance.now();
       
       if (filteredProducts.length > 0) {
@@ -293,6 +325,9 @@ const ProductPage = () => {
           headers['Authorization'] = `Bearer ${token}`;
         }
         
+        // Track if we're doing a frontend fallback for collaborative
+        let frontendFallback = false;
+        
         switch (activeAlgorithm) {
           case 'ml':
             apiUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommendations/product/${firstProduct.id}?algorithm=ml&limit=8`;
@@ -302,9 +337,13 @@ const ProductPage = () => {
             break;
           case 'collaborative':
             if (user) {
+              // User is logged in, try personalized recommendations
               apiUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommendations/user/personalized?limit=8`;
             } else {
-              apiUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommendations/product/${firstProduct.id}?algorithm=content&limit=8`;
+              // User not logged in, fallback to trending (not content) and show message
+              apiUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommendations/popular?limit=8`;
+              frontendFallback = true;
+              setCollaborativeFallbackMessage('Log in to see personalized recommendations based on your purchase history.');
             }
             break;
           case 'popular':
@@ -321,6 +360,24 @@ const ProductPage = () => {
         
         if (response.ok) {
           const data = await response.json();
+          
+          // Check for backend collaborative fallback (user logged in but no purchases)
+          if (activeAlgorithm === 'collaborative' && user && data.fallback) {
+            if (data.fallback_reason === 'no_purchases') {
+              setCollaborativeFallbackMessage('Personalized recommendations available after you make a purchase.');
+            } else if (data.fallback_reason === 'no_similar_users') {
+              setCollaborativeFallbackMessage('Building your profile - try again after more users join!');
+            } else {
+              setCollaborativeFallbackMessage('Showing trending products while we learn your preferences.');
+            }
+          }
+          
+          // Track which algorithm was actually used
+          const actualAlgorithm = frontendFallback 
+            ? 'trending (fallback)' 
+            : (data.algorithm_used || data.algorithm || activeAlgorithm);
+          setAlgorithmUsed(actualAlgorithm);
+          
           if (data.success && data.recommendations && data.recommendations.length > 0) {
             const processedRecommendations = data.recommendations.map(rec => ({
               ...rec,
@@ -338,7 +395,8 @@ const ProductPage = () => {
                 responseTime,
                 recommendationCount: processedRecommendations.length,
                 lastUsed: new Date().toISOString(),
-                success: true
+                success: true,
+                algorithmUsed: actualAlgorithm
               }
             }));
           } else {
@@ -359,6 +417,7 @@ const ProductPage = () => {
         }));
       
       setRecommendations(featured);
+      setAlgorithmUsed('featured (fallback)');
       
       setAlgorithmPerformance(prev => ({
         ...prev,
@@ -648,6 +707,14 @@ const ProductPage = () => {
   const handleCategorySelect = (category) => {
     setSelectedCategory(category);
     showToast(`📁 Showing ${category === 'all' ? 'all products' : category}`, 'info');
+  };
+
+  // NEW: Jump to recommendations handler
+  const handleJumpToRecommendations = () => {
+    recommendationsRef.current?.scrollIntoView({ 
+      behavior: 'smooth',
+      block: 'start'
+    });
   };
 
   // Enhanced loading component
@@ -1180,6 +1247,7 @@ const ProductPage = () => {
         {/* Enhanced AI Recommendations Section */}
         {recommendations.length > 0 && (
           <motion.section 
+            ref={recommendationsRef}
             className="mt-16"
             initial={{ opacity: 0, y: 50 }}
             animate={{ opacity: 1, y: 0 }}
@@ -1292,7 +1360,9 @@ const ProductPage = () => {
                   <>
                     <div className="inline-flex items-center gap-3 bg-green-500/20 text-green-300 px-6 py-3 rounded-2xl text-sm font-medium border border-green-400/30 shadow-lg">
                       <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                      AI Recommendations Active
+                      {algorithmUsed && algorithmUsed.includes('fallback') 
+                        ? `Using ${algorithmUsed}` 
+                        : 'AI Recommendations Active'}
                     </div>
                     <div className="inline-flex items-center gap-3 bg-purple-500/20 text-purple-300 px-6 py-3 rounded-2xl text-sm font-medium border border-purple-400/30 shadow-lg">
                       <span>🎯</span>
@@ -1312,6 +1382,28 @@ const ProductPage = () => {
                   </>
                 )}
               </div>
+              
+              {/* Collaborative Filtering Fallback Message */}
+              {collaborativeFallbackMessage && activeAlgorithm === 'collaborative' && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex justify-center mb-6"
+                >
+                  <div className="inline-flex items-center gap-3 bg-yellow-500/20 text-yellow-300 px-6 py-3 rounded-2xl text-sm font-medium border border-yellow-400/30 shadow-lg">
+                    <span>💡</span>
+                    {collaborativeFallbackMessage}
+                    {!user && (
+                      <button 
+                        onClick={() => navigate('/login')}
+                        className="ml-2 bg-yellow-500/30 hover:bg-yellow-500/50 px-3 py-1 rounded-lg transition-colors"
+                      >
+                        Log In
+                      </button>
+                    )}
+                  </div>
+                </motion.div>
+              )}
             </div>
             
             {/* Enhanced Recommendations Carousel */}
@@ -1452,8 +1544,26 @@ const ProductPage = () => {
         />
       )}
 
-      {/* Support Widget */}
-      <SupportWidget />
+
+      {/* NEW: Jump to Recommendations Floating Button */}
+      <AnimatePresence>
+        {showJumpButton && recommendations.length > 0 && (
+          <motion.button
+            initial={{ opacity: 0, scale: 0.5, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.5, y: 20 }}
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
+            onClick={handleJumpToRecommendations}
+            className="fixed bottom-8 right-8 z-50 flex items-center gap-2 px-6 py-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-full shadow-2xl hover:shadow-purple-500/50 transition-all duration-300 backdrop-blur-sm border border-white/20"
+            aria-label="Jump to Recommendations"
+          >
+            <Sparkles className="w-5 h-5" />
+            <span className="font-semibold hidden sm:inline">Recommendations</span>
+            <ArrowDown className="w-5 h-5 animate-bounce" />
+          </motion.button>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

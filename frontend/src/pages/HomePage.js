@@ -16,6 +16,7 @@ import {
   Globe
 } from 'lucide-react';
 import ProductCard from '../components/ProductCard.js';
+import ProductModal from '../components/ProductModal.js';
 import { useCart } from '../context/CartContext.js';
 import { useAuth } from '../context/AuthContext.js';
 import { Toast } from '../components/Toast.js';
@@ -32,6 +33,10 @@ const HomePage = () => {
   });
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState({ message: '', type: 'success' });
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [showProductModal, setShowProductModal] = useState(false);
+  const [productReviews, setProductReviews] = useState({});
+  const [reviewsLoading, setReviewsLoading] = useState({});
   const { addToCart, getCartItemsCount } = useCart();
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -198,8 +203,7 @@ const HomePage = () => {
   };
 
   const handleViewDetails = (product) => {
-    // Navigate to product detail page or open modal
-    navigate(`/product/${product.id}`);
+    loadProductDetails(product);
   };
 
   const handleAddReview = (product) => {
@@ -207,8 +211,44 @@ const HomePage = () => {
       showToast('Please login to add a review', 'error');
       return;
     }
-    // Navigate to product page with review modal
     navigate(`/product/${product.id}?review=true`);
+  };
+
+  const fetchProductReviews = async (productId) => {
+    try {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/reviews/product/${productId}`);
+      if (response.ok) {
+        const data = await response.json();
+        return {
+          reviews: data.reviews || [],
+          average_rating: data.average_rating || 0,
+          total_reviews: data.total_reviews || 0
+        };
+      }
+    } catch (error) {
+      console.error('Error fetching product reviews:', error);
+    }
+    return {
+      reviews: [],
+      average_rating: 0,
+      total_reviews: 0
+    };
+  };
+
+  const loadProductDetails = async (product) => {
+    setSelectedProduct(product);
+
+    if (!productReviews[product.id]) {
+      setReviewsLoading(prev => ({ ...prev, [product.id]: true }));
+      const reviewsData = await fetchProductReviews(product.id);
+      setProductReviews(prev => ({
+        ...prev,
+        [product.id]: reviewsData
+      }));
+      setReviewsLoading(prev => ({ ...prev, [product.id]: false }));
+    }
+
+    setShowProductModal(true);
   };
 
   if (loading) {
@@ -221,6 +261,8 @@ const HomePage = () => {
       </div>
     );
   }
+
+  const heroFeatureProducts = (featuredProducts.length > 0 ? featuredProducts : newArrivals).slice(0, 4);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-purple-900">
@@ -312,19 +354,45 @@ const HomePage = () => {
             >
               <div className="bg-gradient-to-br from-cyan-500/20 to-purple-500/20 rounded-3xl p-8 backdrop-blur-md border border-cyan-400/30 shadow-2xl">
                 <div className="grid grid-cols-2 gap-4">
-                  {[1, 2, 3, 4].map((item) => (
+                  {(heroFeatureProducts.length > 0 ? heroFeatureProducts : [1, 2, 3, 4]).map((item, index) => (
                     <motion.div
-                      key={item}
+                      key={typeof item === 'object' ? item.id : item}
                       whileHover={{ scale: 1.05, y: -5 }}
-                      className="bg-white/10 rounded-2xl p-4 border border-white/20 backdrop-blur-sm"
+                      className="bg-white/10 rounded-2xl p-4 border border-white/20 backdrop-blur-sm cursor-pointer"
+                      onClick={() => {
+                        if (typeof item === 'object') {
+                          navigate(`/product/${item.id}`);
+                        }
+                      }}
                     >
-                      <div className="w-12 h-12 bg-gradient-to-r from-cyan-400 to-blue-500 rounded-xl flex items-center justify-center mb-3 mx-auto">
-                        <TrendingUp className="text-white w-6 h-6" />
-                      </div>
-                      <div className="text-center">
-                        <div className="text-white font-semibold">Feature {item}</div>
-                        <div className="text-gray-400 text-sm mt-1">Amazing benefit</div>
-                      </div>
+                      {typeof item === 'object' ? (
+                        <>
+                          <div className="w-14 h-14 rounded-xl overflow-hidden mx-auto mb-3 border border-cyan-300/40">
+                            <img
+                              src={item.image_urls?.[0] || item.image_url || 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500'}
+                              alt={item.name}
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                e.target.src = 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500';
+                              }}
+                            />
+                          </div>
+                          <div className="text-center">
+                            <div className="text-white font-semibold text-sm line-clamp-1">{item.name}</div>
+                            <div className="text-cyan-300 text-sm mt-1 font-bold">Rs. {parseFloat(item.price || 0).toFixed(0)}</div>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="w-12 h-12 bg-gradient-to-r from-cyan-400 to-blue-500 rounded-xl flex items-center justify-center mb-3 mx-auto">
+                            <TrendingUp className="text-white w-6 h-6" />
+                          </div>
+                          <div className="text-center">
+                            <div className="text-white font-semibold">Feature {index + 1}</div>
+                            <div className="text-gray-400 text-sm mt-1">Top picks for you</div>
+                          </div>
+                        </>
+                      )}
                     </motion.div>
                   ))}
                 </div>
@@ -637,6 +705,20 @@ const HomePage = () => {
         type={toast.type} 
         onClose={() => setToast({ message: '', type: 'success' })} 
       />
+
+      {showProductModal && selectedProduct && (
+        <ProductModal
+          product={selectedProduct}
+          reviews={productReviews[selectedProduct.id]}
+          reviewsLoading={reviewsLoading[selectedProduct.id]}
+          onClose={() => setShowProductModal(false)}
+          onAddToCart={handleAddToCart}
+          onAddReview={() => {
+            setShowProductModal(false);
+            handleAddReview(selectedProduct);
+          }}
+        />
+      )}
     </div>
   );
 };

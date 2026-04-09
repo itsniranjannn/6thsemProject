@@ -53,7 +53,14 @@ export const getPersonalizedRecommendations = async (limit = 8) => {
     const token = localStorage.getItem('token');
     
     if (!token) {
-      throw new Error('User not authenticated');
+      // Return structured response indicating user needs to log in
+      return { 
+        success: false, 
+        recommendations: [],
+        fallback: true,
+        fallback_reason: 'not_authenticated',
+        message: 'Please log in to see personalized recommendations'
+      };
     }
 
     const response = await fetch(
@@ -74,7 +81,13 @@ export const getPersonalizedRecommendations = async (limit = 8) => {
     return data;
   } catch (error) {
     console.error('Error fetching personalized recommendations:', error);
-    return { success: false, recommendations: [] };
+    return { 
+      success: false, 
+      recommendations: [],
+      fallback: true,
+      fallback_reason: 'error',
+      error: error.message
+    };
   }
 };
 
@@ -89,10 +102,18 @@ export const getPopularProducts = async (limit = 8) => {
     }
 
     const data = await response.json();
-    return data;
+    return {
+      ...data,
+      algorithm_used: 'popularity'
+    };
   } catch (error) {
     console.error('Error fetching popular products:', error);
-    return { success: false, recommendations: [] };
+    return { 
+      success: false, 
+      recommendations: [],
+      algorithm_used: 'popularity',
+      error: error.message
+    };
   }
 };
 

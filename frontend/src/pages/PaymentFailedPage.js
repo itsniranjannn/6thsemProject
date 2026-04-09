@@ -1,5 +1,7 @@
 import React from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import { XCircle, RotateCcw, ShoppingCart, Home, AlertTriangle } from 'lucide-react';
 
 const PaymentFailedPage = () => {
   const [searchParams] = useSearchParams();
@@ -22,56 +24,58 @@ const PaymentFailedPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-red-50 to-orange-100 flex items-center justify-center py-12 px-4">
-      <div className="max-w-md w-full">
-        <div className="bg-white rounded-2xl shadow-lg p-8 text-center">
-          <div className="w-20 h-20 bg-red-500 rounded-full flex items-center justify-center mx-auto mb-6">
-            <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-purple-900 flex items-center justify-center py-12 px-4">
+      <motion.div
+        initial={{ opacity: 0, y: 20, scale: 0.95 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        className="max-w-xl w-full"
+      >
+        <div className="bg-white/10 backdrop-blur-md border border-red-400/30 rounded-3xl shadow-2xl p-8 text-center">
+          <div className="w-20 h-20 bg-gradient-to-r from-red-500 to-rose-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-xl">
+            <XCircle className="w-10 h-10 text-white" />
           </div>
-          
-          <h1 className="text-3xl font-bold text-gray-900 mb-4">Payment Failed</h1>
-          
-          <div className="space-y-3 mb-8">
-            <p className="text-gray-600">{getErrorMessage()}</p>
+
+          <h1 className="text-3xl font-black text-white mb-3">Payment Failed</h1>
+
+          <div className="mb-6 bg-red-500/15 border border-red-400/30 rounded-2xl p-4">
+            <p className="text-red-100 flex items-center justify-center gap-2">
+              <AlertTriangle className="w-4 h-4" />
+              {getErrorMessage()}
+            </p>
             {orderId && (
-              <p className="text-sm text-gray-500">
+              <p className="text-sm text-red-200 mt-2">
                 Order ID: <span className="font-mono">#{orderId}</span>
               </p>
             )}
           </div>
 
-          <div className="space-y-4">
+          <div className="space-y-3">
             <button
               onClick={() => window.history.back()}
-              className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white py-3 px-4 rounded-lg font-semibold transition-colors duration-200"
+              className="w-full bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white py-3 px-4 rounded-xl font-semibold transition-all duration-200 flex items-center justify-center gap-2"
             >
+              <RotateCcw className="w-4 h-4" />
               Try Again
             </button>
-            
+
             <Link
               to="/checkout"
-              className="block w-full border border-gray-300 text-gray-700 hover:bg-gray-50 py-3 px-4 rounded-lg font-semibold transition-colors duration-200"
+              className="w-full bg-white/10 hover:bg-white/20 border border-white/20 text-white py-3 px-4 rounded-xl font-semibold transition-all duration-200 flex items-center justify-center gap-2"
             >
+              <ShoppingCart className="w-4 h-4" />
               Back to Checkout
             </Link>
-            
+
             <Link
               to="/"
-              className="block w-full text-gray-600 hover:text-gray-800 py-2 text-sm"
+              className="w-full text-cyan-200 hover:text-cyan-100 py-2 text-sm flex items-center justify-center gap-2"
             >
+              <Home className="w-4 h-4" />
               Return to Home
             </Link>
           </div>
-
-          <div className="mt-8 pt-6 border-t border-gray-200">
-            <p className="text-sm text-gray-500">
-              Need help? Contact our support team at support@nexusstore.com
-            </p>
-          </div>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 };
