@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import Toast from '../Toast.js';
 
 const AdminProductModal = ({ product, onClose, onSave }) => {
@@ -223,7 +224,13 @@ const AdminProductModal = ({ product, onClose, onSave }) => {
   const allImages = [...uploadedImages, ...imageUrls.filter(url => url.trim() !== '')];
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+    <motion.div 
+      className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 overflow-y-auto"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      onClick={onClose}
+    >
       {/* Toast Notification */}
       {toast.show && (
         <Toast 
@@ -233,66 +240,82 @@ const AdminProductModal = ({ product, onClose, onSave }) => {
         />
       )}
 
-      <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+      {/* Centering container */}
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <motion.div 
+          className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto border border-white/20 shadow-2xl"
+          initial={{ scale: 0.9, y: 50, opacity: 0 }}
+          animate={{ scale: 1, y: 0, opacity: 1 }}
+          exit={{ scale: 0.9, y: 50, opacity: 0 }}
+          transition={{ type: "spring", damping: 25, stiffness: 300 }}
+          onClick={(e) => e.stopPropagation()}
+        >
         <div className="p-8">
           <div className="flex justify-between items-center mb-6">
-            <h3 className="text-2xl font-bold text-gray-900">
+            <motion.h3 
+              className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent"
+              initial={{ x: -20, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              transition={{ delay: 0.1 }}
+            >
               {product ? 'Edit Product' : 'Add New Product'}
-            </h3>
-            <button
+            </motion.h3>
+            <motion.button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 transition-colors"
+              className="text-gray-400 hover:text-white transition-colors p-2 hover:bg-white/10 rounded-lg"
+              whileHover={{ scale: 1.1, rotate: 90 }}
+              whileTap={{ scale: 0.9 }}
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
-            </button>
+            </motion.button>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Product Name *</label>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Product Name *</label>
                 <input
                   type="text"
                   required
                   value={formData.name}
                   onChange={(e) => setFormData({...formData, name: e.target.value})}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                  className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors backdrop-blur-sm"
                   placeholder="Enter product name"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Category *</label>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Category *</label>
                 <select
                   required
                   value={formData.category}
                   onChange={(e) => setFormData({...formData, category: e.target.value})}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                  className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors backdrop-blur-sm"
                 >
-                  <option value="">Select a category</option>
+                  <option value="" className="bg-gray-800">Select a category</option>
                   {categories.map(category => (
-                    <option key={category} value={category}>{category}</option>
+                    <option key={category} value={category} className="bg-gray-800">{category}</option>
                   ))}
                 </select>
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Description</label>
               <textarea
                 value={formData.description}
                 onChange={(e) => setFormData({...formData, description: e.target.value})}
                 rows="4"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors backdrop-blur-sm"
                 placeholder="Enter product description"
               />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Price (NPR) *</label>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Price (NPR) *</label>
                 <input
                   type="number"
                   required
@@ -300,26 +323,26 @@ const AdminProductModal = ({ product, onClose, onSave }) => {
                   min="0"
                   value={formData.price}
                   onChange={(e) => setFormData({...formData, price: e.target.value})}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                  className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors backdrop-blur-sm"
                   placeholder="0.00"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Stock Quantity *</label>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Stock Quantity *</label>
                 <input
                   type="number"
                   required
                   min="0"
                   value={formData.stock_quantity}
                   onChange={(e) => setFormData({...formData, stock_quantity: e.target.value})}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                  className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors backdrop-blur-sm"
                   placeholder="0"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Discount %</label>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Discount %</label>
                 <input
                   type="number"
                   step="0.01"
@@ -327,7 +350,7 @@ const AdminProductModal = ({ product, onClose, onSave }) => {
                   max="100"
                   value={formData.discount_percentage}
                   onChange={(e) => setFormData({...formData, discount_percentage: e.target.value})}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                  className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors backdrop-blur-sm"
                   placeholder="0"
                 />
               </div>
@@ -335,52 +358,52 @@ const AdminProductModal = ({ product, onClose, onSave }) => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Tags</label>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Tags</label>
                 <input
                   type="text"
                   value={formData.tags}
                   onChange={(e) => setFormData({...formData, tags: e.target.value})}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                  className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors backdrop-blur-sm"
                   placeholder="tag1, tag2, tag3"
                 />
-                <p className="text-sm text-gray-500 mt-1">Separate tags with commas</p>
+                <p className="text-sm text-gray-400 mt-1">Separate tags with commas</p>
               </div>
 
               <div className="flex items-center space-x-6">
-                <label className="flex items-center space-x-3">
+                <label className="flex items-center space-x-3 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={formData.is_featured}
                     onChange={(e) => setFormData({...formData, is_featured: e.target.checked})}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-5 w-5"
+                    className="rounded border-white/20 bg-white/10 text-blue-600 focus:ring-blue-500 h-5 w-5"
                   />
-                  <span className="text-sm font-medium text-gray-700">Featured Product</span>
+                  <span className="text-sm font-medium text-gray-300">Featured Product</span>
                 </label>
-                <label className="flex items-center space-x-3">
+                <label className="flex items-center space-x-3 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={formData.is_new}
                     onChange={(e) => setFormData({...formData, is_new: e.target.checked})}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-5 w-5"
+                    className="rounded border-white/20 bg-white/10 text-blue-600 focus:ring-blue-500 h-5 w-5"
                   />
-                  <span className="text-sm font-medium text-gray-700">New Arrival</span>
+                  <span className="text-sm font-medium text-gray-300">New Arrival</span>
                 </label>
               </div>
             </div>
 
             {/* Image Management */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-3">Product Images</label>
+              <label className="block text-sm font-medium text-gray-300 mb-3">Product Images</label>
               
               {/* Tab Navigation */}
-              <div className="flex border-b border-gray-200 mb-4">
+              <div className="flex border-b border-white/20 mb-4">
                 <button
                   type="button"
                   onClick={() => setActiveTab('url')}
                   className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
                     activeTab === 'url' 
-                      ? 'border-blue-500 text-blue-600' 
-                      : 'border-transparent text-gray-500 hover:text-gray-700'
+                      ? 'border-blue-500 text-blue-400' 
+                      : 'border-transparent text-gray-400 hover:text-gray-300'
                   }`}
                 >
                   Image URLs
@@ -390,8 +413,8 @@ const AdminProductModal = ({ product, onClose, onSave }) => {
                   onClick={() => setActiveTab('upload')}
                   className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
                     activeTab === 'upload' 
-                      ? 'border-blue-500 text-blue-600' 
-                      : 'border-transparent text-gray-500 hover:text-gray-700'
+                      ? 'border-blue-500 text-blue-400' 
+                      : 'border-transparent text-gray-400 hover:text-gray-300'
                   }`}
                 >
                   Upload Images
@@ -409,30 +432,30 @@ const AdminProductModal = ({ product, onClose, onSave }) => {
                             type="url"
                             value={url}
                             onChange={(e) => handleImageUrlChange(index, e.target.value)}
-                            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                            className="flex-1 px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors backdrop-blur-sm"
                             placeholder={`Image URL ${index + 1}`}
                           />
                           {url && (
                             <button
                               type="button"
                               onClick={() => removeImageUrl(index)}
-                              className="px-3 py-2 text-red-600 hover:text-red-800 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
+                              className="px-3 py-2 text-red-300 hover:text-red-400 bg-red-500/20 hover:bg-red-500/30 rounded-lg transition-all border border-red-500/30"
                             >
                               Remove
                             </button>
                           )}
                         </div>
                         {url && (
-                          <div className="flex items-center space-x-3 p-2 bg-gray-50 rounded-lg">
+                          <div className="flex items-center space-x-3 p-2 bg-white/5 rounded-lg border border-white/10">
                             <img 
                               src={url} 
                               alt={`Preview ${index + 1}`}
-                              className="w-16 h-16 object-cover rounded border border-gray-300"
+                              className="w-16 h-16 object-cover rounded border border-white/20"
                               onError={(e) => {
                                 e.target.style.display = 'none';
                               }}
                             />
-                            <span className="text-sm text-gray-500">Preview</span>
+                            <span className="text-sm text-gray-400">Preview</span>
                           </div>
                         )}
                       </div>
@@ -445,7 +468,7 @@ const AdminProductModal = ({ product, onClose, onSave }) => {
               {activeTab === 'upload' && (
                 <div className="space-y-4">
                   {/* Upload New Image */}
-                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                  <div className="border-2 border-dashed border-white/20 rounded-lg p-6 text-center bg-white/5 hover:bg-white/10 transition-colors">
                     <input
                       type="file"
                       id="image-upload"
@@ -459,10 +482,10 @@ const AdminProductModal = ({ product, onClose, onSave }) => {
                       className="hidden"
                     />
                     <label htmlFor="image-upload" className="cursor-pointer">
-                      <svg className="w-12 h-12 text-gray-400 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-12 h-12 text-gray-500 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                       </svg>
-                      <p className="text-sm text-gray-600">
+                      <p className="text-sm text-gray-300">
                         {uploadLoading ? 'Uploading...' : 'Click to upload images from your device'}
                       </p>
                       <p className="text-xs text-gray-500 mt-1">PNG, JPG, JPEG up to 5MB</p>
@@ -477,12 +500,12 @@ const AdminProductModal = ({ product, onClose, onSave }) => {
                           <img 
                             src={imageUrl} 
                             alt={`Uploaded ${index + 1}`}
-                            className="w-full h-24 object-cover rounded-lg border border-gray-300"
+                            className="w-full h-24 object-cover rounded-lg border border-white/20"
                           />
                           <button
                             type="button"
                             onClick={() => removeUploadedImage(index)}
-                            className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                            className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
                           >
                             ×
                           </button>
@@ -496,14 +519,14 @@ const AdminProductModal = ({ product, onClose, onSave }) => {
               {/* Image Preview Section */}
               {allImages.length > 0 && (
                 <div className="mt-6">
-                  <h4 className="text-sm font-medium text-gray-700 mb-3">All Product Images ({allImages.length})</h4>
+                  <h4 className="text-sm font-medium text-gray-300 mb-3">All Product Images ({allImages.length})</h4>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     {allImages.map((imageUrl, index) => (
                       <div key={index} className="relative">
                         <img 
                           src={imageUrl} 
                           alt={`Product ${index + 1}`}
-                          className="w-full h-24 object-cover rounded-lg border border-gray-300"
+                          className="w-full h-24 object-cover rounded-lg border border-white/20"
                           onError={(e) => {
                             e.target.src = '/api/placeholder/100/100';
                           }}
@@ -520,26 +543,31 @@ const AdminProductModal = ({ product, onClose, onSave }) => {
               )}
             </div>
 
-            <div className="flex justify-end space-x-4 pt-6 border-t border-gray-200">
-              <button
+            <div className="flex justify-end space-x-4 pt-6 border-t border-white/20">
+              <motion.button
                 type="button"
                 onClick={onClose}
-                className="px-6 py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium transition-colors"
+                className="px-6 py-3 border border-white/20 rounded-lg text-gray-300 hover:bg-white/10 font-medium transition-all backdrop-blur-sm"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
               >
                 Cancel
-              </button>
-              <button
+              </motion.button>
+              <motion.button
                 type="submit"
                 disabled={loading}
                 className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 font-medium shadow-lg transition-all duration-200"
+                whileHover={{ scale: loading ? 1 : 1.05 }}
+                whileTap={{ scale: loading ? 1 : 0.95 }}
               >
                 {loading ? 'Saving...' : (product ? 'Update Product' : 'Create Product')}
-              </button>
+              </motion.button>
             </div>
           </form>
         </div>
+      </motion.div>
       </div>
-    </div>
+    </motion.div>
   );
 };
 

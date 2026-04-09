@@ -9,6 +9,16 @@ const OrdersManagement = () => {
   const [paymentFilter, setPaymentFilter] = useState('all');
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
 
+  const sanitizeOrderItems = (items = []) => {
+    if (!Array.isArray(items)) return [];
+    return items.filter(item =>
+      item &&
+      item.product_id &&
+      Number(item.quantity) > 0 &&
+      Number(item.price) >= 0
+    );
+  };
+
   useEffect(() => {
     fetchOrders();
   }, []);
@@ -30,7 +40,11 @@ const OrdersManagement = () => {
       
       if (response.ok) {
         const data = await response.json();
-        setOrders(data.orders || []);
+        const sanitizedOrders = (data.orders || []).map(order => ({
+          ...order,
+          items: sanitizeOrderItems(order.items)
+        }));
+        setOrders(sanitizedOrders);
       } else {
         console.error('Failed to fetch orders');
         showToast('Failed to fetch orders', 'error');
@@ -448,7 +462,10 @@ const OrdersManagement = () => {
                       <td className="px-4 lg:px-6 py-4">
                         <div className="flex flex-col space-y-2">
                           <button
-                            onClick={() => setSelectedOrder(order)}
+                            onClick={() => setSelectedOrder({
+                              ...order,
+                              items: sanitizeOrderItems(order.items)
+                            })}
                             className="text-blue-600 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 px-2 lg:px-4 py-1 lg:py-2 rounded-lg text-xs lg:text-sm font-medium transition-colors flex items-center space-x-1 lg:space-x-2 justify-center"
                           >
                             <svg className="w-3 h-3 lg:w-4 lg:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

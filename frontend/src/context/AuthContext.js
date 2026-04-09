@@ -30,6 +30,38 @@ export const AuthProvider = ({ children }) => {
     setLoading(false);
   }, []);
 
+  // NEW: Fetch fresh user profile from API
+  const refreshUserProfile = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        return { success: false, error: 'No token found' };
+      }
+
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/users/profile`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        const freshUser = data.user;
+        localStorage.setItem('user', JSON.stringify(freshUser));
+        setUser(freshUser);
+        return { success: true, user: freshUser };
+      } else {
+        return { success: false, error: data.message || 'Failed to fetch profile' };
+      }
+    } catch (error) {
+      console.error('Error refreshing user profile:', error);
+      return { success: false, error: 'Network error' };
+    }
+  };
+
   const login = async (email, password) => {
     try {
       const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/users/login`, {
@@ -118,11 +150,8 @@ export const AuthProvider = ({ children }) => {
       const data = await response.json();
 
       if (response.ok && data.success) {
-        // Update user verification status
-        const updatedUser = { ...data.user, email_verified: true };
-        localStorage.setItem('user', JSON.stringify(updatedUser));
-        localStorage.setItem('token', data.token);
-        setUser(updatedUser);
+        // MODIFIED: Refresh user profile from API instead of manually updating
+        await refreshUserProfile();
         return { success: true, data };
       } else {
         return { success: false, error: data.message || 'Verification failed' };
@@ -146,6 +175,10 @@ export const AuthProvider = ({ children }) => {
       const data = await response.json();
 
       if (response.ok) {
+        // ADDED: If already verified, refresh profile to update state
+        if (data.alreadyVerified) {
+          await refreshUserProfile();
+        }
         return { success: true, data };
       } else {
         return { success: false, error: data.message || 'Failed to resend verification' };
@@ -252,6 +285,7 @@ export const AuthProvider = ({ children }) => {
     logout,
     updateUser,
     updateProfile,
+    refreshUserProfile, // NEW: Export refresh function
     loading,
     isAuthenticated: !!user,
     isAdmin: user?.role === 'admin',

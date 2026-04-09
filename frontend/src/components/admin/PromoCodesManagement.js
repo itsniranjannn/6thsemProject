@@ -17,6 +17,7 @@ const PromoCodesManagement = () => {
     valid_from: new Date().toISOString().split('T')[0],
     valid_until: '',
     is_active: true,
+    apply_to_all_categories: true,
     categories: []
   });
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
@@ -93,7 +94,10 @@ const PromoCodesManagement = () => {
           min_order_amount: parseFloat(formData.min_order_amount || 0),
           max_discount_amount: formData.max_discount_amount ? parseFloat(formData.max_discount_amount) : null,
           usage_limit: formData.usage_limit ? parseInt(formData.usage_limit) : null,
-          categories: formData.categories.length > 0 ? formData.categories : []
+          apply_to_all_categories: formData.apply_to_all_categories,
+          categories: formData.apply_to_all_categories
+            ? null
+            : (formData.categories.length > 0 ? formData.categories : null)
         })
       });
 
@@ -112,6 +116,7 @@ const PromoCodesManagement = () => {
           valid_from: new Date().toISOString().split('T')[0],
           valid_until: '',
           is_active: true,
+          apply_to_all_categories: true,
           categories: []
         });
         setEditingPromo(null);
@@ -167,6 +172,7 @@ const PromoCodesManagement = () => {
       valid_from: new Date().toISOString().split('T')[0],
       valid_until: '',
       is_active: true,
+      apply_to_all_categories: true,
       categories: []
     });
     setShowModal(true);
@@ -174,6 +180,14 @@ const PromoCodesManagement = () => {
 
   const openEditModal = (promo) => {
     setEditingPromo(promo);
+    let parsedCategories = [];
+    if (promo.categories) {
+      try {
+        parsedCategories = Array.isArray(promo.categories) ? promo.categories : JSON.parse(promo.categories);
+      } catch (error) {
+        parsedCategories = [];
+      }
+    }
     setFormData({
       code: promo.code,
       description: promo.description || '',
@@ -185,7 +199,8 @@ const PromoCodesManagement = () => {
       valid_from: promo.valid_from ? promo.valid_from.split('T')[0] : new Date().toISOString().split('T')[0],
       valid_until: promo.valid_until ? promo.valid_until.split('T')[0] : '',
       is_active: promo.is_active,
-      categories: promo.categories ? JSON.parse(promo.categories) : []
+      apply_to_all_categories: !parsedCategories || parsedCategories.length === 0,
+      categories: parsedCategories || []
     });
     setShowModal(true);
   };
@@ -218,14 +233,6 @@ const PromoCodesManagement = () => {
         ? prev.categories.filter(c => c !== category)
         : [...prev.categories, category]
     }));
-  };
-
-  const toggleAllCategories = () => {
-    if (formData.categories.length === categories.length) {
-      setFormData(prev => ({ ...prev, categories: [] }));
-    } else {
-      setFormData(prev => ({ ...prev, categories: [...categories] }));
-    }
   };
 
   const activePromos = promoCodes.filter(promo => isActive(promo)).length;
@@ -392,7 +399,7 @@ const PromoCodesManagement = () => {
               </div>
 
               <form onSubmit={handleSubmit} className="p-4 lg:p-6 space-y-4 lg:space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
                   {/* Code */}
                   <div className="md:col-span-2">
                     <label className="block text-sm font-medium text-gray-700 mb-2">Promo Code *</label>
@@ -521,33 +528,46 @@ const PromoCodesManagement = () => {
                 </div>
 
                 {/* Categories */}
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <label className="block text-sm font-medium text-gray-700">Applicable Categories</label>
-                    <button
-                      type="button"
-                      onClick={toggleAllCategories}
-                      className="text-xs text-purple-600 hover:text-purple-800 font-medium"
-                    >
-                      {formData.categories.length === categories.length ? 'Deselect All' : 'Select All'}
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 lg:gap-3 max-h-32 overflow-y-auto p-2 border border-gray-200 rounded-lg">
-                    {categories.map(category => (
-                      <label key={category} className="flex items-center space-x-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={formData.categories.includes(category)}
-                          onChange={() => toggleCategory(category)}
-                          className="w-3 h-3 lg:w-4 lg:h-4 text-purple-600 rounded focus:ring-purple-500"
-                        />
-                        <span className="text-xs lg:text-sm text-gray-700">{category}</span>
-                      </label>
-                    ))}
-                  </div>
+                <div className="lg:col-span-2 bg-gray-50 border border-gray-200 rounded-xl p-4">
+                  <label className="inline-flex items-center gap-2 text-sm font-semibold text-gray-800 mb-3">
+                    <input
+                      type="checkbox"
+                      checked={formData.apply_to_all_categories}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          apply_to_all_categories: e.target.checked,
+                          categories: e.target.checked ? [] : prev.categories
+                        }))
+                      }
+                      className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
+                    />
+                    Apply to all categories
+                  </label>
+
+                  {!formData.apply_to_all_categories && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Select specific categories</label>
+                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 lg:gap-3 max-h-36 overflow-y-auto p-2 border border-gray-200 rounded-lg bg-white">
+                        {categories.map(category => (
+                          <label key={category} className="flex items-center space-x-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={formData.categories.includes(category)}
+                              onChange={() => toggleCategory(category)}
+                              className="w-3 h-3 lg:w-4 lg:h-4 text-purple-600 rounded focus:ring-purple-500"
+                            />
+                            <span className="text-xs lg:text-sm text-gray-700">{category}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   <p className="text-xs text-gray-500 mt-2">
-                    {formData.categories.length === 0 ? 'Applied to all categories' : 
-                     `Applied to ${formData.categories.length} categor${formData.categories.length === 1 ? 'y' : 'ies'}`}
+                    {formData.apply_to_all_categories
+                      ? 'Global promo: applies to all products'
+                      : `Applied to ${formData.categories.length} categor${formData.categories.length === 1 ? 'y' : 'ies'}`}
                   </p>
                 </div>
 
