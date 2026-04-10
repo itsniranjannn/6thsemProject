@@ -237,20 +237,18 @@ const ProfileSection = ({ user, onUpdate }) => {
       const data = await response.json();
       if (data.success) {
         if (data.alreadyVerified) {
-          // Update local state to show verified status
-          const updatedUser = { ...user, email_verified: true };
-          onUpdate(updatedUser);
-          localStorage.setItem('user', JSON.stringify(updatedUser));
-          alert('Email is already verified!');
+          // The AuthContext already refreshed the profile in resendVerification
+          // So the UI should update automatically through props
+          alert('✅ Email is already verified! Your status has been updated.');
         } else {
-          alert('Verification email sent! Please check your inbox.');
+          alert('📧 Verification email sent! Please check your inbox.');
         }
       } else {
         alert(data.message || 'Failed to send verification email');
       }
     } catch (error) {
       console.error('Error sending verification email:', error);
-      alert('Error sending verification email');
+      alert('❌ Error sending verification email');
     } finally {
       setIsVerifyingEmail(false);
     }
@@ -946,6 +944,30 @@ const OrderHistory = ({ orders, onViewDetails, onCancelOrder }) => {
 // Enhanced Order Details Modal
 const OrderDetailsModal = ({ order, isOpen, onClose }) => {
   if (!isOpen || !order) return null;
+  const validItems = Array.isArray(order.items)
+    ? order.items.filter(item => item && Number(item.quantity) > 0)
+    : [];
+
+  const shippingAddressText = (() => {
+    if (!order.shipping_address) return '';
+    if (typeof order.shipping_address === 'string') {
+      try {
+        const parsed = JSON.parse(order.shipping_address);
+        return [parsed.fullName, parsed.address, parsed.city, parsed.postalCode, parsed.phone, parsed.email]
+          .filter(Boolean)
+          .join(', ');
+      } catch {
+        return order.shipping_address;
+      }
+    }
+    if (typeof order.shipping_address === 'object') {
+      const a = order.shipping_address;
+      return [a.fullName, a.address, a.city, a.postalCode, a.phone, a.email]
+        .filter(Boolean)
+        .join(', ');
+    }
+    return '';
+  })();
 
   // Calculate display amount based on refund status
   const displayAmount = order.payment_status === 'refunded' ? 0 : order.total_amount;
@@ -993,7 +1015,7 @@ const OrderDetailsModal = ({ order, isOpen, onClose }) => {
                 <span>Order Items</span>
               </h3>
               <div className="space-y-4">
-                {order.items?.map((item) => (
+                {validItems.length > 0 ? validItems.map((item) => (
                   <div key={item.id} className="flex items-center space-x-4 p-4 bg-gray-50 rounded-2xl border border-gray-200">
                     <img
                       src={item.product_image || '/api/placeholder/80/80'}
@@ -1011,7 +1033,11 @@ const OrderDetailsModal = ({ order, isOpen, onClose }) => {
                       </div>
                     </div>
                   </div>
-                ))}
+                )) : (
+                  <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-sm">
+                    Order items are being processed. Please refresh once.
+                  </div>
+                )}
               </div>
             </div>
 
@@ -1095,13 +1121,13 @@ const OrderDetailsModal = ({ order, isOpen, onClose }) => {
                 </div>
               </div>
 
-              {order.shipping_address && (
+              {shippingAddressText && (
                 <div className="bg-white rounded-2xl p-6 border border-gray-200">
                   <h3 className="text-xl font-semibold mb-4 flex items-center space-x-2">
                     <MapPin size={20} />
                     <span>Shipping Address</span>
                   </h3>
-                  <p className="text-gray-700 leading-relaxed">{order.shipping_address}</p>
+                  <p className="text-gray-700 leading-relaxed">{shippingAddressText}</p>
                 </div>
               )}
             </div>
@@ -1114,7 +1140,7 @@ const OrderDetailsModal = ({ order, isOpen, onClose }) => {
 
 // Main Dashboard Component
 const UserDashboard = () => {
-  const { user, logout, updateUser } = useAuth();
+  const { user, logout, updateUser, refreshUserProfile } = useAuth();
   const [activeTab, setActiveTab] = useState('overview');
   const [dashboardStats, setDashboardStats] = useState({});
   const [orders, setOrders] = useState([]);
@@ -1125,6 +1151,8 @@ const UserDashboard = () => {
   const [isCancelling, setIsCancelling] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false); // NEW: Track manual refresh state
+  const [lastRefreshed, setLastRefreshed] = useState(Date.now()); // NEW: Track last refresh time
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: LayoutDashboard },
@@ -1133,9 +1161,30 @@ const UserDashboard = () => {
     { id: 'security', label: 'Security', icon: Shield }
   ];
 
+  // NEW: Initial data fetch on mount + refresh user profile
   useEffect(() => {
-    fetchDashboardData();
+    const initializeDashboard = async () => {
+      // Refresh user profile from API to ensure email_verified is up to date
+      await refreshUserProfile();
+      // Then fetch dashboard data
+      await fetchDashboardData();
+    };
+    
+    initializeDashboard();
   }, []);
+
+  // NEW: Auto-refresh user profile every 30 seconds while dashboard is open
+  useEffect(() => {
+    const autoRefreshInterval = setInterval(async () => {
+      const result = await refreshUserProfile();
+      if (result.success) {
+        setLastRefreshed(Date.now());
+        console.log('✅ User profile auto-refreshed');
+      }
+    }, 30000); // 30 seconds
+
+    return () => clearInterval(autoRefreshInterval);
+  }, [refreshUserProfile]);
 
   const fetchDashboardData = async () => {
     try {
@@ -1175,6 +1224,22 @@ const UserDashboard = () => {
       console.error('Error fetching dashboard data:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // NEW: Manual refresh function
+  const handleManualRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await refreshUserProfile();
+      await fetchDashboardData();
+      setLastRefreshed(Date.now());
+      alert('✅ Dashboard refreshed successfully!');
+    } catch (error) {
+      console.error('Error refreshing dashboard:', error);
+      alert('❌ Failed to refresh dashboard');
+    } finally {
+      setIsRefreshing(false);
     }
   };
 
@@ -1286,18 +1351,44 @@ const UserDashboard = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 ">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header */}
+        {/* Header with Refresh Button */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           className="mb-8 text-center lg:text-left"
         >
-          <h1 className="text-5xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-4 p-4">
-            Welcome back, {user?.name}!
-          </h1>
-          <p className="text-xl text-gray-600 max-w-2xl">
-            Here's your complete shopping activity and account overview
-          </p>
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div>
+              <h1 className="text-5xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-4 p-4">
+                Welcome back, {user?.name}!
+              </h1>
+              <p className="text-xl text-gray-600 max-w-2xl">
+                Here's your complete shopping activity and account overview
+              </p>
+            </div>
+            
+            {/* Refresh Button */}
+            <motion.button
+              onClick={handleManualRefresh}
+              disabled={isRefreshing}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              className={`flex items-center gap-2 px-6 py-3 rounded-xl font-semibold transition-all shadow-lg ${
+                isRefreshing
+                  ? 'bg-gray-400 text-white cursor-not-allowed'
+                  : 'bg-gradient-to-r from-blue-500 to-purple-600 text-white hover:shadow-xl'
+              }`}
+            >
+              <RefreshCw size={20} className={isRefreshing ? 'animate-spin' : ''} />
+              <span>{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
+            </motion.button>
+          </div>
+          
+          {/* Last Refreshed Time */}
+          <div className="mt-3 text-sm text-gray-500">
+            <Activity size={14} className="inline mr-1" />
+            Last updated: {new Date(lastRefreshed).toLocaleTimeString()}
+          </div>
         </motion.div>
 
         {/* Navigation Tabs */}

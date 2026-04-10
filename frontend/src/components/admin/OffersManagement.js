@@ -7,9 +7,10 @@ const OffersManagement = () => {
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [editingOffer, setEditingOffer] = useState(null);
+  const [selectedCategory, setSelectedCategory] = useState('');
   const [formData, setFormData] = useState({
     product_id: '',
-    offer_type: 'discount',
+    offer_type: 'flat_discount', // ✅ Use valid ENUM value as default
     discount_percentage: '',
     discount_amount: '',
     min_quantity: '',
@@ -19,16 +20,60 @@ const OffersManagement = () => {
     is_active: true,
     description: ''
   });
-  const [offerTypeInput, setOfferTypeInput] = useState('discount');
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
 
-  const offerTypeSuggestions = [
-    'discount', 'percentage_off', 'flat_discount', 'buy_one_get_one', 
-    'bogo', 'bulk_discount', 'free_shipping', 'clearance_sale',
-    'seasonal_offer', 'flash_sale', 'limited_time', 'special_offer',
-    'summer_sale', 'winter_sale', 'festival_offer', 'anniversary_sale',
-    'clearance', 'end_of_season', 'new_arrival', 'hot_deal'
+  // ✅ UPDATED: All offer types matching database ENUM with descriptions
+  const offerTypes = [
+    {
+      value: 'Bogo',
+      label: 'BOGO - Buy One Get One Free',
+      description: 'Customer pays for 1 item but receives 2 items',
+      icon: '🎁',
+      color: 'from-purple-500 to-pink-500'
+    },
+    {
+      value: 'percentage_discount',
+      label: 'Percentage Discount',
+      description: 'Discount by percentage (e.g., 10% off, 25% off)',
+      icon: '📊', 
+      color: 'from-red-500 to-orange-500'
+    },
+    {
+      value: 'flat_discount',
+      label: 'Flat Discount',
+      description: 'Fixed amount off (e.g., Rs. 500 off, Rs. 1000 off)',
+      icon: '🏷️',
+      color: 'from-green-500 to-emerald-500'
+    },
+    {
+      value: 'bulk_discount',
+      label: 'Bulk Discount',
+      description: 'Discount for buying in quantity (e.g., Buy 5+ get 20% off)',
+      icon: '📦',
+      color: 'from-blue-500 to-cyan-500'
+    },
+    {
+      value: 'clearance_sale',
+      label: 'Clearance Sale',
+      description: 'Heavy discounts to clear stock (usually 50%+ off)',
+      icon: '🔥',
+      color: 'from-orange-500 to-red-500'
+    },
+    {
+      value: 'flash_sale',
+      label: 'Flash Sale',
+      description: 'Time-limited offers with high discounts (24-48 hours)',
+      icon: '⚡',
+      color: 'from-yellow-500 to-orange-500'
+    }
   ];
+
+  // Legacy suggestions for backward compatibility
+  const offerTypeSuggestions = offerTypes.map(type => type.value);
+  const categories = [...new Set(products.map(product => product.category).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const filteredProducts = selectedCategory
+    ? products.filter(product => product.category === selectedCategory)
+    : [];
 
   useEffect(() => {
     fetchOffers();
@@ -46,7 +91,7 @@ const OffersManagement = () => {
       const token = localStorage.getItem('token');
       const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000';
       
-      const response = await fetch(`${API_BASE}/api/admin/offers`, {
+      const response = await fetch(`${API_BASE}/api/offers/admin/all`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       
@@ -69,13 +114,13 @@ const OffersManagement = () => {
       const token = localStorage.getItem('token');
       const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000';
       
-      const response = await fetch(`${API_BASE}/api/admin/products`, {
+      const response = await fetch(`${API_BASE}/api/products`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       
       if (response.ok) {
         const data = await response.json();
-        setProducts(data.products || []);
+        setProducts(Array.isArray(data) ? data : (data.products || []));
       } else {
         showToast('Failed to fetch products', 'error');
       }
@@ -94,15 +139,16 @@ const OffersManagement = () => {
       const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000';
       
       const url = editingOffer 
-        ? `${API_BASE}/api/admin/offers/${editingOffer.id}`
-        : `${API_BASE}/api/admin/offers`;
+        ? `${API_BASE}/api/offers/${editingOffer.id}`
+        : `${API_BASE}/api/offers`;
       
       const method = editingOffer ? 'PUT' : 'POST';
 
-      // Prepare offer data - handle both ENUM and custom types
+      // Prepare offer data - handle both ENUM and custom types - FIXED PRECISION
       const offerData = {
         ...formData,
-        discount_percentage: formData.discount_percentage ? parseFloat(formData.discount_percentage) : null,
+        // FIXED: Round percentage to whole numbers to prevent decimal precision issues
+        discount_percentage: formData.discount_percentage ? Math.round(parseFloat(formData.discount_percentage)) : null,
         discount_amount: formData.discount_amount ? parseFloat(formData.discount_amount) : null,
         min_quantity: formData.min_quantity ? parseInt(formData.min_quantity) : null,
         max_quantity: formData.max_quantity ? parseInt(formData.max_quantity) : null
@@ -125,7 +171,7 @@ const OffersManagement = () => {
         setShowModal(false);
         setFormData({
           product_id: '',
-          offer_type: 'discount',
+          offer_type: 'flat_discount', // ✅ Use valid ENUM value
           discount_percentage: '',
           discount_amount: '',
           min_quantity: '',
@@ -135,7 +181,6 @@ const OffersManagement = () => {
           is_active: true,
           description: ''
         });
-        setOfferTypeInput('discount');
         fetchOffers();
         showToast(`Offer ${editingOffer ? 'updated' : 'created'} successfully!`);
       } else {
@@ -156,7 +201,7 @@ const OffersManagement = () => {
       const token = localStorage.getItem('token');
       const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000';
       
-      const response = await fetch(`${API_BASE}/api/admin/offers/${offerId}`, {
+      const response = await fetch(`${API_BASE}/api/offers/${offerId}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -175,9 +220,10 @@ const OffersManagement = () => {
 
   const openCreateModal = () => {
     setEditingOffer(null);
+    setSelectedCategory('');
     setFormData({
       product_id: '',
-      offer_type: 'discount',
+      offer_type: 'flat_discount', // ✅ Use valid ENUM value as default
       discount_percentage: '',
       discount_amount: '',
       min_quantity: '',
@@ -187,12 +233,13 @@ const OffersManagement = () => {
       is_active: true,
       description: ''
     });
-    setOfferTypeInput('discount');
     setShowModal(true);
   };
 
   const openEditModal = (offer) => {
     setEditingOffer(offer);
+    const selectedProduct = products.find(p => String(p.id) === String(offer.product_id));
+    setSelectedCategory(selectedProduct?.category || '');
     setFormData({
       product_id: offer.product_id,
       offer_type: offer.offer_type,
@@ -205,7 +252,6 @@ const OffersManagement = () => {
       is_active: offer.is_active,
       description: offer.description || ''
     });
-    setOfferTypeInput(offer.offer_type);
     setShowModal(true);
   };
 
@@ -222,6 +268,7 @@ const OffersManagement = () => {
       'percentage_off': 'bg-green-100 text-green-800 border-green-200',
       'flat_discount': 'bg-purple-100 text-purple-800 border-purple-200',
       'buy_one_get_one': 'bg-orange-100 text-orange-800 border-orange-200',
+      'Bogo': 'bg-orange-100 text-orange-800 border-orange-200',
       'bogo': 'bg-orange-100 text-orange-800 border-orange-200',
       'bulk_discount': 'bg-indigo-100 text-indigo-800 border-indigo-200',
       'free_shipping': 'bg-pink-100 text-pink-800 border-pink-200',
@@ -330,20 +377,6 @@ const OffersManagement = () => {
           ? offer.offer_type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
           : 'Special Offer';
     }
-  };
-
-  const filteredSuggestions = offerTypeSuggestions.filter(suggestion =>
-    suggestion.toLowerCase().includes(offerTypeInput.toLowerCase())
-  );
-
-  const handleOfferTypeSelect = (suggestion) => {
-    setFormData({...formData, offer_type: suggestion});
-    setOfferTypeInput(suggestion);
-  };
-
-  const handleOfferTypeChange = (value) => {
-    setOfferTypeInput(value);
-    setFormData({...formData, offer_type: value});
   };
 
   const activeOffers = offers.filter(offer => isOfferActive(offer)).length;
@@ -564,16 +597,37 @@ const OffersManagement = () => {
 
               <form onSubmit={handleSubmit} className="p-4 lg:p-6 space-y-4 lg:space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6">
-                  <div className="md:col-span-2">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Category *</label>
+                    <select
+                      required
+                      value={selectedCategory}
+                      onChange={(e) => {
+                        setSelectedCategory(e.target.value);
+                        setFormData({ ...formData, product_id: '' });
+                      }}
+                      className="w-full px-3 lg:px-4 py-2 lg:py-3 border border-gray-300 rounded-lg lg:rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
+                    >
+                      <option value="">Select category</option>
+                      {categories.map(category => (
+                        <option key={category} value={category}>
+                          {category}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Product *</label>
                     <select
                       required
                       value={formData.product_id}
                       onChange={(e) => setFormData({...formData, product_id: e.target.value})}
+                      disabled={!selectedCategory}
                       className="w-full px-3 lg:px-4 py-2 lg:py-3 border border-gray-300 rounded-lg lg:rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
                     >
-                      <option value="">Select a product</option>
-                      {products.map(product => (
+                      <option value="">{selectedCategory ? 'Select a product' : 'Select category first'}</option>
+                      {filteredProducts.map(product => (
                         <option key={product.id} value={product.id}>
                           {product.name} - Rs. {product.price}
                         </option>
@@ -583,71 +637,115 @@ const OffersManagement = () => {
 
                   <div className="md:col-span-2">
                     <label className="block text-sm font-medium text-gray-700 mb-2">Offer Type *</label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        required
-                        value={offerTypeInput}
-                        onChange={(e) => handleOfferTypeChange(e.target.value)}
-                        className="w-full px-3 lg:px-4 py-2 lg:py-3 border border-gray-300 rounded-lg lg:rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
-                        placeholder="Type offer type or select from suggestions"
-                      />
-                      {offerTypeInput && filteredSuggestions.length > 0 && (
-                        <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-32 overflow-y-auto">
-                          {filteredSuggestions.map(suggestion => (
-                            <div
-                              key={suggestion}
-                              onClick={() => handleOfferTypeSelect(suggestion)}
-                              className="px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm"
-                            >
-                              {suggestion.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                    <select
+                      required
+                      value={formData.offer_type}
+                      onChange={(e) => setFormData({...formData, offer_type: e.target.value})}
+                      className="w-full px-3 lg:px-4 py-2 lg:py-3 border border-gray-300 rounded-lg lg:rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
+                    >
+                      <option value="">Select Offer Type</option>
+                      {offerTypes.map(offerType => (
+                        <option key={offerType.value} value={offerType.value}>
+                          {offerType.icon} {offerType.label}
+                        </option>
+                      ))}
+                    </select>
+                    
+                    {/* Show description of selected offer type */}
+                    {formData.offer_type && (
+                      <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                        {(() => {
+                          const selectedType = offerTypes.find(type => type.value === formData.offer_type);
+                          return selectedType ? (
+                            <div className="flex items-start space-x-2">
+                              <span className="text-lg">{selectedType.icon}</span>
+                              <div>
+                                <p className="text-sm font-medium text-blue-800">{selectedType.label}</p>
+                                <p className="text-xs text-blue-600">{selectedType.description}</p>
+                              </div>
                             </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">
-                      Common types: discount, bogo, bulk, free_shipping, flash_sale, seasonal_offer
-                    </p>
+                          ) : null;
+                        })()}
+                      </div>
+                    )}
                   </div>
 
-                  {(formData.offer_type.includes('discount') || formData.offer_type.includes('percentage') || formData.offer_type === 'flat_discount') ? (
-                    <>
+                  {/* Percentage Discount Fields */}
+                  {formData.offer_type === 'percentage_discount' && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Discount Percentage *
+                        <span className="text-xs text-gray-500">(whole numbers only, e.g., 10, 25, 50)</span>
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="1"
+                        required
+                        value={formData.discount_percentage}
+                        onChange={(e) => {
+                          // Only allow whole numbers for percentage
+                          const value = e.target.value;
+                          if (value === '' || (Number.isInteger(Number(value)) && Number(value) >= 0 && Number(value) <= 100)) {
+                            setFormData({...formData, discount_percentage: value});
+                          }
+                        }}
+                        className="w-full px-3 lg:px-4 py-2 lg:py-3 border border-gray-300 rounded-lg lg:rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
+                        placeholder="10"
+                      />
+                      <p className="text-xs text-green-600 mt-1">Enter whole numbers only (10% not 10.5%)</p>
+                    </div>
+                  )}
+
+                  {/* Flat Discount Fields */}
+                  {formData.offer_type === 'flat_discount' && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Discount Amount (Rs.) *
+                        <span className="text-xs text-gray-500">(fixed amount off)</span>
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        required
+                        value={formData.discount_amount}
+                        onChange={(e) => setFormData({...formData, discount_amount: e.target.value})}
+                        className="w-full px-3 lg:px-4 py-2 lg:py-3 border border-gray-300 rounded-lg lg:rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
+                        placeholder="500"
+                      />
+                      <p className="text-xs text-gray-600 mt-1">Fixed amount discount (e.g., Rs. 100 off, Rs. 500 off)</p>
+                    </div>
+                  )}
+
+                  {/* Bulk Discount Fields */}
+                  {formData.offer_type === 'bulk_discount' && (
+                    <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Discount Percentage</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Discount Percentage *
+                        </label>
                         <input
                           type="number"
-                          step="0.01"
                           min="0"
                           max="100"
+                          step="1"
+                          required
                           value={formData.discount_percentage}
                           onChange={(e) => setFormData({...formData, discount_percentage: e.target.value})}
                           className="w-full px-3 lg:px-4 py-2 lg:py-3 border border-gray-300 rounded-lg lg:rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
-                          placeholder="10"
+                          placeholder="20"
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Discount Amount (Rs.)</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Minimum Quantity *
+                        </label>
                         <input
                           type="number"
-                          step="0.01"
-                          min="0"
-                          value={formData.discount_amount}
-                          onChange={(e) => setFormData({...formData, discount_amount: e.target.value})}
-                          className="w-full px-3 lg:px-4 py-2 lg:py-3 border border-gray-300 rounded-lg lg:rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
-                          placeholder="50"
-                        />
-                      </div>
-                    </>
-                  ) : null}
-
-                  {formData.offer_type.includes('bulk') && (
-                    <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Minimum Quantity</label>
-                        <input
-                          type="number"
-                          min="1"
+                          min="2"
+                          required
                           value={formData.min_quantity}
                           onChange={(e) => setFormData({...formData, min_quantity: e.target.value})}
                           className="w-full px-3 lg:px-4 py-2 lg:py-3 border border-gray-300 rounded-lg lg:rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
@@ -655,15 +753,81 @@ const OffersManagement = () => {
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Maximum Quantity</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Maximum Quantity
+                          <span className="text-xs text-gray-500">(optional)</span>
+                        </label>
                         <input
                           type="number"
                           min="1"
                           value={formData.max_quantity}
                           onChange={(e) => setFormData({...formData, max_quantity: e.target.value})}
                           className="w-full px-3 lg:px-4 py-2 lg:py-3 border border-gray-300 rounded-lg lg:rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
-                          placeholder="20"
+                          placeholder="50"
                         />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Clearance Sale Fields */}
+                  {formData.offer_type === 'clearance_sale' && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Clearance Discount Percentage *
+                        <span className="text-xs text-gray-500">(typically 50%+ for clearance)</span>
+                      </label>
+                      <input
+                        type="number"
+                        min="30"
+                        max="90"
+                        step="1"
+                        required
+                        value={formData.discount_percentage}
+                        onChange={(e) => setFormData({...formData, discount_percentage: e.target.value})}
+                        className="w-full px-3 lg:px-4 py-2 lg:py-3 border border-gray-300 rounded-lg lg:rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
+                        placeholder="60"
+                      />
+                      <p className="text-xs text-orange-600 mt-1">Clearance sales typically offer 50-80% discounts</p>
+                    </div>
+                  )}
+
+                  {/* Flash Sale Fields */}
+                  {formData.offer_type === 'flash_sale' && (
+                    <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Flash Sale Discount *
+                        </label>
+                        <input
+                          type="number"
+                          min="10"
+                          max="80"
+                          step="1"
+                          required
+                          value={formData.discount_percentage}
+                          onChange={(e) => setFormData({...formData, discount_percentage: e.target.value})}
+                          className="w-full px-3 lg:px-4 py-2 lg:py-3 border border-gray-300 rounded-lg lg:rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
+                          placeholder="30"
+                        />
+                        <p className="text-xs text-yellow-600 mt-1">Flash sales are time-limited (24-48 hours typically). Use the date fields below to set duration.</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* BOGO Information Section */}
+                  {formData.offer_type === 'Bogo' && (
+                    <div className="md:col-span-2">
+                      <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                        <div className="flex items-center space-x-2 mb-2">
+                          <span className="text-lg">🎁</span>
+                          <h4 className="text-sm font-medium text-orange-800">BOGO - Buy One Get One Free</h4>
+                        </div>
+                        <p className="text-xs text-orange-700">
+                          Customer pays for 1 item but receives 2 items. No additional settings needed.
+                        </p>
+                        <p className="text-xs text-orange-600 mt-1">
+                          Example: Buy 1 T-shirt, get 1 T-shirt FREE (customer pays for 1, gets 2 items)
+                        </p>
                       </div>
                     </div>
                   )}

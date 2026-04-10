@@ -181,6 +181,12 @@ const AboutPage = () => {
       image: '../images/n.jpg',
       expertise: 'Mastermind of Vision & Strategy'
     },
+        {
+      name: 'Shirshika Shrestha',
+      role: 'CTO & Co-Founder',
+      image: '../images/s.jpg',
+      expertise: 'Smart Assistant & Tech Innovator'
+    },
     {
       name: 'Prithivi Narayan Shah',
       role: 'Shree Pach Sarkar',
@@ -193,12 +199,7 @@ const AboutPage = () => {
       image: 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/48/Jang_Bahadur_Ranaji.jpg/500px-Jang_Bahadur_Ranaji.jpg',
       expertise: 'Deadly Reformer'
     },
-    {
-      name: 'Bhimsen Thapa',
-      role: 'Mukhtiyar',
-      image: 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/56/Bhimsen-thapa-painting.jpg/338px-Bhimsen-thapa-painting.jpg' ,
-      expertise: 'Architect of Modern Nepal'
-    }
+
   ];
 
   return (

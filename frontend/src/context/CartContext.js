@@ -136,8 +136,15 @@ export const CartProvider = ({ children }) => {
         let finalQuantity = product.quantity || quantity;
         
         // For BOGO offers from offers page, ensure we add 2 items
-        if (product.offer_type === 'Bogo' && product.offer_id) {
+        if ((product.offer_type === 'Bogo' || product.offer_type === 'bogo' || product.offer_type === 'buy_one_get_one') && product.offer_id) {
           finalQuantity = 2; // Force 2 items for BOGO deals
+        }
+
+        if (product.offer_type === 'bulk_discount' && product.offer_id) {
+          const minQty = parseInt(product.min_quantity, 10) || 1;
+          if (finalQuantity < minQty) {
+            finalQuantity = minQty;
+          }
         }
 
         const cartData = {
