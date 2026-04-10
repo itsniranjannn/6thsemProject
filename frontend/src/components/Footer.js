@@ -274,37 +274,6 @@ const Footer = () => {
         </motion.div>
       </div>
 
-      {/* Bottom Bar */}
-      <div className="border-t border-white/10 bg-black/20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-            {/* Copyright */}
-            <div className="text-gray-400 text-sm text-center md:text-left">
-              <p>
-                © {currentYear} Nexus Store. Made with <Heart className="w-4 h-4 text-red-400 inline" /> in Nepal.
-              </p>
-            </div>
-
-            {/* Additional Links */}
-            <div className="flex items-center gap-6 text-sm">
-              <Link to="/privacy" className="text-gray-400 hover:text-cyan-300 transition-colors">
-                Privacy Policy
-              </Link>
-              <Link to="/terms" className="text-gray-400 hover:text-cyan-300 transition-colors">
-                Terms of Service
-              </Link>
-              <Link to="/sitemap" className="text-gray-400 hover:text-cyan-300 transition-colors">
-                Sitemap
-              </Link>
-              <div className="flex items-center gap-2 text-gray-400">
-                <Star className="w-4 h-4 text-yellow-400" />
-                <span>4.9/5 Rating</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* Trust Badges */}
       <motion.div
         initial={{ opacity: 0 }}

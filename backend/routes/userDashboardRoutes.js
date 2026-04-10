@@ -1,5 +1,6 @@
 const express = require('express');
 const { protect } = require('../middleware/authMiddleware');
+const { sendOrderCancelled } = require('../controllers/emailController');
 
 const router = express.Router();
 
@@ -212,6 +213,7 @@ router.put('/orders/:id/cancel', protect, async (req, res) => {
     const orderId = req.params.id;
     const userId = req.user.id;
     const db = require('../config/db');
+    const { cancellation_reason } = req.body;
 
     console.log(`🔄 Attempting to cancel order ${orderId} for user ${userId}`);
 
@@ -274,6 +276,23 @@ router.put('/orders/:id/cancel', protect, async (req, res) => {
         'UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?',
         [item.quantity, item.product_id]
       );
+    }
+
+    // Step 6: Send cancellation email (this route previously missed email sending)
+    try {
+      const [users] = await db.execute(
+        'SELECT id, name, email FROM users WHERE id = ?',
+        [userId]
+      );
+      const user = users?.[0];
+      if (user?.email) {
+        await sendOrderCancelled(order, user, cancellation_reason || 'Customer request');
+        console.log(`📧 Cancellation email sent for order ${orderId}`);
+      } else {
+        console.warn(`⚠️ No user email found for cancellation email. userId=${userId}`);
+      }
+    } catch (emailError) {
+      console.error(`⚠️ Failed to send cancellation email for order ${orderId}:`, emailError.message);
     }
 
     console.log(`✅ Order ${orderId} cancelled successfully!`);

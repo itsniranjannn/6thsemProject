@@ -26,10 +26,10 @@ const HomePage = () => {
   const [specialOffers, setSpecialOffers] = useState([]);
   const [newArrivals, setNewArrivals] = useState([]);
   const [stats, setStats] = useState({
-    totalProducts: 100,
-    happyCustomers: 1000,
-    satisfactionRate:98,
-    deliveryTime: 72
+    totalProducts: null,
+    happyCustomers: null,
+    satisfactionRate: null,
+    deliveryTime: null
   });
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState({ message: '', type: 'success' });
@@ -131,23 +131,26 @@ const HomePage = () => {
       const response = await fetch(
         `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/stats/homepage`
       );
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          setStats(data.stats);
-        }
+      if (!response.ok) {
+        throw new Error(`Stats API failed: ${response.status}`);
+      }
+      const data = await response.json();
+      if (data.success) {
+        setStats({
+          totalProducts: Number(data.stats?.totalProducts ?? 0),
+          happyCustomers: Number(data.stats?.happyCustomers ?? 0),
+          satisfactionRate: Number(data.stats?.satisfactionRate ?? 0),
+          deliveryTime: Number(data.stats?.deliveryTime ?? 0)
+        });
       }
     } catch (error) {
       console.error('Error fetching stats:', error);
-      // Fallback stats
-      setStats({
-        totalProducts: 1250,
-        happyCustomers: 50000,
-        satisfactionRate: 98,
-        deliveryTime: 24
-      });
     }
   };
+
+  const formatCount = (value) => (value === null ? '--' : `${value}+`);
+  const formatPercent = (value) => (value === null ? '--' : `${value}%`);
+  const formatHours = (value) => (value === null ? '--' : `${value}h`);
 
   const processImageUrls = (image_urls, fallback_image_url) => {
     let imageUrls = [];
@@ -174,6 +177,59 @@ const HomePage = () => {
     }
     
     return imageUrls;
+  };
+
+  const getOfferImage = (offer) => {
+    if (offer.image_urls) {
+      if (Array.isArray(offer.image_urls) && offer.image_urls[0]) {
+        return offer.image_urls[0];
+      }
+      if (typeof offer.image_urls === 'string') {
+        try {
+          const parsed = JSON.parse(offer.image_urls);
+          if (Array.isArray(parsed) && parsed[0]) {
+            return parsed[0];
+          }
+        } catch {
+          if (offer.image_urls.trim() !== '') {
+            return offer.image_urls;
+          }
+        }
+      }
+    }
+    if (offer.image_url && typeof offer.image_url === 'string' && offer.image_url.trim() !== '') {
+      return offer.image_url;
+    }
+    return 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500';
+  };
+
+  const getOfferDiscountLabel = (offer) => {
+    if (offer.offer_type === 'Bogo') return 'BOGO';
+    if (offer.discount_percentage && Number(offer.discount_percentage) > 0) {
+      return `${offer.discount_percentage}% OFF`;
+    }
+    if (offer.discount_amount && Number(offer.discount_amount) > 0) {
+      return `Rs. ${offer.discount_amount} OFF`;
+    }
+    return 'Special Deal';
+  };
+
+  const getOfferTitle = (offer) => {
+    if (offer.title) return offer.title;
+    if (offer.product_name) return `${offer.product_name} Deal`;
+    return 'Limited Time Offer';
+  };
+
+  const getOfferDescription = (offer) => {
+    if (offer.description) return offer.description;
+    if (offer.offer_type === 'Bogo') return 'Buy one and get one free for a limited time.';
+    if (offer.discount_percentage && Number(offer.discount_percentage) > 0) {
+      return `Save ${offer.discount_percentage}% on this product today.`;
+    }
+    if (offer.discount_amount && Number(offer.discount_amount) > 0) {
+      return `Instant discount of Rs. ${offer.discount_amount} on this offer.`;
+    }
+    return 'Grab this curated offer before it ends.';
   };
 
   const showToast = (message, type = 'success') => {
@@ -335,11 +391,11 @@ const HomePage = () => {
                 transition={{ delay: 0.5 }}
               >
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-white">{stats.totalProducts}+</div>
+                  <div className="text-2xl font-bold text-white">{formatCount(stats.totalProducts)}</div>
                   <div className="text-gray-400 text-sm">Products</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-white">{stats.happyCustomers}+</div>
+                  <div className="text-2xl font-bold text-white">{formatCount(stats.happyCustomers)}</div>
                   <div className="text-gray-400 text-sm">Happy Customers</div>
                 </div>
               </motion.div>
@@ -353,12 +409,12 @@ const HomePage = () => {
               className="relative"
             >
               <div className="bg-gradient-to-br from-cyan-500/20 to-purple-500/20 rounded-3xl p-8 backdrop-blur-md border border-cyan-400/30 shadow-2xl">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-5">
                   {(heroFeatureProducts.length > 0 ? heroFeatureProducts : [1, 2, 3, 4]).map((item, index) => (
                     <motion.div
                       key={typeof item === 'object' ? item.id : item}
-                      whileHover={{ scale: 1.05, y: -5 }}
-                      className="bg-white/10 rounded-2xl p-4 border border-white/20 backdrop-blur-sm cursor-pointer"
+                      whileHover={{ scale: 1.04, y: -6 }}
+                      className="bg-white/10 rounded-2xl p-6 border border-white/20 backdrop-blur-sm cursor-pointer min-h-[210px] flex flex-col justify-center"
                       onClick={() => {
                         if (typeof item === 'object') {
                           navigate(`/product/${item.id}`);
@@ -367,7 +423,7 @@ const HomePage = () => {
                     >
                       {typeof item === 'object' ? (
                         <>
-                          <div className="w-14 h-14 rounded-xl overflow-hidden mx-auto mb-3 border border-cyan-300/40">
+                          <div className="w-28 h-28 rounded-2xl overflow-hidden mx-auto mb-4 border border-cyan-300/40">
                             <img
                               src={item.image_urls?.[0] || item.image_url || 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500'}
                               alt={item.name}
@@ -378,17 +434,17 @@ const HomePage = () => {
                             />
                           </div>
                           <div className="text-center">
-                            <div className="text-white font-semibold text-sm line-clamp-1">{item.name}</div>
-                            <div className="text-cyan-300 text-sm mt-1 font-bold">Rs. {parseFloat(item.price || 0).toFixed(0)}</div>
+                            <div className="text-white font-semibold text-lg line-clamp-2 min-h-[3.4rem]">{item.name}</div>
+                            <div className="text-cyan-300 text-lg mt-1 font-bold">Rs. {parseFloat(item.price || 0).toFixed(0)}</div>
                           </div>
                         </>
                       ) : (
                         <>
-                          <div className="w-12 h-12 bg-gradient-to-r from-cyan-400 to-blue-500 rounded-xl flex items-center justify-center mb-3 mx-auto">
-                            <TrendingUp className="text-white w-6 h-6" />
+                          <div className="w-16 h-16 bg-gradient-to-r from-cyan-400 to-blue-500 rounded-xl flex items-center justify-center mb-4 mx-auto">
+                            <TrendingUp className="text-white w-7 h-7" />
                           </div>
                           <div className="text-center">
-                            <div className="text-white font-semibold">Feature {index + 1}</div>
+                            <div className="text-white font-semibold text-base">Feature {index + 1}</div>
                             <div className="text-gray-400 text-sm mt-1">Top picks for you</div>
                           </div>
                         </>
@@ -412,10 +468,10 @@ const HomePage = () => {
             className="grid grid-cols-2 lg:grid-cols-4 gap-6"
           >
             {[
-              { icon: Award, value: `${stats.satisfactionRate}%`, label: 'Satisfaction Rate', color: 'from-green-500 to-emerald-500' },
-              { icon: Users, value: `${stats.happyCustomers}+`, label: 'Happy Customers', color: 'from-blue-500 to-cyan-500' },
+              { icon: Award, value: formatPercent(stats.satisfactionRate), label: 'Satisfaction Rate', color: 'from-green-500 to-emerald-500' },
+              { icon: Users, value: formatCount(stats.happyCustomers), label: 'Happy Customers', color: 'from-blue-500 to-cyan-500' },
               { icon: Globe, value: 'Nationwide', label: 'Delivery Coverage', color: 'from-purple-500 to-pink-500' },
-              { icon: Clock, value: `${stats.deliveryTime}h`, label: 'Avg Delivery Time', color: 'from-orange-500 to-red-500' }
+              { icon: Clock, value: formatHours(stats.deliveryTime), label: 'Avg Delivery Time', color: 'from-orange-500 to-red-500' }
             ].map((stat, index) => (
               <motion.div
                 key={stat.label}
@@ -445,16 +501,34 @@ const HomePage = () => {
             transition={{ duration: 0.6 }}
             className="text-center mb-12"
           >
-            <h2 className="text-5xl font-black text-white mb-4 flex items-center justify-center gap-3">
-              <Zap className="text-yellow-400" />
-              Special Offers
-            </h2>
-            <p className="text-xl text-gray-400 max-w-2xl mx-auto">
-              Don't miss out on these limited-time deals and exclusive discounts
-            </p>
+            <div className="relative overflow-hidden rounded-[2rem] border border-yellow-300/40 bg-gradient-to-br from-yellow-300 via-orange-400 to-amber-500 p-8 md:p-12 shadow-2xl">
+              <div className="absolute -top-16 -left-10 w-48 h-48 rounded-full bg-yellow-200/40" />
+              <div className="absolute -bottom-20 -right-8 w-56 h-56 rounded-full bg-orange-300/40" />
+              <div className="absolute top-8 right-10 w-24 h-24 rounded-full bg-yellow-100/30" />
+
+              <div className="relative max-w-3xl mx-auto">
+                <motion.div
+                  whileHover={{ rotate: -1, scale: 1.01 }}
+                  className="relative mx-auto max-w-2xl"
+                >
+                  <div className="absolute inset-0 translate-y-3 rounded-2xl bg-purple-900/45" />
+                  <div className="relative rounded-2xl bg-gradient-to-r from-purple-700 via-violet-600 to-fuchsia-600 px-6 py-7 md:px-10 md:py-9 shadow-xl">
+                    <span className="absolute -top-7 left-5 inline-flex items-center rounded-full bg-orange-500 px-4 py-2 text-sm font-black uppercase tracking-wide text-yellow-100">
+                      Special Offer
+                    </span>
+                    <h2 className="text-4xl md:text-6xl font-black uppercase tracking-wider text-white">
+                      Big Deal
+                    </h2>
+                    <p className="mt-3 text-white/90 text-base md:text-lg font-semibold">
+                      Don't miss out on these limited-time deals and exclusive discounts
+                    </p>
+                  </div>
+                </motion.div>
+              </div>
+            </div>
           </motion.div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-7 mb-8">
             {specialOffers.map((offer, index) => (
               <motion.div
                 key={offer.id}
@@ -462,26 +536,50 @@ const HomePage = () => {
                 whileInView={{ opacity: 1, x: 0 }}
                 transition={{ delay: index * 0.2 }}
                 whileHover={{ scale: 1.02, y: -5 }}
-                className={`bg-gradient-to-r ${offer.bgGradient} rounded-3xl p-8 text-white shadow-2xl hover:shadow-2xl transition-all duration-300 cursor-pointer group`}
+                className="bg-gradient-to-br from-fuchsia-500/20 via-blue-500/20 to-cyan-500/20 rounded-3xl p-6 md:p-7 text-white shadow-2xl hover:shadow-cyan-500/25 transition-all duration-300 cursor-pointer group border border-cyan-300/30 backdrop-blur-xl"
                 onClick={() => navigate('/offers')}
               >
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <h3 className="text-2xl font-bold mb-2">{offer.title}</h3>
-                    <p className="text-white/80 mb-4">{offer.description}</p>
+                <div className="flex gap-4 items-start">
+                  <div className="w-24 h-24 rounded-2xl overflow-hidden border border-white/30 bg-white/10 shrink-0">
+                    <img
+                      src={getOfferImage(offer)}
+                      alt={offer.product_name || getOfferTitle(offer)}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.target.src = 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500';
+                      }}
+                    />
                   </div>
-                  <motion.div
-                    whileHover={{ scale: 1.1, rotate: 5 }}
-                    className="bg-white/20 backdrop-blur-sm px-4 py-2 rounded-full text-sm font-bold"
-                  >
-                    {offer.discount} OFF
-                  </motion.div>
+                  <div className="flex-1">
+                    <div className="flex justify-between items-start gap-3 mb-2">
+                      <h3 className="text-2xl font-black">{getOfferTitle(offer)}</h3>
+                      <motion.div
+                        whileHover={{ scale: 1.08, rotate: 3 }}
+                        className="bg-gradient-to-r from-yellow-300 to-orange-400 text-gray-900 px-4 py-2 rounded-full text-sm font-black shadow-lg"
+                      >
+                        {getOfferDiscountLabel(offer)}
+                      </motion.div>
+                    </div>
+                    <p className="text-white/80 mb-4 leading-relaxed">{getOfferDescription(offer)}</p>
+                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                      {offer.offer_type && (
+                        <span className="px-3 py-1 rounded-full bg-white/15 border border-white/20 font-semibold">
+                          {offer.offer_type}
+                        </span>
+                      )}
+                      {offer.valid_until && (
+                        <span className="px-3 py-1 rounded-full bg-white/15 border border-white/20 font-semibold">
+                          Valid till {new Date(offer.valid_until).toLocaleDateString()}
+                        </span>
+                      )}
+                    </div>
+                  </div>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-white/70 text-sm">Limited time offer</span>
+                <div className="flex justify-between items-center mt-5 pt-4 border-t border-white/15">
+                  <span className="text-cyan-100 text-sm font-semibold">Limited-time offer</span>
                   <motion.div
                     whileHover={{ x: 5 }}
-                    className="flex items-center gap-2 text-white font-semibold"
+                    className="flex items-center gap-2 text-white font-bold"
                   >
                     View Offer
                     <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
@@ -501,7 +599,7 @@ const HomePage = () => {
               onClick={() => navigate('/offers')}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              className="px-8 py-4 bg-white/10 backdrop-blur-md border border-cyan-400/30 hover:bg-white/20 text-white rounded-2xl font-bold text-lg transition-all duration-300 flex items-center justify-center gap-3 mx-auto"
+              className="px-10 py-4 bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-400 hover:to-violet-500 text-white rounded-2xl font-black text-lg transition-all duration-300 flex items-center justify-center gap-3 mx-auto shadow-xl"
             >
               View All Offers
               <ArrowRight className="w-5 h-5" />
@@ -510,7 +608,7 @@ const HomePage = () => {
         </div>
       </section>
 
-      {/* Featured Products Section */}
+      {/* New Arrivals Section */}
       <section className="py-20 bg-gradient-to-b from-gray-900 to-gray-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div
@@ -520,28 +618,28 @@ const HomePage = () => {
             className="text-center mb-12"
           >
             <h2 className="text-5xl font-black text-white mb-4 flex items-center justify-center gap-3">
-              <Star className="text-yellow-400" />
-              Featured Products
+              <Sparkles className="text-cyan-400" />
+              New Arrivals
             </h2>
             <p className="text-xl text-gray-400 max-w-2xl mx-auto">
-              Handpicked selection of our most popular and high-quality products
+              Freshly added products to explore and discover
             </p>
           </motion.div>
 
-          {featuredProducts.length === 0 ? (
+          {newArrivals.length === 0 ? (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               className="text-center py-16 bg-white/5 rounded-3xl border border-cyan-500/20"
             >
-              <div className="text-6xl mb-4">⭐</div>
-              <h3 className="text-2xl font-semibold text-white mb-2">No Featured Products</h3>
-              <p className="text-gray-400 mb-6">Check back later for featured items</p>
+              <div className="text-6xl mb-4">✨</div>
+              <h3 className="text-2xl font-semibold text-white mb-2">No New Arrivals Yet</h3>
+              <p className="text-gray-400 mb-6">Check back soon for fresh products</p>
             </motion.div>
           ) : (
             <>
               <motion.div
-                className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8"
+                className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8"
                 initial="hidden"
                 whileInView="visible"
                 variants={{
@@ -554,7 +652,7 @@ const HomePage = () => {
                   }
                 }}
               >
-                {featuredProducts.map((product, index) => (
+                {newArrivals.slice(0, 6).map((product, index) => (
                   <motion.div
                     key={product.id}
                     variants={{
@@ -595,7 +693,7 @@ const HomePage = () => {
         </div>
       </section>
 
-      {/* New Arrivals Section */}
+      {/* Featured Products Section */}
       <section className="py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div
@@ -605,17 +703,17 @@ const HomePage = () => {
             className="text-center mb-12"
           >
             <h2 className="text-5xl font-black text-white mb-4 flex items-center justify-center gap-3">
-              <Sparkles className="text-cyan-400" />
-              New Arrivals
+              <Star className="text-yellow-400" />
+              Featured Products
             </h2>
             <p className="text-xl text-gray-400 max-w-2xl mx-auto">
-              Freshly added products to explore and discover
+              Handpicked selection of our most popular and high-quality products
             </p>
           </motion.div>
 
-          {newArrivals.length > 0 && (
+          {featuredProducts.length > 0 && (
             <motion.div
-              className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"
+              className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6"
               initial="hidden"
               whileInView="visible"
               variants={{
@@ -625,10 +723,10 @@ const HomePage = () => {
                   transition: {
                     staggerChildren: 0.1
                   }
-                }
-              }}
-            >
-              {newArrivals.slice(0, 6).map((product, index) => (
+                  }
+                }}
+              >
+              {featuredProducts.map((product, index) => (
                 <motion.div
                   key={product.id}
                   variants={{

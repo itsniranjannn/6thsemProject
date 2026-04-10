@@ -74,6 +74,7 @@ const routes = [
   { path: '/api/recommendations', file: './routes/recommendationRoutes' },
   { path: '/api/payments', file: './routes/paymentRoutes' },
   { path: '/api/reviews', file: './routes/reviewRoutes' },
+  { path: '/api/stats', file: './routes/statsRoutes' },
   { path: '/api/promo', file: './routes/promoRoutes' },
   { path: '/api/email', file: './routes/emailRoutes' },
   { path: '/api/admin', file: './routes/adminRoutes' },
