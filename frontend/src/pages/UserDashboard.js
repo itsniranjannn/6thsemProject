@@ -73,12 +73,12 @@ const DashboardStats = ({ stats, user }) => {
       gradient: 'from-blue-500 to-cyan-500'
     },
     {
-      title: 'Pending Orders',
-      value: stats.pendingOrders || 0,
+      title: 'Cancelled Orders',
+      value: stats.cancelledOrders || 0,
       icon: Clock,
-      color: 'amber',
-      description: 'Awaiting processing',
-      gradient: 'from-amber-500 to-orange-500'
+      color: 'red',
+      description: 'Orders cancelled',
+      gradient: 'from-red-500 to-rose-500'
     },
     {
       title: 'Delivered',
@@ -321,7 +321,7 @@ const ProfileSection = ({ user, onUpdate }) => {
         </div>
       </div>
 
-      <div className="space-y-6">
+        <div className="space-y-6 min-w-0">
         {/* Profile Header */}
         <div className="flex items-center space-x-4 p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-2xl border border-blue-100">
           <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center shadow-lg">
@@ -329,16 +329,16 @@ const ProfileSection = ({ user, onUpdate }) => {
           </div>
           <div className="flex-1">
             <h4 className="text-lg font-bold text-gray-900">{user?.name}</h4>
-            <div className="flex items-center space-x-4 mt-2">
-              <div className="flex items-center space-x-2">
+            <div className="flex flex-wrap items-center gap-3 mt-2">
+              <div className="flex items-center space-x-2 min-w-0">
                 <Award size={16} className="text-amber-500" />
-                <span className="text-sm text-gray-600">
+                <span className="text-sm text-gray-600 break-words">
                   Member for {calculateMemberDuration()}
                 </span>
               </div>
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-2 min-w-0">
                 <BadgeCheck size={16} className={user?.email_verified ? "text-green-500" : "text-gray-400"} />
-                <span className={`text-sm ${user?.email_verified ? "text-green-600" : "text-gray-500"}`}>
+                <span className={`text-sm break-words ${user?.email_verified ? "text-green-600" : "text-gray-500"}`}>
                   {user?.email_verified ? "Verified" : "Unverified"}
                 </span>
               </div>
@@ -407,7 +407,7 @@ const ProfileSection = ({ user, onUpdate }) => {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Email Address
+                Email Address (Read-only)
               </label>
               {isEditing ? (
                 <div className="relative">
@@ -416,16 +416,16 @@ const ProfileSection = ({ user, onUpdate }) => {
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 pr-10"
-                    placeholder="Enter your email"
-                    disabled // Don't allow email editing
+                    placeholder="Email cannot be changed"
+                    disabled // Email updates are not supported from dashboard edit form
                   />
                   {user?.email_verified && (
                     <CheckCircle className="absolute right-3 top-1/2 transform -translate-y-1/2 text-green-500" size={20} />
                   )}
                 </div>
               ) : (
-                <div className="flex items-center justify-between py-3 px-2 bg-gray-50 rounded-lg">
-                  <p className="text-gray-900 font-medium">{user?.email}</p>
+                <div className="flex flex-wrap items-center gap-2 py-3 px-3 bg-gray-50 rounded-lg min-w-0">
+                  <p className="text-gray-900 font-medium text-sm sm:text-base break-all min-w-0">{user?.email}</p>
                   {user?.email_verified ? (
                     <CheckCircle size={20} className="text-green-500" />
                   ) : (
@@ -481,7 +481,7 @@ const ProfileSection = ({ user, onUpdate }) => {
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   City
@@ -495,7 +495,7 @@ const ProfileSection = ({ user, onUpdate }) => {
                     placeholder="Enter your city"
                   />
                 ) : (
-                  <p className="text-gray-900 font-medium py-3 px-2 bg-gray-50 rounded-lg">
+                  <p className="text-gray-900 font-medium py-3 px-3 bg-gray-50 rounded-lg break-words">
                     {user?.city || 'Not provided'}
                   </p>
                 )}
@@ -518,7 +518,7 @@ const ProfileSection = ({ user, onUpdate }) => {
                     <option value="Other">Other</option>
                   </select>
                 ) : (
-                  <p className="text-gray-900 font-medium py-3 px-2 bg-gray-50 rounded-lg">
+                  <p className="text-gray-900 font-medium py-3 px-3 bg-gray-50 rounded-lg break-words">
                     {user?.country || 'Nepal'}
                   </p>
                 )}
