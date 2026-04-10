@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.js';
 import ConfirmationModal from '../components/ConfirmationModel.js';
 import { 
@@ -1141,6 +1142,7 @@ const OrderDetailsModal = ({ order, isOpen, onClose }) => {
 // Main Dashboard Component
 const UserDashboard = () => {
   const { user, logout, updateUser, refreshUserProfile } = useAuth();
+  const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState('overview');
   const [dashboardStats, setDashboardStats] = useState({});
   const [orders, setOrders] = useState([]);
@@ -1160,6 +1162,14 @@ const UserDashboard = () => {
     { id: 'profile', label: 'Profile', icon: User },
     { id: 'security', label: 'Security', icon: Shield }
   ];
+
+  useEffect(() => {
+    const tabFromQuery = searchParams.get('tab');
+    const validTabs = new Set(tabs.map((tab) => tab.id));
+    if (tabFromQuery && validTabs.has(tabFromQuery)) {
+      setActiveTab(tabFromQuery);
+    }
+  }, [searchParams]);
 
   // NEW: Initial data fetch on mount + refresh user profile
   useEffect(() => {

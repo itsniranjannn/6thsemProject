@@ -8,9 +8,10 @@ const OrderSuccessPage = () => {
   const [orderDetails, setOrderDetails] = useState(null);
   const [userDetails, setUserDetails] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [countdown, setCountdown] = useState(20);
   const [activeTab, setActiveTab] = useState('summary');
   const [isGeneratingInvoice, setIsGeneratingInvoice] = useState(false);
+  const [actionFeedback, setActionFeedback] = useState(null);
+  const [showTrackingDetails, setShowTrackingDetails] = useState(false);
   const invoiceRef = useRef();
 
   const orderId = searchParams.get('orderId');
@@ -21,25 +22,25 @@ const OrderSuccessPage = () => {
   const paymentMethods = {
     stripe: {
       name: 'Credit/Debit Card',
-      icon: '💳',
+      image: '/images/Stripe.png',
       color: 'from-purple-500 to-indigo-600',
       status: 'completed'
     },
     khalti: {
       name: 'Khalti',
-      icon: '📱',
+      image: '/images/khalti.png',
       color: 'from-purple-600 to-pink-600',
       status: 'completed'
     },
     esewa: {
       name: 'eSewa',
-      icon: '⚡',
+      image: '/images/Esewa.png',
       color: 'from-green-500 to-blue-500',
       status: 'completed'
     },
     cod: {
       name: 'Cash on Delivery',
-      icon: '💰',
+      image: '/images/cod.png',
       color: 'from-orange-500 to-red-500',
       status: 'pending'
     }
@@ -156,19 +157,7 @@ const OrderSuccessPage = () => {
 
     fetchData();
 
-    // Countdown redirect
-    const timer = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          navigate('/products');
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
+    return undefined;
   }, [orderId, navigate, success]);
 
   const getFallbackOrderData = () => {
@@ -235,40 +224,31 @@ const OrderSuccessPage = () => {
 
   const handleTrackOrder = () => {
     const trackingNumber = orderDetails?.tracking_number;
-    if (trackingNumber && trackingNumber !== 'Will be assigned' && trackingNumber !== 'Pending') {
-      alert(`📦 Your order is being tracked!\n\nTracking Number: ${trackingNumber}\n\nYou'll receive updates via email as your order progresses.`);
-    } else {
-      alert('Tracking number will be available once your order is shipped. You will receive an email with tracking details.');
-    }
+    const hasTrackingNumber = trackingNumber && trackingNumber !== 'Will be assigned' && trackingNumber !== 'Pending';
+    setShowTrackingDetails(true);
+    setActionFeedback({
+      type: hasTrackingNumber ? 'success' : 'info',
+      message: hasTrackingNumber
+        ? `Tracking is active for ${trackingNumber}.              
+        You will recieve the mail for your order`
+        : 'Tracking number will appear once your order is shipped.'
+    });
   };
 
   const generateProfessionalInvoice = async () => {
     setIsGeneratingInvoice(true);
     try {
-      const token = localStorage.getItem('token');
-      const response = await axios.post(
-        `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/orders/${orderId}/generate-invoice`,
-        {},
-        {
-          headers: { Authorization: `Bearer ${token}` },
-          responseType: 'blob'
-        }
-      );
-
-      const blob = new Blob([response.data], { type: 'application/pdf' });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `nexusstore-invoice-${orderId}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-      
-      alert('✅ Professional invoice downloaded successfully!');
-    } catch (error) {
-      console.error('Error generating professional invoice:', error);
       generateEnhancedTextInvoice();
+      setActionFeedback({
+        type: 'success',
+        message: 'Detailed invoice downloaded successfully.'
+      });
+    } catch (error) {
+      console.error('Error generating invoice:', error);
+      setActionFeedback({
+        type: 'info',
+        message: 'Could not generate invoice. Please try again.'
+      });
     } finally {
       setIsGeneratingInvoice(false);
     }
@@ -284,87 +264,339 @@ const OrderSuccessPage = () => {
     const customerEmail = shippingAddress.email || user?.email || 'N/A';
     const customerPhone = shippingAddress.phone || user?.phone || 'N/A';
     
-    const invoiceContent = `
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                           6thSHOP - OFFICIAL INVOICE                         ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║  🏪 Nexus Store - Your Trusted Shopping Partner                                 ║
-║  📧 Email: support@nexusstore.com | 🌐 Website: www.nexusstore.com                ║
-║  📞 Support: +977-1-4000000 | 🕒 Mon-Sun: 9:00 AM - 6:00 PM                 ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                              INVOICE SUMMARY                                 ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║  Invoice No:    #INV-${order?.id || 'N/A'}                                           ║
-║  Order No:      #${order?.id || 'N/A'}                                              ║
-║  Invoice Date:  ${order?.created_at ? new Date(order.created_at).toLocaleDateString() : new Date().toLocaleDateString()} ║
-║  Order Date:    ${order?.created_at ? new Date(order.created_at).toLocaleDateString() : new Date().toLocaleDateString()} ║
-║  Status:        ${order?.status ? order.status.toUpperCase() : 'PROCESSING'}                 ║
-║  Payment:       ${payment.name.toUpperCase()} - ${order?.payment_status?.toUpperCase() || 'PENDING'} ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                            CUSTOMER INFORMATION                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║  👤 Customer:      ${customerName}                                      ║
-║  📧 Email:          ${customerEmail}                                 ║
-║  📞 Phone:          ${customerPhone}              ║
-║  🏠 Address:        ${shippingAddress.address || 'N/A'}               ║
-║  🏙️ City:           ${shippingAddress.city || 'N/A'}                     ║
-║  📮 Postal Code:    ${shippingAddress.postalCode || 'N/A'}                      ║
-║  🌍 Country:        ${shippingAddress.country || 'Nepal'}                      ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                              ORDER ITEMS                                     ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║  No.  Item Name                          Qty    Unit Price    Total Amount   ║
-║  ────────────────────────────────────────────────────────────────────────── ║
-${order?.items?.map((item, index) => 
-`║  ${(index + 1).toString().padEnd(3)}  ${(item.product_name || item.name || 'Product').padEnd(30)} ${item.quantity.toString().padStart(3)}    Rs.${parseFloat(item.price || 0).toFixed(2).padStart(8)}    Rs.${(item.quantity * parseFloat(item.price || 0)).toFixed(2).padStart(8)} ║`
-).join('\n') || '║  No items found in this order'.padEnd(80) + '║'}
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                            PAYMENT SUMMARY                                   ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║  Subtotal:                                  Rs. ${parseFloat(order?.subtotal || order?.total_amount || 0).toFixed(2).padStart(12)} ║
-║  Shipping Fee:                              Rs. ${parseFloat(order?.shipping_fee || 50).toFixed(2).padStart(12)} ║
-║  ────────────────────────────────────────────────────────────────────────── ║
-║  GRAND TOTAL:                               Rs. ${parseFloat(order?.total_amount || 0).toFixed(2).padStart(12)} ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                         DELIVERY INFORMATION                                 ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║  📦 Tracking Number: ${order?.tracking_number || 'Will be assigned upon shipment'} ║
-║  📅 Estimated Delivery: ${order?.estimated_delivery ? new Date(order.estimated_delivery).toLocaleDateString() : 'Within 7 working days'} ║
-║  🚚 Shipping Method: Express Delivery - Rs. 50 charge all over Nepal       ║
-║                                                                              ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                          THANK YOU FOR SHOPPING! 🎉                         ║
-║                                                                              ║
-║  We appreciate your business and hope you enjoy your products!              ║
-║  For any questions or support, contact us at:                               ║
-║  📧 support@nexusstore.com | 📞 +977-1-4000000                               ║
-║  🌐 www.nexusstore.com                                                        ║
-║                                                                              ║
-╚══════════════════════════════════════════════════════════════════════════════╝
-    `.trim();
+    const escapeHtml = (value) => String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
 
-    const blob = new Blob([invoiceContent], { type: 'text/plain;charset=utf-8' });
+    const toAbsoluteUrl = (imagePath) => {
+      if (!imagePath) {
+        return `${window.location.origin}/images/s.jpg`;
+      }
+      if (/^https?:\/\//i.test(imagePath)) {
+        return imagePath;
+      }
+      if (imagePath.startsWith('//')) {
+        return `https:${imagePath}`;
+      }
+      if (imagePath.startsWith('/')) {
+        return `${window.location.origin}${imagePath}`;
+      }
+      return `${window.location.origin}/${imagePath.replace(/^\.?\//, '')}`;
+    };
+
+    const rows = (order?.items || []).map((item, index) => {
+      const quantity = Number(item.quantity || 0);
+      const unitPrice = Number(item.price || 0);
+      const total = quantity * unitPrice;
+      const productImage = toAbsoluteUrl(item.product_image || item.image || item.productImage);
+      return `
+        <tr>
+          <td>${index + 1}</td>
+          <td class="product-cell"><img class="product-image" src="${escapeHtml(productImage)}" alt="${escapeHtml(item.product_name || item.name || 'Product')}" /></td>
+          <td>${escapeHtml(item.product_name || item.name || 'Product')}</td>
+          <td>${quantity}</td>
+          <td>Rs. ${unitPrice.toFixed(2)}</td>
+          <td>Rs. ${total.toFixed(2)}</td>
+        </tr>
+      `;
+    }).join('');
+
+    const orderDate = order?.created_at ? new Date(order.created_at) : new Date();
+    const invoiceDate = new Date();
+    const formattedOrderDate = orderDate.toLocaleDateString();
+    const formattedInvoiceDate = invoiceDate.toLocaleDateString();
+    const orderStatus = String(order?.status || 'processing').toUpperCase();
+    const paymentSummary = `${payment.name.toUpperCase()} - ${String(order?.payment_status || 'pending').toUpperCase()}`;
+    const trackingNumber = order?.tracking_number || 'Will be assigned upon shipment';
+    const estimatedDelivery = order?.estimated_delivery
+      ? new Date(order.estimated_delivery).toLocaleDateString()
+      : 'Within 7 working days';
+    const storeLogoUrl = `${window.location.origin}/logo192.png`;
+    const paymentLogoUrl = toAbsoluteUrl(payment.image);
+
+    const invoiceContent = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Nexus Store - Invoice #${escapeHtml(order?.id || 'N/A')}</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 28px;
+      font-family: "Segoe UI", Arial, sans-serif;
+      color: #1f2937;
+      background: linear-gradient(160deg, #f0f9ff 0%, #eef2ff 55%, #f8fafc 100%);
+    }
+    .invoice {
+      max-width: 980px;
+      margin: 0 auto;
+      background: #ffffff;
+      border: 1px solid #dbeafe;
+      border-radius: 18px;
+      box-shadow: 0 18px 40px rgba(30, 64, 175, 0.12);
+      overflow: hidden;
+    }
+    .header {
+      background: linear-gradient(135deg, #1d4ed8 0%, #2563eb 40%, #7c3aed 100%);
+      color: #ffffff;
+      padding: 30px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+    }
+    .brand-wrap {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 8px;
+    }
+    .brand-logo {
+      width: 52px;
+      height: 52px;
+      border-radius: 12px;
+      object-fit: cover;
+      background: rgba(255, 255, 255, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.4);
+      padding: 4px;
+    }
+    .brand-title {
+      margin: 0 0 6px;
+      font-size: 32px;
+      letter-spacing: 0.4px;
+    }
+    .brand-subtitle, .header-meta {
+      margin: 2px 0;
+      font-size: 14px;
+      opacity: 0.95;
+    }
+    .content {
+      padding: 26px;
+    }
+    .section {
+      border: 1px solid #e5e7eb;
+      border-radius: 14px;
+      margin-bottom: 18px;
+      overflow: hidden;
+      background: #ffffff;
+    }
+    .section h3 {
+      margin: 0;
+      padding: 12px 16px;
+      font-size: 14px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      color: #1e3a8a;
+      background: linear-gradient(90deg, #eff6ff 0%, #f5f3ff 100%);
+      border-bottom: 1px solid #dbeafe;
+    }
+    .section-body {
+      padding: 14px 16px;
+    }
+    .summary-grid, .customer-grid, .delivery-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px 20px;
+      font-size: 14px;
+    }
+    .label {
+      color: #6b7280;
+      min-width: 120px;
+      display: inline-block;
+    }
+    .value {
+      color: #111827;
+      font-weight: 600;
+    }
+    .status-pill {
+      display: inline-block;
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 12px;
+      font-weight: 700;
+      background: #dcfce7;
+      color: #166534;
+    }
+    .payment-method {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .payment-logo {
+      width: 30px;
+      height: 30px;
+      border-radius: 4px;
+      object-fit: contain;
+      background: #ffffff;
+      border: 1px solid #e5e7eb;
+      padding: 3px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 6px;
+      font-size: 14px;
+    }
+    th, td {
+      border: 1px solid #e5e7eb;
+      padding: 11px 10px;
+      text-align: left;
+    }
+    th {
+      background: #f8fafc;
+      color: #334155;
+      font-weight: 700;
+    }
+    tbody tr:nth-child(even) {
+      background: #fcfcff;
+    }
+    .product-cell {
+      width: 74px;
+    }
+    .product-image {
+      width: 52px;
+      height: 52px;
+      border-radius: 8px;
+      object-fit: cover;
+      border: 1px solid #e2e8f0;
+      background: #f8fafc;
+      display: block;
+    }
+    .amount-table {
+      width: 360px;
+      margin-left: auto;
+      margin-top: 8px;
+    }
+    .amount-table td {
+      border: none;
+      padding: 6px 0;
+    }
+    .amount-total td {
+      padding-top: 10px;
+      border-top: 1px dashed #cbd5e1;
+      font-size: 16px;
+      font-weight: 800;
+      color: #0f172a;
+    }
+    .thank-you {
+      margin-top: 18px;
+      padding: 16px;
+      border: 1px dashed #93c5fd;
+      border-radius: 12px;
+      background: #eff6ff;
+      color: #1e3a8a;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+  </style>
+</head>
+<body>
+  <div class="invoice">
+    <div class="header">
+      <div>
+        <div class="brand-wrap">
+          <h1 class="brand-title">Nexus Store - Official Invoice</h1>
+        </div>
+        <p class="brand-subtitle">Nexus Store - Your Trusted Shopping Partner</p>
+        <p class="brand-subtitle">Email: support@nexusstore.com | Website: www.nexusstore.com</p>
+        <p class="brand-subtitle">Support: +977-1-4000000 | Mon-Sun: 9:00 AM - 6:00 PM</p>
+      </div>
+      <div>
+        <p class="header-meta"><strong>Invoice No:</strong> #INV-${escapeHtml(order?.id || 'N/A')}</p>
+        <p class="header-meta"><strong>Order No:</strong> #${escapeHtml(order?.id || 'N/A')}</p>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="section">
+        <h3>Invoice Summary</h3>
+        <div class="section-body summary-grid">
+          <div><span class="label">Invoice Date:</span> <span class="value">${escapeHtml(formattedInvoiceDate)}</span></div>
+          <div><span class="label">Order Date:</span> <span class="value">${escapeHtml(formattedOrderDate)}</span></div>
+          <div><span class="label">Status:</span> <span class="status-pill">${escapeHtml(orderStatus)}</span></div>
+          <div><span class="label">Payment:</span> <span class="value payment-method"><img class="payment-logo" src="${escapeHtml(paymentLogoUrl)}" alt="${escapeHtml(payment.name)}" /> ${escapeHtml(paymentSummary)}</span></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>Customer Information</h3>
+        <div class="section-body customer-grid">
+          <div><span class="label">Customer:</span> <span class="value">${escapeHtml(customerName)}</span></div>
+          <div><span class="label">Email:</span> <span class="value">${escapeHtml(customerEmail)}</span></div>
+          <div><span class="label">Phone:</span> <span class="value">${escapeHtml(customerPhone)}</span></div>
+          <div><span class="label">Address:</span> <span class="value">${escapeHtml(shippingAddress.address || 'N/A')}</span></div>
+          <div><span class="label">City:</span> <span class="value">${escapeHtml(shippingAddress.city || 'N/A')}</span></div>
+          <div><span class="label">Postal Code:</span> <span class="value">${escapeHtml(shippingAddress.postalCode || 'N/A')}</span></div>
+          <div><span class="label">Country:</span> <span class="value">${escapeHtml(shippingAddress.country || 'Nepal')}</span></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>Order Items</h3>
+        <div class="section-body">
+          <table>
+            <thead>
+              <tr>
+                <th>No.</th>
+                <th>Image</th>
+                <th>Item Name</th>
+                <th>Qty</th>
+                <th>Unit Price</th>
+                <th>Total Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows || '<tr><td colspan="6">No items found in this order.</td></tr>'}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>Payment Summary</h3>
+        <div class="section-body">
+          <table class="amount-table">
+            <tr><td>Subtotal:</td><td>Rs. ${Number(order?.subtotal || order?.total_amount || 0).toFixed(2)}</td></tr>
+            <tr><td>Shipping Fee:</td><td>Rs. ${Number(order?.shipping_fee || 50).toFixed(2)}</td></tr>
+            <tr class="amount-total"><td>GRAND TOTAL:</td><td>Rs. ${Number(order?.total_amount || 0).toFixed(2)}</td></tr>
+          </table>
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>Delivery Information</h3>
+        <div class="section-body delivery-grid">
+          <div><span class="label">Tracking Number:</span> <span class="value">${escapeHtml(trackingNumber)}</span></div>
+          <div><span class="label">Estimated Delivery:</span> <span class="value">${escapeHtml(estimatedDelivery)}</span></div>
+          <div><span class="label">Shipping Method:</span> <span class="value">Express Delivery - Rs. 50 charge all over Nepal</span></div>
+        </div>
+      </div>
+
+      <div class="thank-you">
+        <strong>Thank you for shopping with us!</strong><br/>
+        We appreciate your business and hope you enjoy your products.<br/>
+        For support: support@nexusstore.com | +977-1-4000000 | www.nexusstore.com
+      </div>
+    </div>
+  </div>
+</body>
+</html>`.trim();
+
+    const blob = new Blob([invoiceContent], { type: 'text/html;charset=utf-8' });
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `nexusstore-invoice-${orderId}.txt`;
+    link.download = `6thshop-invoice-${orderId || order?.id || 'order'}.html`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     window.URL.revokeObjectURL(url);
-    
-    alert('✅ Text invoice downloaded successfully!');
   };
 
   const shareOrder = async () => {
@@ -388,9 +620,15 @@ ${order?.items?.map((item, index) =>
 
   const fallbackShare = (text) => {
     navigator.clipboard.writeText(text).then(() => {
-      alert('Order details copied to clipboard! 📋\nYou can now share it with your friends.');
+      setActionFeedback({
+        type: 'success',
+        message: 'Order details copied to clipboard.'
+      });
     }).catch(() => {
-      alert('Order details:\n\n' + text);
+      setActionFeedback({
+        type: 'info',
+        message: 'Could not copy automatically. You can share this order from your dashboard.'
+      });
     });
   };
 
@@ -489,7 +727,11 @@ ${order?.items?.map((item, index) =>
             </div>
             
             <div className="inline-flex items-center px-4 py-2 bg-blue-100 text-blue-800 rounded-full text-sm font-semibold shadow-sm">
-              <span className="mr-2">{payment.icon}</span>
+              <img
+                src={payment.image}
+                alt={payment.name}
+                className="w-8 h-8 mr-2 rounded object-contain bg-white border border-blue-200 p-1"
+              />
               {payment.name}
             </div>
             
@@ -691,7 +933,17 @@ ${order?.items?.map((item, index) =>
 
           {/* Sidebar - 1/4 width */}
           <div className="space-y-6">
-            
+
+            {actionFeedback && (
+              <div className={`rounded-xl border p-4 text-sm ${
+                actionFeedback.type === 'success'
+                  ? 'bg-green-50 border-green-200 text-green-700'
+                  : 'bg-blue-50 border-blue-200 text-blue-700'
+              }`}>
+                {actionFeedback.message}
+              </div>
+            )}
+             
             {/* Quick Actions */}
             <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-200">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
@@ -737,6 +989,19 @@ ${order?.items?.map((item, index) =>
                 </button>
               </div>
             </div>
+
+            {showTrackingDetails && (
+              <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-200">
+                <h3 className="text-lg font-semibold text-gray-900 mb-3">Tracking Details</h3>
+                <div className="space-y-2 text-sm text-gray-700">
+                  <p><strong>Order ID:</strong> #{orderDetails?.id || orderId || 'N/A'}</p>
+                  <p><strong>Tracking Number:</strong> {orderDetails?.tracking_number || 'Pending assignment'}</p>
+                  <p><strong>Status:</strong> {orderDetails?.status || 'Processing'}</p>
+                  <p><strong>Estimated Delivery:</strong> {orderDetails?.estimated_delivery ? new Date(orderDetails.estimated_delivery).toLocaleDateString() : 'Within 7 working days'}</p>
+                  <p className="text-gray-500">You will keep receiving updates by email as shipping progresses.</p>
+                </div>
+              </div>
+            )}
 
             {/* Support Card */}
             <div className="bg-gradient-to-br from-blue-50 to-indigo-100 rounded-2xl shadow-lg p-6 border border-blue-200">
@@ -807,7 +1072,7 @@ ${order?.items?.map((item, index) =>
             </Link>
             
             <Link
-              to="/my-orders"
+              to="/dashboard?tab=orders"
               className="border-2 border-blue-500 text-blue-600 hover:bg-blue-500 hover:text-white py-4 px-8 rounded-xl font-semibold text-lg transition-all duration-200 flex items-center justify-center"
             >
               <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -818,7 +1083,7 @@ ${order?.items?.map((item, index) =>
           </div>
 
           <p className="text-gray-500 text-sm">
-            Redirecting to products page in <span className="font-semibold text-blue-600">{countdown}</span> seconds...
+            Use the buttons above to continue shopping or view your orders.
           </p>
         </div>
       </div>
