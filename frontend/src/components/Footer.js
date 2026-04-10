@@ -66,9 +66,9 @@ const Footer = () => {
   ];
 
   const paymentMethods = [
-    { name: 'Khalti', icon: '📱' },
-    { name: 'eSewa', icon: '📱' },
-    { name: 'Stripe', icon: '💸' }
+    { name: 'Khalti' },
+    { name: 'eSewa' },
+    { name: 'Stripe' }
   ];
 
   const features = [

@@ -232,7 +232,7 @@ const CheckoutPage = () => {
   };
 
   const applyPromoCode = async (code = null) => {
-    const codeToApply = code || promoCode;
+    const codeToApply = (code || promoCode || '').trim().toUpperCase();
     
     if (!codeToApply.trim()) {
       showToast('🔤 Please enter a promo code', 'error');
@@ -274,8 +274,11 @@ const CheckoutPage = () => {
         setPromoCode(codeToApply);
         setShowPromoDropdown(false);
         const eligibleItems = result.breakdown?.eligibleItemCount || 0;
+        const isFreeShippingPromo = result.promo?.discount_type === 'free_shipping';
         showToast(
-          result.promo.description || `🎉 Promo code applied! Rs. ${discountAmount.toFixed(2)} discount on ${eligibleItems} item(s)`,
+          result.promo.description || (isFreeShippingPromo
+            ? `🎉 Promo code applied! Free shipping unlocked for ${eligibleItems} item(s)`
+            : `🎉 Promo code applied! Rs. ${discountAmount.toFixed(2)} discount on ${eligibleItems} item(s)`),
           'success'
         );
       } else {
@@ -326,7 +329,7 @@ const CheckoutPage = () => {
       const cartSummary = getCartSummary();
       const cartItemsForCheckout = getCartItemsForCheckout();
       
-      const shippingCharge = 50;
+      const shippingCharge = appliedPromo?.discount_type === 'free_shipping' ? 0 : 50;
       
       // ✅ FIXED: Ensure all amounts are numbers
       const subtotalNum = parseFloat(cartSummary.subtotal) || 0;
@@ -542,7 +545,7 @@ const CheckoutPage = () => {
 
   const cartSummary = getCartSummary();
   const subtotal = parseFloat(cartSummary.subtotal) || 0;
-  const shipping = 50;
+  const shipping = appliedPromo?.discount_type === 'free_shipping' ? 0 : 50;
   const totalBeforeDiscount = subtotal + shipping;
   const total = Math.max(0, totalBeforeDiscount - discount); // ✅ Ensure no negative total
 
@@ -1113,7 +1116,9 @@ const CheckoutPage = () => {
                         )}
                       </div>
                       <span className="text-green-300 font-bold text-xl">
-                        - Rs. {discount.toFixed(2)}
+                        {appliedPromo?.discount_type === 'free_shipping'
+                          ? 'Free Shipping'
+                          : `- Rs. ${discount.toFixed(2)}`}
                       </span>
                     </div>
                   </motion.div>
@@ -1166,11 +1171,24 @@ const CheckoutPage = () => {
                 </div>
                 <div className="flex justify-between text-cyan-200">
                   <span>Shipping</span>
-                  <span className="font-semibold">Rs. {shipping.toFixed(2)}</span>
+                  <span className="font-semibold">
+                    {appliedPromo?.discount_type === 'free_shipping' ? (
+                      <span className="text-green-300 font-bold">FREE</span>
+                    ) : (
+                      `Rs. ${shipping.toFixed(2)}`
+                    )}
+                  </span>
                 </div>
-                <div className="text-xs text-cyan-300 -mt-2 text-right">
-                  <em>Rs. 50 delivery charge all over Nepal</em>
-                </div>
+                {appliedPromo?.discount_type !== 'free_shipping' && (
+                  <div className="text-xs text-cyan-300 -mt-2 text-right">
+                    <em>Rs. 50 delivery charge all over Nepal</em>
+                  </div>
+                )}
+                {appliedPromo?.discount_type === 'free_shipping' && (
+                  <div className="text-xs text-green-300 -mt-2 text-right">
+                    <em>Shipping waived by promo code</em>
+                  </div>
+                )}
                 
                 {discount > 0 && (
                   <motion.div 

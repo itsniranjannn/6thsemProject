@@ -15,6 +15,12 @@ class PromoCode {
     return [];
   }
 
+  static normalizePromoType(discountType) {
+    return ['percentage', 'fixed', 'free_shipping'].includes(discountType)
+      ? discountType
+      : 'fixed';
+  }
+
   // Create new promo code
   static async create(promoData) {
     try {
@@ -24,23 +30,28 @@ class PromoCode {
         discount_type, 
         discount_value, 
         min_order_amount, 
-        max_uses, 
+        max_uses,
+        usage_limit,
+        max_discount_amount,
         valid_from, 
         valid_until, 
         is_active,
         categories
       } = promoData;
       
+      const normalizedUsageLimit = usage_limit ?? max_uses ?? null;
+
       const [result] = await db.execute(
-        `INSERT INTO promo_codes (code, description, discount_type, discount_value, min_order_amount, max_uses, valid_from, valid_until, is_active, categories) 
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO promo_codes (code, description, discount_type, discount_value, min_order_amount, usage_limit, max_discount_amount, valid_from, valid_until, is_active, categories) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           code,
           description,
           discount_type,
           discount_value,
           min_order_amount,
-          max_uses,
+          normalizedUsageLimit,
+          max_discount_amount || null,
           valid_from,
           valid_until,
           is_active !== undefined ? is_active : true,
@@ -94,9 +105,17 @@ class PromoCode {
   // Get promo code by code
   static async findByCode(code) {
     try {
+      const normalizedCode = String(code || '').trim().toUpperCase();
+      if (!normalizedCode) return null;
+
       const [rows] = await db.execute(
-        'SELECT * FROM promo_codes WHERE code = ? AND is_active = true',
-        [code]
+        `SELECT * FROM promo_codes 
+         WHERE UPPER(code) = ?
+         AND is_active = true
+         AND valid_from <= NOW()
+         AND (valid_until IS NULL OR valid_until >= NOW())
+         LIMIT 1`,
+        [normalizedCode]
       );
       
       if (rows.length === 0) {
@@ -104,17 +123,8 @@ class PromoCode {
       }
       
       const promo = rows[0];
-      
-      // Check if promo code is still valid
-      const now = new Date();
-      const validFrom = new Date(promo.valid_from);
-      const validUntil = new Date(promo.valid_until);
-      
-      if (now < validFrom || now > validUntil) {
-        return null;
-      }
-      
-      console.log(`✅ Found valid promo code: ${code}`);
+
+      console.log(`✅ Found valid promo code: ${normalizedCode}`);
       return promo;
     } catch (error) {
       console.error('❌ Promo code find by code error:', error);
@@ -226,7 +236,7 @@ class PromoCode {
       const usageLimit = promo.max_uses || promo.usage_limit;
       if (usageLimit) {
         const [usageCount] = await db.execute(
-          'SELECT COUNT(*) as count FROM order_promo_codes WHERE promo_code_id = ?',
+          'SELECT COUNT(*) as count FROM promo_usage WHERE promo_code_id = ?',
           [promo.id]
         );
         
@@ -237,7 +247,10 @@ class PromoCode {
       
       // Calculate discount
       let discountAmount = 0;
-      if (promo.discount_type === 'percentage') {
+      const promoType = this.normalizePromoType(promo.discount_type);
+      if (promoType === 'free_shipping') {
+        discountAmount = 0;
+      } else if (promoType === 'percentage') {
         discountAmount = (eligibleSubtotal * promo.discount_value) / 100;
         if (promo.max_discount_amount) {
           discountAmount = Math.min(discountAmount, parseFloat(promo.max_discount_amount) || discountAmount);
@@ -258,7 +271,8 @@ class PromoCode {
           ineligibleSubtotal,
           eligibleItemCount,
           appliesToAllCategories: !hasCategoryRestriction,
-          categories: hasCategoryRestriction ? promoCategories : []
+          categories: hasCategoryRestriction ? promoCategories : [],
+          isFreeShipping: promoType === 'free_shipping'
         }
       };
     } catch (error) {
@@ -274,7 +288,7 @@ class PromoCode {
         `SELECT * FROM promo_codes 
          WHERE is_active = true 
          AND valid_from <= NOW() 
-         AND valid_until >= NOW() 
+         AND (valid_until IS NULL OR valid_until >= NOW()) 
          ORDER BY created_at DESC`
       );
       console.log(`✅ Retrieved ${rows.length} active promo codes`);

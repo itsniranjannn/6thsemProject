@@ -29,6 +29,58 @@ const normalizePromoCategories = (categories, applyToAllCategories = false) => {
   return null;
 };
 
+const isSupportedPromoDiscountType = (discountType) => {
+  return ['percentage', 'fixed', 'free_shipping'].includes(discountType);
+};
+
+const normalizePromoDiscountValue = (discountType, discountValue) => {
+  if (discountType === 'free_shipping') return 0;
+  if (discountValue === undefined || discountValue === null || discountValue === '') return null;
+  const parsed = parseFloat(discountValue);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const getRangeSqlFilter = (range = 'today') => {
+  const normalizedRange = String(range || 'today').toLowerCase();
+  switch (normalizedRange) {
+    case 'week':
+    case 'weekly':
+      return 'DATE(created_at) >= DATE_SUB(CURDATE(), INTERVAL 6 DAY) AND DATE(created_at) <= CURDATE()';
+    case 'month':
+    case 'monthly':
+      return 'YEAR(created_at) = YEAR(CURDATE()) AND MONTH(created_at) = MONTH(CURDATE())';
+    case 'year':
+      return 'YEAR(created_at) = YEAR(CURDATE())';
+    case 'today':
+    default:
+      return 'DATE(created_at) = CURDATE()';
+  }
+};
+
+const getPreviousRangeSqlFilter = (range = 'today') => {
+  const normalizedRange = String(range || 'today').toLowerCase();
+  switch (normalizedRange) {
+    case 'week':
+    case 'weekly':
+      return 'DATE(created_at) >= DATE_SUB(CURDATE(), INTERVAL 13 DAY) AND DATE(created_at) < DATE_SUB(CURDATE(), INTERVAL 6 DAY)';
+    case 'month':
+    case 'monthly':
+      return 'YEAR(created_at) = YEAR(DATE_SUB(CURDATE(), INTERVAL 1 MONTH)) AND MONTH(created_at) = MONTH(DATE_SUB(CURDATE(), INTERVAL 1 MONTH))';
+    case 'year':
+      return 'YEAR(created_at) = YEAR(CURDATE()) - 1';
+    case 'today':
+    default:
+      return 'DATE(created_at) = DATE_SUB(CURDATE(), INTERVAL 1 DAY)';
+  }
+};
+
+const calculateGrowthRate = (currentValue, previousValue) => {
+  const current = parseFloat(currentValue || 0);
+  const previous = parseFloat(previousValue || 0);
+  if (previous <= 0) return current > 0 ? 100 : 0;
+  return ((current - previous) / previous) * 100;
+};
+
 // Get all users - FIXED: Using 'name' instead of 'username'
 router.get('/users', protect, admin, async (req, res) => {
   try {
@@ -358,78 +410,177 @@ router.put('/products/:id/status', protect, admin, async (req, res) => {
 // Dashboard statistics
 router.get('/stats', protect, admin, async (req, res) => {
   try {
-    // Total revenue from completed orders
-    const [revenueResult] = await db.execute(`
-      SELECT SUM(total_amount) as total_revenue 
-      FROM orders 
-      WHERE payment_status = 'completed'
-    `);
+    const requestedRange = String(req.query.range || 'today').toLowerCase();
+    const rangeAliases = { weekly: 'week', monthly: 'month' };
+    const range = rangeAliases[requestedRange] || requestedRange;
+    const rangeFilter = getRangeSqlFilter(range);
+    const previousRangeFilter = getPreviousRangeSqlFilter(range);
 
-    // Total orders
-    const [ordersResult] = await db.execute('SELECT COUNT(*) as total_orders FROM orders');
+    const [periodRevenueResult] = await db.execute(
+      `SELECT COALESCE(SUM(total_amount), 0) as total_revenue
+       FROM orders
+       WHERE payment_status = 'completed'
+       AND ${rangeFilter}`
+    );
 
-    // Total products
+    const [periodOrdersResult] = await db.execute(
+      `SELECT COUNT(*) as total_orders
+       FROM orders
+       WHERE ${rangeFilter}`
+    );
+
+    const [periodUsersResult] = await db.execute(
+      `SELECT COUNT(*) as total_users
+       FROM users
+       WHERE ${rangeFilter}`
+    );
+
+    const [previousRevenueResult] = await db.execute(
+      `SELECT COALESCE(SUM(total_amount), 0) as total_revenue
+       FROM orders
+       WHERE payment_status = 'completed'
+       AND ${previousRangeFilter}`
+    );
+
+    const [previousOrdersResult] = await db.execute(
+      `SELECT COUNT(*) as total_orders
+       FROM orders
+       WHERE ${previousRangeFilter}`
+    );
+
+    const [previousUsersResult] = await db.execute(
+      `SELECT COUNT(*) as total_users
+       FROM users
+       WHERE ${previousRangeFilter}`
+    );
+
     const [productsResult] = await db.execute('SELECT COUNT(*) as total_products FROM products');
 
-    // Total users
-    const [usersResult] = await db.execute('SELECT COUNT(*) as total_users FROM users');
-
-    // Today's orders
-    const [todayOrdersResult] = await db.execute(`
-      SELECT COUNT(*) as today_orders 
-      FROM orders 
-      WHERE DATE(created_at) = CURDATE()
-    `);
-
-    // Low stock products
     const [lowStockResult] = await db.execute(`
-      SELECT COUNT(*) as low_stock 
-      FROM products 
+      SELECT COUNT(*) as low_stock
+      FROM products
       WHERE stock_quantity <= 10
     `);
 
-    // Pending orders
     const [pendingOrdersResult] = await db.execute(`
-      SELECT COUNT(*) as pending_orders 
-      FROM orders 
+      SELECT COUNT(*) as pending_orders
+      FROM orders
       WHERE status = 'pending'
     `);
 
-    // Payment method breakdown
-    const [paymentMethodStats] = await db.execute(`
-      SELECT 
-        payment_method,
-        COUNT(*) as count,
-        SUM(total_amount) as total_amount
-      FROM orders 
-      WHERE payment_status = 'completed'
-      GROUP BY payment_method
-    `);
+    const [paymentMethodStats] = await db.execute(
+      `SELECT
+         payment_method,
+         COUNT(*) as count,
+         COALESCE(SUM(total_amount), 0) as total_amount
+       FROM orders
+       WHERE payment_status = 'completed'
+       AND ${rangeFilter}
+       GROUP BY payment_method
+       ORDER BY total_amount DESC`
+    );
 
-    // Order status breakdown
-    const [orderStatusStats] = await db.execute(`
-      SELECT 
-        status,
-        COUNT(*) as count,
-        SUM(total_amount) as total_amount
-      FROM orders 
-      GROUP BY status
-    `);
+    const [orderStatusStats] = await db.execute(
+      `SELECT
+         status,
+         COUNT(*) as count,
+         COALESCE(SUM(total_amount), 0) as total_amount
+       FROM orders
+       WHERE ${rangeFilter}
+       GROUP BY status
+       ORDER BY count DESC`
+    );
+
+    const [topProducts] = await db.execute(
+      `SELECT
+         p.id,
+         p.name,
+         COALESCE(NULLIF(TRIM(p.category), ''), 'General') as category,
+         p.image_url,
+         COALESCE(AVG(r.rating), 0) as avg_rating,
+         COALESCE(COUNT(DISTINCT r.id), 0) as review_count,
+         COALESCE(SUM(oi.quantity), 0) as units_sold,
+          COALESCE(SUM(oi.quantity * oi.price), 0) as revenue
+        FROM order_items oi
+        JOIN orders o ON o.id = oi.order_id
+        JOIN products p ON p.id = oi.product_id
+        LEFT JOIN reviews r ON r.product_id = p.id
+        WHERE ${rangeFilter.replace(/created_at/g, 'o.created_at')}
+        GROUP BY p.id, p.name, p.category, p.image_url
+        ORDER BY units_sold DESC, avg_rating DESC, review_count DESC, revenue DESC
+        LIMIT 4`
+    );
+
+    const [recentOrders] = await db.execute(
+      `SELECT
+         o.id,
+         o.total_amount,
+         o.status,
+         o.payment_method,
+         o.payment_status,
+         o.created_at,
+         u.name as user_name,
+         u.email as user_email
+       FROM orders o
+       LEFT JOIN users u ON o.user_id = u.id
+       ORDER BY o.created_at DESC
+       LIMIT 10`
+    );
+
+    for (const order of recentOrders) {
+      const [items] = await db.execute(
+        `SELECT
+           oi.product_id,
+           oi.quantity,
+           oi.price,
+           p.name,
+           COALESCE(NULLIF(TRIM(p.category), ''), 'General') as category,
+            p.image_url
+          FROM order_items oi
+         LEFT JOIN products p ON p.id = oi.product_id
+         WHERE oi.order_id = ?
+         ORDER BY oi.id ASC`,
+        [order.id]
+      );
+      order.items = items || [];
+    }
+
+    const periodRevenue = parseFloat(periodRevenueResult[0]?.total_revenue) || 0;
+    const periodOrders = parseInt(periodOrdersResult[0]?.total_orders || 0, 10);
+    const periodUsers = parseInt(periodUsersResult[0]?.total_users || 0, 10);
+    const previousRevenue = parseFloat(previousRevenueResult[0]?.total_revenue) || 0;
+    const previousOrders = parseInt(previousOrdersResult[0]?.total_orders || 0, 10);
+    const previousUsers = parseInt(previousUsersResult[0]?.total_users || 0, 10);
+    const conversionRate = periodUsers > 0 ? (periodOrders / periodUsers) * 100 : 0;
 
     res.json({
       success: true,
       stats: {
-        totalRevenue: parseFloat(revenueResult[0]?.total_revenue) || 0,
-        totalOrders: ordersResult[0]?.total_orders || 0,
+        range,
+        rangeStart: null,
+        rangeEnd: null,
+        totalRevenue: periodRevenue,
+        totalOrders: periodOrders,
         totalProducts: productsResult[0]?.total_products || 0,
-        totalUsers: usersResult[0]?.total_users || 0,
-        todayOrders: todayOrdersResult[0]?.today_orders || 0,
+        totalUsers: periodUsers,
+        growth: {
+          revenue: calculateGrowthRate(periodRevenue, previousRevenue),
+          orders: calculateGrowthRate(periodOrders, previousOrders),
+          users: calculateGrowthRate(periodUsers, previousUsers)
+        },
+        conversionRate,
         lowStockProducts: lowStockResult[0]?.low_stock || 0,
         pendingOrders: pendingOrdersResult[0]?.pending_orders || 0,
         paymentAnalytics: {
           paymentMethodStats: paymentMethodStats || [],
           orderStatusStats: orderStatusStats || []
-        }
+        },
+        report: {
+          topProducts: topProducts || [],
+          recentOrders: recentOrders || []
+        },
+        rangeStart: null,
+        rangeEnd: null
       }
     });
   } catch (error) {
@@ -493,10 +644,39 @@ router.post('/promo-codes', protect, admin, async (req, res) => {
       apply_to_all_categories
     } = req.body;
 
-    if (!code || !discount_type || !discount_value) {
+    if (!code || !discount_type) {
       return res.status(400).json({ 
         success: false, 
-        message: 'Code, discount type, and discount value are required' 
+        message: 'Code and discount type are required' 
+      });
+    }
+
+    if (!isSupportedPromoDiscountType(discount_type)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid discount type'
+      });
+    }
+
+    const normalizedDiscountValue = normalizePromoDiscountValue(discount_type, discount_value);
+    if (normalizedDiscountValue === null) {
+      return res.status(400).json({
+        success: false,
+        message: 'Discount value is required for this discount type'
+      });
+    }
+
+    if (discount_type === 'percentage' && (normalizedDiscountValue < 0 || normalizedDiscountValue > 100)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Percentage discount must be between 0 and 100'
+      });
+    }
+
+    if (discount_type === 'fixed' && normalizedDiscountValue < 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Fixed discount must be zero or greater'
       });
     }
 
@@ -510,6 +690,13 @@ router.post('/promo-codes', protect, admin, async (req, res) => {
     }
 
     const normalizedCategories = normalizePromoCategories(categories, apply_to_all_categories);
+    if (!apply_to_all_categories && (!normalizedCategories || normalizedCategories.length === 0)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please select at least one category'
+      });
+    }
+    const normalizedValidUntil = valid_until || null;
 
     const [result] = await db.execute(
       `INSERT INTO promo_codes 
@@ -519,12 +706,12 @@ router.post('/promo-codes', protect, admin, async (req, res) => {
         code.toUpperCase(),
         description || '',
         discount_type,
-        parseFloat(discount_value),
+        normalizedDiscountValue,
         parseFloat(min_order_amount || 0),
         usage_limit ? parseInt(usage_limit) : null,
         max_discount_amount ? parseFloat(max_discount_amount) : null,
         valid_from || new Date(),
-        valid_until,
+        normalizedValidUntil,
         is_active,
         normalizedCategories ? JSON.stringify(normalizedCategories) : null
       ]
@@ -560,7 +747,50 @@ router.put('/promo-codes/:id', protect, admin, async (req, res) => {
       apply_to_all_categories
     } = req.body;
 
+    if (!code || !discount_type) {
+      return res.status(400).json({
+        success: false,
+        message: 'Code and discount type are required'
+      });
+    }
+
+    if (!isSupportedPromoDiscountType(discount_type)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid discount type'
+      });
+    }
+
+    const normalizedDiscountValue = normalizePromoDiscountValue(discount_type, discount_value);
+    if (normalizedDiscountValue === null) {
+      return res.status(400).json({
+        success: false,
+        message: 'Discount value is required for this discount type'
+      });
+    }
+
+    if (discount_type === 'percentage' && (normalizedDiscountValue < 0 || normalizedDiscountValue > 100)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Percentage discount must be between 0 and 100'
+      });
+    }
+
+    if (discount_type === 'fixed' && normalizedDiscountValue < 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Fixed discount must be zero or greater'
+      });
+    }
+
     const normalizedCategories = normalizePromoCategories(categories, apply_to_all_categories);
+    if (!apply_to_all_categories && (!normalizedCategories || normalizedCategories.length === 0)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please select at least one category'
+      });
+    }
+    const normalizedValidUntil = valid_until || null;
 
     const [result] = await db.execute(
       `UPDATE promo_codes SET 
@@ -571,12 +801,12 @@ router.put('/promo-codes/:id', protect, admin, async (req, res) => {
         code.toUpperCase(),
         description || '',
         discount_type,
-        parseFloat(discount_value),
+        normalizedDiscountValue,
         parseFloat(min_order_amount || 0),
         usage_limit ? parseInt(usage_limit) : null,
         max_discount_amount ? parseFloat(max_discount_amount) : null,
         valid_from,
-        valid_until,
+        normalizedValidUntil,
         is_active,
         normalizedCategories ? JSON.stringify(normalizedCategories) : null,
         promoId

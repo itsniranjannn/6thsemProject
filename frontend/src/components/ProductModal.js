@@ -283,7 +283,7 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
       exit={{ opacity: 0 }}
     >
       <motion.div 
-        className="bg-white rounded-3xl max-w-6xl w-full max-h-[95vh] overflow-hidden shadow-2xl border border-gray-100"
+        className="bg-white rounded-2xl max-w-5xl w-full max-h-[88vh] overflow-hidden shadow-2xl border border-gray-100"
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.9, opacity: 0 }}
@@ -291,14 +291,14 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
       >
         <div className="flex flex-col lg:flex-row h-full">
           {/* Product Images */}
-          <div className="lg:w-1/2 p-8">
+          <div className="lg:w-[46%] p-5 lg:p-6">
             <div className="relative group">
               {/* Main Image */}
               <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-gray-50 to-gray-100">
                 <motion.img
                   src={images[selectedImage]}
                   alt={product.name}
-                  className="w-full h-96 object-cover"
+                  className="w-full h-[320px] lg:h-[350px] object-cover"
                   key={selectedImage}
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
@@ -385,7 +385,7 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
                     <motion.button
                       key={index}
                       onClick={() => setSelectedImage(index)}
-                      className={`w-20 h-20 border-2 rounded-xl overflow-hidden transition-all duration-300 ${
+                      className={`w-16 h-16 border-2 rounded-xl overflow-hidden transition-all duration-300 ${
                         selectedImage === index 
                           ? 'border-blue-500 shadow-lg ring-2 ring-blue-200' 
                           : 'border-gray-300 hover:border-gray-400'
@@ -402,23 +402,23 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
           </div>
 
           {/* Product Details */}
-          <div className="lg:w-1/2 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 to-white">
+          <div className="lg:w-[54%] p-5 lg:p-6 overflow-y-auto bg-gradient-to-br from-gray-50 to-white">
             {/* Header */}
-            <div className="flex justify-between items-start mb-6">
+            <div className="flex justify-between items-start mb-4">
               <div className="flex-1">
                 <motion.h2 
-                  className="text-3xl font-bold text-gray-900 mb-2"
+                  className="text-2xl font-bold text-gray-900 mb-1"
                   initial={{ opacity: 0, y: -20 }}
                   animate={{ opacity: 1, y: 0 }}
                 >
                   {product.name}
                 </motion.h2>
-                <div className="flex items-center gap-4 mb-4">
-                  <div className="flex items-center gap-2 bg-yellow-50 px-3 py-2 rounded-xl">
+                  <div className="flex items-center gap-3 mb-3 flex-wrap">
+                    <div className="flex items-center gap-2 bg-yellow-50 px-2.5 py-1.5 rounded-xl">
                     {renderStars(displayRating, 'text-xl')}
-                    <span className="text-xl font-semibold text-gray-900">{displayRating}</span>
-                  </div>
-                  <span className="text-gray-600 text-lg">({displayReviewCount} reviews)</span>
+                      <span className="text-lg font-semibold text-gray-900">{displayRating}</span>
+                    </div>
+                    <span className="text-gray-600 text-base">({displayReviewCount} reviews)</span>
                   {realTimeRating && (
                     <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
                       Live Rating
@@ -428,7 +428,7 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
               </div>
               <motion.button
                 onClick={onClose}
-                className="text-gray-500 hover:text-gray-700 text-3xl transition-colors duration-200 hover:scale-110 bg-gray-100 hover:bg-gray-200 rounded-full w-10 h-10 flex items-center justify-center"
+                className="text-gray-500 hover:text-gray-700 transition-colors duration-200 hover:scale-110 bg-gray-100 hover:bg-gray-200 rounded-full w-9 h-9 flex items-center justify-center"
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.9 }}
               >
@@ -437,18 +437,18 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
             </div>
 
             {/* Price and Stock */}
-            <div className="mb-6">
+            <div className="mb-4">
               <div className="flex items-center gap-4 mb-2">
-                <span className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                <span className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
                   Rs. {parseFloat(product.price || 0).toLocaleString()}
                 </span>
                 {product.stock_quantity > 0 ? (
-                  <span className="text-green-600 font-semibold text-lg bg-green-50 px-3 py-1 rounded-full flex items-center gap-2">
+                  <span className="text-green-600 font-semibold text-base bg-green-50 px-3 py-1 rounded-full flex items-center gap-2">
                     <Package className="w-4 h-4" />
                     In Stock ({product.stock_quantity} available)
                   </span>
                 ) : (
-                  <span className="text-red-500 font-semibold text-lg bg-red-50 px-3 py-1 rounded-full">
+                    <span className="text-red-500 font-semibold text-base bg-red-50 px-3 py-1 rounded-full">
                     ❌ Out of Stock
                   </span>
                 )}
@@ -461,20 +461,20 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
             </div>
 
             {/* Premium Features */}
-            <div className="grid grid-cols-2 gap-4 mb-6">
-              <div className="flex items-center gap-2 bg-blue-50 p-3 rounded-lg">
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div className="flex items-center gap-2 bg-blue-50 p-2.5 rounded-lg">
                 <Truck className="w-5 h-5 text-blue-600" />
                 <span className="text-sm font-medium text-blue-700">Free Delivery</span>
               </div>
-              <div className="flex items-center gap-2 bg-green-50 p-3 rounded-lg">
+              <div className="flex items-center gap-2 bg-green-50 p-2.5 rounded-lg">
                 <Shield className="w-5 h-5 text-green-600" />
                 <span className="text-sm font-medium text-green-700">Secure Payment</span>
               </div>
-              <div className="flex items-center gap-2 bg-purple-50 p-3 rounded-lg">
+              <div className="flex items-center gap-2 bg-purple-50 p-2.5 rounded-lg">
                 <Zap className="w-5 h-5 text-purple-600" />
                 <span className="text-sm font-medium text-purple-700">Fast Support</span>
               </div>
-              <div className="flex items-center gap-2 bg-orange-50 p-3 rounded-lg">
+              <div className="flex items-center gap-2 bg-orange-50 p-2.5 rounded-lg">
                 <Clock className="w-5 h-5 text-orange-600" />
                 <span className="text-sm font-medium text-orange-700">24/7 Available</span>
               </div>
@@ -482,7 +482,7 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
 
             {/* Quantity Selector */}
             {product.stock_quantity > 0 && (
-              <div className="mb-6">
+              <div className="mb-4">
                 <label className="block text-sm font-semibold text-gray-700 mb-3">Quantity:</label>
                 <div className="flex items-center gap-3">
                   <motion.button
@@ -514,11 +514,11 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
             )}
 
             {/* Action Buttons */}
-            <div className="flex gap-4 mb-8">
+            <div className="flex gap-3 mb-4">
               <motion.button
                 onClick={handleAddToCartWithQuantity}
                 disabled={product.stock_quantity === 0 || isAddingToCart}
-                className={`flex-1 py-4 px-6 rounded-xl font-semibold text-lg transition-all duration-300 shadow-lg flex items-center justify-center gap-3 ${
+                className={`flex-1 py-3 px-4 rounded-xl font-semibold text-base transition-all duration-300 shadow-lg flex items-center justify-center gap-2 ${
                   product.stock_quantity === 0 || isAddingToCart
                     ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                     : 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white'
@@ -540,7 +540,7 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
               </motion.button>
               <motion.button
                 onClick={onAddReview}
-                className="flex-1 border-2 border-gray-300 text-gray-700 hover:bg-gray-50 py-4 px-6 rounded-xl font-semibold text-lg transition-all duration-300 flex items-center justify-center gap-3"
+                className="flex-1 border-2 border-gray-300 text-gray-700 hover:bg-gray-50 py-3 px-4 rounded-xl font-semibold text-base transition-all duration-300 flex items-center justify-center gap-2"
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
               >
@@ -550,13 +550,13 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
             </div>
 
             {/* Enhanced Tabs */}
-            <div className="border-b border-gray-200 mb-6">
-              <div className="flex gap-6">
+            <div className="border-b border-gray-200 mb-3 sticky top-0 bg-gradient-to-br from-gray-50 to-white z-10">
+              <div className="flex gap-4 overflow-x-auto pb-1">
                 {['description', 'reviews', 'specifications', 'recommendations'].map(tab => (
                   <motion.button
                     key={tab}
                     onClick={() => setActiveTab(tab)}
-                    className={`pb-3 px-1 font-semibold capitalize transition-all duration-200 ${
+                    className={`pb-2 px-1 text-sm font-semibold capitalize whitespace-nowrap transition-all duration-200 ${
                       activeTab === tab
                         ? 'text-blue-600 border-b-2 border-blue-500'
                         : 'text-gray-500 hover:text-gray-700'
@@ -570,7 +570,7 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
             </div>
 
             {/* Tab Content */}
-            <div className="max-h-80 overflow-y-auto">
+            <div className="max-h-[36vh] overflow-y-auto pr-1">
               {activeTab === 'description' && (
                 <motion.div 
                   className="space-y-4"

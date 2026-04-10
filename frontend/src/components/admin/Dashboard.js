@@ -6,12 +6,21 @@ const Dashboard = () => {
     totalOrders: 0,
     totalProducts: 0,
     totalUsers: 0,
-    todayOrders: 0,
+    conversionRate: 0,
+    growth: {
+      revenue: 0,
+      orders: 0,
+      users: 0
+    },
     pendingPayments: 0,
     lowStockProducts: 0,
     paymentAnalytics: {
       paymentMethodStats: [],
       orderStatusStats: []
+    },
+    report: {
+      topProducts: [],
+      recentOrders: []
     }
   });
 
@@ -30,7 +39,7 @@ const Dashboard = () => {
       const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000';
       
       // Fetch stats
-      const statsResponse = await fetch(`${API_BASE}/api/admin/stats`, {
+      const statsResponse = await fetch(`${API_BASE}/api/admin/stats?range=${timeRange}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       
@@ -110,12 +119,209 @@ const Dashboard = () => {
     }
   };
 
-  // Calculate additional statistics
   const totalRevenue = stats.totalRevenue || 0;
-  const revenueGrowth = 12.5; // This would come from your backend in a real app
-  const orderGrowth = 8.2;
-  const userGrowth = 15.7;
-  const conversionRate = 3.2;
+  const revenueGrowth = parseFloat(stats.growth?.revenue || 0);
+  const orderGrowth = parseFloat(stats.growth?.orders || 0);
+  const userGrowth = parseFloat(stats.growth?.users || 0);
+  const conversionRate = parseFloat(stats.conversionRate || 0);
+  const rangeLabelMap = {
+    today: 'Today',
+    week: 'This Week',
+    month: 'This Month',
+    year: 'This Year'
+  };
+  const activeRangeLabel = rangeLabelMap[timeRange] || 'Today';
+
+  const formatGrowth = (value) => {
+    const numeric = parseFloat(value || 0);
+    const prefix = numeric >= 0 ? '↑' : '↓';
+    return `${prefix} ${Math.abs(numeric).toFixed(1)}%`;
+  };
+
+  const escapeHtml = (value) => String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+
+  const getReportHtml = () => {
+    const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+    const productImageFallback = 'https://via.placeholder.com/64x64.png?text=Product';
+    const reportTopProducts = (stats.report?.topProducts && stats.report.topProducts.length > 0)
+      ? stats.report.topProducts
+      : [];
+    const reportRecentOrders = (stats.report?.recentOrders && stats.report.recentOrders.length > 0)
+      ? stats.report.recentOrders
+      : recentOrders;
+
+    const fallbackProductMap = new Map();
+    reportRecentOrders.forEach((order) => {
+      (order.items || []).forEach((item) => {
+        const key = item.product_id || item.id || item.name;
+        if (!key) return;
+        const existing = fallbackProductMap.get(key) || {
+          id: key,
+          name: item.name || 'Product',
+          category: item.category || 'Uncategorized',
+          image_url: item.image_url || item.product_image || '',
+          avg_rating: 0,
+          review_count: 0,
+          units_sold: 0,
+          revenue: 0
+        };
+        const quantity = parseFloat(item.quantity || 0) || 0;
+        const price = parseFloat(item.price || 0) || 0;
+        existing.units_sold += quantity;
+        existing.revenue += quantity * price;
+        fallbackProductMap.set(key, existing);
+      });
+    });
+
+    const fallbackTopProducts = Array.from(fallbackProductMap.values())
+      .sort((a, b) => b.units_sold - a.units_sold || b.revenue - a.revenue)
+      .slice(0, 10);
+
+    const productsForReport = reportTopProducts.length > 0 ? reportTopProducts : fallbackTopProducts;
+    const normalizeImageUrl = (rawUrl) => {
+      if (!rawUrl) return productImageFallback;
+      if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) return rawUrl;
+      if (rawUrl.startsWith('/uploads/')) return `${API_BASE}${rawUrl}`;
+      if (rawUrl.startsWith('uploads/')) return `${API_BASE}/${rawUrl}`;
+      return rawUrl;
+    };
+
+    const paymentRows = (stats.paymentAnalytics?.paymentMethodStats || [])
+      .map((item) => `
+        <tr>
+          <td>${escapeHtml(item.payment_method)}</td>
+          <td>${escapeHtml(item.count)}</td>
+          <td>${escapeHtml(formatNPR(item.total_amount))}</td>
+        </tr>
+      `)
+      .join('');
+
+    const productRows = productsForReport.slice(0, 4)
+      .map((item, idx) => `
+        <tr>
+          <td>${idx + 1}</td>
+          <td>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <img src="${escapeHtml(normalizeImageUrl(item.image_url))}" alt="${escapeHtml(item.name)}" style="width:48px;height:48px;border-radius:10px;object-fit:cover;border:1px solid #e5e7eb;background:#f3f4f6;" />
+              <span>${escapeHtml(item.name)}</span>
+            </div>
+          </td>
+          <td>${escapeHtml(item.category || 'General')}</td>
+          <td>${escapeHtml(parseFloat(item.avg_rating || 0).toFixed(1))} ⭐ (${escapeHtml(item.review_count || 0)} reviews)</td>
+          <td>${escapeHtml(item.units_sold)}</td>
+          <td>${escapeHtml(formatNPR(item.revenue))}</td>
+        </tr>
+      `)
+      .join('');
+
+    const orderRows = reportRecentOrders.slice(0, 5)
+      .map((order) => `
+        <tr>
+          <td>#${escapeHtml(order.id)}</td>
+          <td>${escapeHtml(order.user_name || 'Customer')}</td>
+          <td>${escapeHtml(order.payment_method || '-')}</td>
+          <td>${escapeHtml(order.status || '-')}</td>
+          <td>${escapeHtml(formatNPR(order.total_amount))}</td>
+          <td>${escapeHtml(new Date(order.created_at).toLocaleString())}</td>
+        </tr>
+      `)
+      .join('');
+
+    return `
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Admin Analytics Report - ${escapeHtml(activeRangeLabel)}</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f3f4f6; color: #111827; margin: 0; padding: 24px; }
+    .report { max-width: 1100px; margin: 0 auto; background: white; border-radius: 14px; box-shadow: 0 8px 24px rgba(0,0,0,0.08); overflow: hidden; }
+    .header { background: linear-gradient(135deg, #1d4ed8, #7c3aed); color: white; padding: 24px; }
+    .header h1 { margin: 0 0 8px; font-size: 26px; }
+    .header p { margin: 0; opacity: .92; }
+    .section { padding: 22px 24px; border-top: 1px solid #e5e7eb; }
+    .section h2 { margin: 0 0 12px; font-size: 18px; }
+    .kpis { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; }
+    .kpi { background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px; }
+    .kpi .label { font-size: 12px; color: #6b7280; margin-bottom: 6px; }
+    .kpi .value { font-size: 20px; font-weight: 700; }
+    .kpi .meta { font-size: 12px; margin-top: 6px; color: #374151; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { border-bottom: 1px solid #e5e7eb; text-align: left; padding: 10px 8px; }
+    th { background: #f9fafb; color: #374151; font-weight: 700; }
+    .footer { padding: 14px 24px 24px; color: #6b7280; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="report">
+    <div class="header">
+      <h1>Admin Analytics Report</h1>
+      <p>Range: ${escapeHtml(activeRangeLabel)} • Generated: ${escapeHtml(new Date().toLocaleString())}</p>
+    </div>
+
+    <div class="section">
+      <h2>Executive Summary</h2>
+      <div class="kpis">
+        <div class="kpi"><div class="label">Revenue</div><div class="value">${escapeHtml(formatNPR(totalRevenue))}</div><div class="meta">${escapeHtml(formatGrowth(revenueGrowth))} vs previous</div></div>
+        <div class="kpi"><div class="label">Orders</div><div class="value">${escapeHtml(stats.totalOrders)}</div><div class="meta">${escapeHtml(formatGrowth(orderGrowth))} vs previous</div></div>
+        <div class="kpi"><div class="label">New Users</div><div class="value">${escapeHtml(stats.totalUsers)}</div><div class="meta">${escapeHtml(formatGrowth(userGrowth))} vs previous</div></div>
+      </div>
+      <div style="margin-top:12px;font-size:13px;color:#374151;">
+        Conversion Rate: <strong>${escapeHtml(conversionRate.toFixed(2))}%</strong> •
+        Pending Orders: <strong>${escapeHtml(stats.pendingOrders)}</strong> •
+        Low Stock Products: <strong>${escapeHtml(stats.lowStockProducts)}</strong>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Payment Method Breakdown</h2>
+      <table>
+        <thead><tr><th>Method</th><th>Orders</th><th>Revenue</th></tr></thead>
+        <tbody>${paymentRows || '<tr><td colspan="3">No data available</td></tr>'}</tbody>
+      </table>
+    </div>
+
+    <div class="section">
+      <h2>Top Products</h2>
+      <table>
+        <thead><tr><th>#</th><th>Product</th><th>Category</th><th>Reviews</th><th>Units Sold</th><th>Revenue</th></tr></thead>
+        <tbody>${productRows || '<tr><td colspan="6">No data available</td></tr>'}</tbody>
+      </table>
+    </div>
+
+    <div class="section">
+      <h2>Recent Orders</h2>
+      <table>
+        <thead><tr><th>Order</th><th>Customer</th><th>Payment</th><th>Status</th><th>Amount</th><th>Date</th></tr></thead>
+        <tbody>${orderRows || '<tr><td colspan="6">No data available</td></tr>'}</tbody>
+      </table>
+    </div>
+
+    <div class="footer">SmartShop Admin Report • Confidential</div>
+  </div>
+</body>
+</html>
+    `;
+  };
+
+  const exportReport = () => {
+    const content = getReportHtml();
+    const blob = new Blob([content], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `admin-report-${timeRange}-${new Date().toISOString().split('T')[0]}.html`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(url);
+  };
 
   if (loading) {
     return (
@@ -135,7 +341,7 @@ const Dashboard = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white p-4">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6">
@@ -163,6 +369,12 @@ const Dashboard = () => {
               </svg>
               <span>Refresh</span>
             </button>
+            <button
+              onClick={exportReport}
+              className="bg-gray-900 hover:bg-black text-white px-3 lg:px-4 py-2 rounded-lg font-medium transition-colors text-sm lg:text-base"
+            >
+              Export Report
+            </button>
           </div>
         </div>
 
@@ -174,7 +386,7 @@ const Dashboard = () => {
                 <p className="text-blue-100 text-xs lg:text-sm font-medium">Total Revenue</p>
                 <p className="text-xl lg:text-2xl font-bold mt-1">{formatNPR(totalRevenue)}</p>
                 <div className="flex items-center mt-1 lg:mt-2">
-                  <span className="text-blue-100 text-xs">↑ {revenueGrowth}% this month</span>
+                  <span className="text-blue-100 text-xs">{formatGrowth(revenueGrowth)} vs previous</span>
                 </div>
               </div>
               <div className="w-10 h-10 lg:w-14 lg:h-14 bg-white bg-opacity-20 rounded-lg lg:rounded-xl flex items-center justify-center">
@@ -189,7 +401,7 @@ const Dashboard = () => {
                 <p className="text-green-100 text-xs lg:text-sm font-medium">Total Orders</p>
                 <p className="text-xl lg:text-2xl font-bold mt-1">{stats.totalOrders}</p>
                 <div className="flex items-center mt-1 lg:mt-2">
-                  <span className="text-green-100 text-xs">↑ {orderGrowth}% growth</span>
+                  <span className="text-green-100 text-xs">{formatGrowth(orderGrowth)} vs previous</span>
                 </div>
               </div>
               <div className="w-10 h-10 lg:w-14 lg:h-14 bg-white bg-opacity-20 rounded-lg lg:rounded-xl flex items-center justify-center">
@@ -204,7 +416,7 @@ const Dashboard = () => {
                 <p className="text-purple-100 text-xs lg:text-sm font-medium">Total Users</p>
                 <p className="text-xl lg:text-2xl font-bold mt-1">{stats.totalUsers}</p>
                 <div className="flex items-center mt-1 lg:mt-2">
-                  <span className="text-purple-100 text-xs">↑ {userGrowth}% this month</span>
+                  <span className="text-purple-100 text-xs">{formatGrowth(userGrowth)} vs previous</span>
                 </div>
               </div>
               <div className="w-10 h-10 lg:w-14 lg:h-14 bg-white bg-opacity-20 rounded-lg lg:rounded-xl flex items-center justify-center">
@@ -285,12 +497,12 @@ const Dashboard = () => {
           <div className="bg-white rounded-xl lg:rounded-2xl shadow border border-gray-200 p-4 lg:p-6">
             <div className="flex items-center justify-between mb-4 lg:mb-6">
               <h3 className="text-lg lg:text-xl font-semibold text-gray-900">Quick Stats</h3>
-              <span className="text-xs lg:text-sm text-gray-500">Today</span>
+              <span className="text-xs lg:text-sm text-gray-500">{activeRangeLabel}</span>
             </div>
             <div className="space-y-4">
               <div className="text-center p-4 bg-blue-50 rounded-lg">
-                <p className="text-2xl lg:text-3xl font-bold text-blue-600">{stats.todayOrders}</p>
-                <p className="text-sm text-blue-800">Orders Today</p>
+                <p className="text-2xl lg:text-3xl font-bold text-blue-600">{stats.totalOrders}</p>
+                <p className="text-sm text-blue-800">Orders ({activeRangeLabel})</p>
               </div>
               <div className="text-center p-4 bg-green-50 rounded-lg">
                 <p className="text-2xl lg:text-3xl font-bold text-green-600">{conversionRate}%</p>
@@ -346,10 +558,10 @@ const Dashboard = () => {
           <div className="bg-white rounded-xl lg:rounded-2xl shadow border border-gray-200">
             <div className="px-4 lg:px-6 py-3 lg:py-4 border-b border-gray-200 flex justify-between items-center">
               <h3 className="text-lg lg:text-xl font-semibold text-gray-900">Recent Orders</h3>
-              <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
-                Last 5 orders
-              </span>
-            </div>
+                <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+                  Last 5 orders
+                </span>
+              </div>
             <div className="p-4 lg:p-6">
               {recentOrders.length > 0 ? (
                 <div className="space-y-3 lg:space-y-4">

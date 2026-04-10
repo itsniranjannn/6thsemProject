@@ -82,6 +82,16 @@ const PromoCodesManagement = () => {
       
       const method = editingPromo ? 'PUT' : 'POST';
 
+      const normalizedDiscountValue = formData.discount_type === 'free_shipping'
+        ? 0
+        : parseFloat(formData.discount_value);
+
+      if (!formData.apply_to_all_categories && (!formData.categories || formData.categories.length === 0)) {
+        showToast('Please select at least one category for this promo code', 'error');
+        setLoading(false);
+        return;
+      }
+
       const response = await fetch(url, {
         method,
         headers: {
@@ -90,7 +100,7 @@ const PromoCodesManagement = () => {
         },
         body: JSON.stringify({
           ...formData,
-          discount_value: parseFloat(formData.discount_value),
+          discount_value: normalizedDiscountValue,
           min_order_amount: parseFloat(formData.min_order_amount || 0),
           max_discount_amount: formData.max_discount_amount ? parseFloat(formData.max_discount_amount) : null,
           usage_limit: formData.usage_limit ? parseInt(formData.usage_limit) : null,
@@ -212,8 +222,8 @@ const PromoCodesManagement = () => {
   const isActive = (promo) => {
     const now = new Date();
     const validFrom = new Date(promo.valid_from);
-    const validUntil = new Date(promo.valid_until);
-    return promo.is_active && now >= validFrom && now <= validUntil;
+    const validUntil = promo.valid_until ? new Date(promo.valid_until) : null;
+    return promo.is_active && now >= validFrom && (!validUntil || now <= validUntil);
   };
 
   const getDiscountText = (promo) => {
@@ -390,18 +400,18 @@ const PromoCodesManagement = () => {
 
         {/* Create/Edit Modal */}
         {showModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-xl lg:rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-              <div className="p-4 lg:p-6 border-b border-gray-200">
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center pt-8 pb-4 px-4 z-50 overflow-y-auto">
+            <div className="bg-white rounded-xl lg:rounded-2xl shadow-xl w-full max-w-5xl max-h-[90vh] overflow-y-auto">
+              <div className="p-4 lg:p-6 border-b border-gray-200 sticky top-0 bg-white z-10">
                 <h3 className="text-xl lg:text-2xl font-bold text-gray-900">
                   {editingPromo ? 'Edit Promo Code' : 'Create New Promo Code'}
                 </h3>
               </div>
 
               <form onSubmit={handleSubmit} className="p-4 lg:p-6 space-y-4 lg:space-y-6">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6">
                   {/* Code */}
-                  <div className="md:col-span-2">
+                  <div className="lg:col-span-1">
                     <label className="block text-sm font-medium text-gray-700 mb-2">Promo Code *</label>
                     <input
                       type="text"
@@ -414,7 +424,7 @@ const PromoCodesManagement = () => {
                   </div>
 
                   {/* Description */}
-                  <div className="md:col-span-2">
+                  <div className="lg:col-span-2">
                     <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
                     <textarea
                       value={formData.description}
@@ -426,7 +436,7 @@ const PromoCodesManagement = () => {
                   </div>
 
                   {/* Discount Type */}
-                  <div>
+                  <div className="lg:col-span-1">
                     <label className="block text-sm font-medium text-gray-700 mb-2">Discount Type *</label>
                     <select
                       value={formData.discount_type}
@@ -440,7 +450,7 @@ const PromoCodesManagement = () => {
                   </div>
 
                   {/* Discount Value */}
-                  <div>
+                  <div className="lg:col-span-1">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       {formData.discount_type === 'percentage' ? 'Discount Percentage *' : 
                        formData.discount_type === 'fixed' ? 'Discount Amount *' : 'Free Shipping'}
@@ -460,7 +470,7 @@ const PromoCodesManagement = () => {
                   </div>
 
                   {/* Min Order Amount */}
-                  <div>
+                  <div className="lg:col-span-1">
                     <label className="block text-sm font-medium text-gray-700 mb-2">Minimum Order Amount</label>
                     <input
                       type="number"
@@ -474,7 +484,7 @@ const PromoCodesManagement = () => {
 
                   {/* Max Discount Amount */}
                   {formData.discount_type === 'percentage' && (
-                    <div>
+                    <div className="lg:col-span-1">
                       <label className="block text-sm font-medium text-gray-700 mb-2">Max Discount Amount</label>
                       <input
                         type="number"
@@ -488,7 +498,7 @@ const PromoCodesManagement = () => {
                   )}
 
                   {/* Usage Limit */}
-                  <div>
+                  <div className="lg:col-span-1">
                     <label className="block text-sm font-medium text-gray-700 mb-2">Usage Limit</label>
                     <input
                       type="number"
@@ -500,31 +510,39 @@ const PromoCodesManagement = () => {
                     />
                   </div>
 
-                  {/* Valid From */}
-<div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6">
-  <div>
-    <label className="block text-sm font-medium text-gray-700 mb-2">Valid From *</label>
-    <input
-      type="date"
-      required
-      min={new Date().toISOString().split('T')[0]}
-      value={formData.valid_from}
-      onChange={(e) => setFormData({...formData, valid_from: e.target.value})}
-      className="w-full px-3 lg:px-4 py-2 lg:py-3 border border-gray-300 rounded-lg lg:rounded-xl focus:ring-2 focus:ring-purple-600 focus:border-transparent transition-all"
-    />
-  </div>
-  <div>
-    <label className="block text-sm font-medium text-gray-700 mb-2">Valid Until *</label>
-    <input
-      type="date"
-      required
-      min={formData.valid_from || new Date().toISOString().split('T')[0]}
-      value={formData.valid_until}
-      onChange={(e) => setFormData({...formData, valid_until: e.target.value})}
-      className="w-full px-3 lg:px-4 py-2 lg:py-3 border border-gray-300 rounded-lg lg:rounded-xl focus:ring-2 focus:ring-purple-600 focus:border-transparent transition-all"
-    />
-  </div>
-</div>
+                  <div className="lg:col-span-1">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Valid From *</label>
+                    <input
+                      type="date"
+                      required
+                      min={new Date().toISOString().split('T')[0]}
+                      value={formData.valid_from}
+                      onChange={(e) => setFormData({...formData, valid_from: e.target.value})}
+                      className="w-full px-3 lg:px-4 py-2 lg:py-3 border border-gray-300 rounded-lg lg:rounded-xl focus:ring-2 focus:ring-purple-600 focus:border-transparent transition-all"
+                    />
+                  </div>
+                  <div className="lg:col-span-1">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Valid Until</label>
+                    <input
+                      type="date"
+                      min={formData.valid_from || new Date().toISOString().split('T')[0]}
+                      value={formData.valid_until}
+                      onChange={(e) => setFormData({...formData, valid_until: e.target.value})}
+                      className="w-full px-3 lg:px-4 py-2 lg:py-3 border border-gray-300 rounded-lg lg:rounded-xl focus:ring-2 focus:ring-purple-600 focus:border-transparent transition-all"
+                    />
+                  </div>
+                  <div className="lg:col-span-1 flex items-end">
+                    <label className="inline-flex items-center gap-2 text-sm text-gray-700 pb-2">
+                      <input
+                        type="checkbox"
+                        checked={formData.is_active}
+                        onChange={(e) => setFormData({...formData, is_active: e.target.checked})}
+                        className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
+                        id="is_active"
+                      />
+                      Active Promo Code
+                    </label>
+                  </div>
                 </div>
 
                 {/* Categories */}
@@ -547,8 +565,8 @@ const PromoCodesManagement = () => {
 
                   {!formData.apply_to_all_categories && (
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Select specific categories</label>
-                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 lg:gap-3 max-h-36 overflow-y-auto p-2 border border-gray-200 rounded-lg bg-white">
+                      <label className="block text-sm font-semibold text-gray-800 mb-2">Select Categories *</label>
+                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 lg:gap-3 p-2 border border-gray-200 rounded-lg bg-white">
                         {categories.map(category => (
                           <label key={category} className="flex items-center space-x-2 cursor-pointer">
                             <input
@@ -571,22 +589,8 @@ const PromoCodesManagement = () => {
                   </p>
                 </div>
 
-                {/* Active Status */}
-                <div className="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={formData.is_active}
-                    onChange={(e) => setFormData({...formData, is_active: e.target.checked})}
-                    className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
-                    id="is_active"
-                  />
-                  <label htmlFor="is_active" className="ml-2 text-sm text-gray-700">
-                    Active Promo Code
-                  </label>
-                </div>
-
                 {/* Actions */}
-                <div className="flex justify-end space-x-3 lg:space-x-4 pt-4 lg:pt-6 border-t border-gray-200">
+                <div className="flex justify-end space-x-3 lg:space-x-4 pt-4 lg:pt-6 border-t border-gray-200 sticky bottom-0 bg-white">
                   <button
                     type="button"
                     onClick={() => setShowModal(false)}

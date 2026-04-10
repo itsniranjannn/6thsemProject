@@ -56,7 +56,9 @@ const createPromoCode = async (req, res) => {
       discount_type, 
       discount_value, 
       min_order_amount, 
-      max_uses, 
+      max_uses,
+      usage_limit,
+      max_discount_amount, 
       valid_from, 
       valid_until, 
       is_active,
@@ -65,41 +67,63 @@ const createPromoCode = async (req, res) => {
     } = req.body;
     
     // Validate required fields
-    if (!code || !discount_type || !discount_value) {
+    if (!code || !discount_type) {
       return res.status(400).json({ 
-        message: 'Code, discount type, and discount value are required' 
+        success: false,
+        message: 'Code and discount type are required' 
       });
     }
 
     // Validate discount type
-    if (!['percentage', 'fixed'].includes(discount_type)) {
+    if (!['percentage', 'fixed', 'free_shipping'].includes(discount_type)) {
       return res.status(400).json({ 
-        message: 'Discount type must be either "percentage" or "fixed"' 
+        success: false,
+        message: 'Discount type must be one of "percentage", "fixed", or "free_shipping"' 
+      });
+    }
+
+    const normalizedDiscountValue = discount_type === 'free_shipping'
+      ? 0
+      : parseFloat(discount_value);
+
+    if (discount_type !== 'free_shipping' && !Number.isFinite(normalizedDiscountValue)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Discount value is required for this discount type'
       });
     }
 
     // Validate discount value
-    if (discount_type === 'percentage' && (discount_value < 0 || discount_value > 100)) {
+    if (discount_type === 'percentage' && (normalizedDiscountValue < 0 || normalizedDiscountValue > 100)) {
       return res.status(400).json({ 
+        success: false,
         message: 'Percentage discount must be between 0 and 100' 
       });
     }
 
-    if (discount_type === 'fixed' && discount_value < 0) {
+    if (discount_type === 'fixed' && normalizedDiscountValue < 0) {
       return res.status(400).json({ 
+        success: false,
         message: 'Fixed discount must be positive' 
       });
     }
 
     const categoriesArray = normalizePromoCategories(categories, apply_to_all_categories);
+    if (!apply_to_all_categories && (!categoriesArray || categoriesArray.length === 0)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please select at least one category'
+      });
+    }
 
     const result = await PromoCode.create({
       code: code.toUpperCase(),
       description: description || '',
       discount_type,
-      discount_value,
+      discount_value: normalizedDiscountValue,
       min_order_amount: min_order_amount || 0,
-      max_uses: max_uses || null,
+      usage_limit: usage_limit ?? max_uses ?? null,
+      max_discount_amount: max_discount_amount || null,
       valid_from: valid_from || new Date().toISOString(),
       valid_until: valid_until || null,
       is_active: is_active !== undefined ? is_active : true,
@@ -107,12 +131,13 @@ const createPromoCode = async (req, res) => {
     });
     
     res.status(201).json({ 
+      success: true,
       message: 'Promo code created successfully', 
-      promoCodeId: result.insertId 
+      promoCodeId: result.id || result.insertId 
     });
   } catch (error) {
     console.error('Create promo code error:', error);
-    res.status(400).json({ message: 'Error creating promo code' });
+    res.status(400).json({ success: false, message: 'Error creating promo code' });
   }
 };
 
@@ -142,8 +167,9 @@ const deletePromoCode = async (req, res) => {
 const validatePromoCode = async (req, res) => {
   try {
     const { code, totalAmount, categories, cartItems = [] } = req.body;
+    const normalizedCode = String(code || '').trim().toUpperCase();
     
-    if (!code || !totalAmount) {
+    if (!normalizedCode || totalAmount === undefined || totalAmount === null) {
       return res.status(400).json({ 
         success: false,
         message: 'Promo code and total amount are required' 
@@ -168,7 +194,7 @@ const validatePromoCode = async (req, res) => {
       : [];
 
     const validation = await PromoCode.validatePromoCode(
-      code,
+      normalizedCode,
       parseFloat(totalAmount),
       categoriesArray,
       normalizedCartItems
@@ -255,7 +281,7 @@ const recordPromoUsage = async (promoCodeId, userId, orderId) => {
   const db = require('../config/db');
   if (!promoCodeId || !userId || !orderId) return;
   await db.execute(
-    `INSERT INTO order_promo_codes (promo_code_id, user_id, order_id, used_at)
+    `INSERT INTO promo_usage (promo_code_id, user_id, order_id, used_at)
      VALUES (?, ?, ?, NOW())`,
     [promoCodeId, userId, orderId]
   );
