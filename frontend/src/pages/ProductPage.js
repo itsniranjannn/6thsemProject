@@ -635,14 +635,23 @@ const ProductPage = () => {
   ];
 
   const handleMinPriceChange = (value) => {
-    const newMin = Math.min(Number(value), maxPrice - 1);
-    setMinPrice(newMin);
+    const parsedValue = Number(value);
+    const safeValue = Number.isFinite(parsedValue) ? parsedValue : 0;
+    const boundedValue = Math.max(0, Math.min(safeValue, currentMaxPrice));
+    const newMin = Math.min(boundedValue, Math.max(maxPrice - 1, 0));
+    setMinPrice(Math.round(newMin));
   };
 
   const handleMaxPriceChange = (value) => {
-    const newMax = Math.max(Number(value), minPrice + 1);
-    setMaxPrice(Math.min(newMax, currentMaxPrice));
+    const parsedValue = Number(value);
+    const safeValue = Number.isFinite(parsedValue) ? parsedValue : currentMaxPrice;
+    const boundedValue = Math.max(0, Math.min(safeValue, currentMaxPrice));
+    const newMax = Math.max(boundedValue, minPrice + 1);
+    setMaxPrice(Math.round(Math.min(newMax, currentMaxPrice)));
   };
+
+  const minPricePercent = currentMaxPrice > 0 ? (minPrice / currentMaxPrice) * 100 : 0;
+  const maxPricePercent = currentMaxPrice > 0 ? (maxPrice / currentMaxPrice) * 100 : 100;
 
   const resetFilters = () => {
     setSelectedCategory('all');
@@ -973,16 +982,36 @@ const ProductPage = () => {
                           <span className="text-cyan-300 font-medium">Rs. {maxPrice}</span>
                         </div>
                         
-                        <div className="relative pt-4">
-                          <div className="bg-gray-600 rounded-full h-3 relative">
+                        <div className="relative pt-2">
+                          <div className="bg-gray-600/70 rounded-full h-2 relative">
                             <motion.div 
-                              className="bg-gradient-to-r from-cyan-500 to-blue-500 h-3 rounded-full shadow-lg"
+                              className="absolute bg-gradient-to-r from-cyan-500 to-blue-500 h-2 rounded-full shadow-lg"
                               initial={{ width: 0 }}
                               animate={{ 
-                                width: `${((maxPrice - minPrice) / currentMaxPrice) * 100}%`,
-                                marginLeft: `${(minPrice / currentMaxPrice) * 100}%`
+                                width: `${Math.max(maxPricePercent - minPricePercent, 0)}%`,
+                                left: `${minPricePercent}%`
                               }}
                               transition={{ duration: 0.8 }}
+                            />
+                          </div>
+                          <div className="relative mt-2 h-6">
+                            <input
+                              type="range"
+                              min="0"
+                              max={currentMaxPrice}
+                              value={minPrice}
+                              onChange={(e) => handleMinPriceChange(e.target.value)}
+                              className="price-range-slider"
+                              aria-label="Minimum price slider"
+                            />
+                            <input
+                              type="range"
+                              min="0"
+                              max={currentMaxPrice}
+                              value={maxPrice}
+                              onChange={(e) => handleMaxPriceChange(e.target.value)}
+                              className="price-range-slider"
+                              aria-label="Maximum price slider"
                             />
                           </div>
                         </div>

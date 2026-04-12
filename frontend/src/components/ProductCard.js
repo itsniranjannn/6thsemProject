@@ -365,13 +365,13 @@ const ProductCard = ({ product, onAddToCart, onViewDetails, onAddReview, compact
 
   return (
     <motion.div 
-      className="bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 border border-gray-100 overflow-hidden group cursor-pointer"
+      className="bg-white rounded-3xl shadow-lg hover:shadow-2xl transition-all duration-300 border border-gray-100 overflow-hidden group cursor-pointer h-full flex flex-col"
       whileHover={{ scale: 1.02, y: -5 }}
       onHoverStart={() => setIsHovered(true)}
       onHoverEnd={() => setIsHovered(false)}
     >
       {/* Product Image */}
-      <div className="relative aspect-square bg-gradient-to-br from-gray-50 to-gray-100 overflow-hidden">
+      <div className="relative aspect-square bg-gradient-to-br from-gray-50 to-gray-100 overflow-hidden shrink-0">
         {imageLoading && !imageError && (
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
@@ -390,12 +390,12 @@ const ProductCard = ({ product, onAddToCart, onViewDetails, onAddReview, compact
         />
         
         {/* Badges */}
-        <div className="absolute top-3 left-3 flex flex-col space-y-2">
+        <div className="absolute top-3 left-3 flex max-w-[68%] flex-col space-y-2">
           {showFeaturedBadge && (
             <motion.span 
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
-              className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-3 py-1 rounded-full text-sm font-bold shadow-lg"
+              className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-3 py-1 rounded-full text-xs font-bold shadow-lg truncate"
             >
               ⭐ Featured
             </motion.span>
@@ -404,7 +404,7 @@ const ProductCard = ({ product, onAddToCart, onViewDetails, onAddReview, compact
             <motion.span 
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
-              className="bg-gradient-to-r from-green-500 to-emerald-500 text-white px-3 py-1 rounded-full text-sm font-bold shadow-lg"
+              className="bg-gradient-to-r from-green-500 to-emerald-500 text-white px-3 py-1 rounded-full text-xs font-bold shadow-lg truncate"
             >
               🆕 New
             </motion.span>
@@ -413,7 +413,7 @@ const ProductCard = ({ product, onAddToCart, onViewDetails, onAddReview, compact
             <motion.span 
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
-              className={offerBadge.className}
+              className={`${offerBadge.className} truncate`}
             >
               {offerBadge.text}
             </motion.span>
@@ -424,7 +424,7 @@ const ProductCard = ({ product, onAddToCart, onViewDetails, onAddReview, compact
         <motion.div 
           initial={{ scale: 0 }}
           animate={{ scale: 1 }}
-          className={`absolute top-3 right-3 px-3 py-1 rounded-full text-sm font-bold shadow-lg ${
+          className={`absolute top-3 right-3 max-w-[45%] px-3 py-1 rounded-full text-xs font-bold shadow-lg truncate ${
             product.stock_quantity > 10 
               ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white'
               : product.stock_quantity > 0
@@ -438,7 +438,7 @@ const ProductCard = ({ product, onAddToCart, onViewDetails, onAddReview, compact
         {/* Wishlist Button */}
         <motion.button
           onClick={handleWishlistToggle}
-          className="absolute top-3 right-3 bg-white/90 hover:bg-white text-gray-600 hover:text-red-500 rounded-full p-2 shadow-lg transition-all duration-200"
+          className="absolute top-12 right-3 bg-white/90 hover:bg-white text-gray-600 hover:text-red-500 rounded-full p-2 shadow-lg transition-all duration-200"
           whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.9 }}
         >
@@ -476,41 +476,43 @@ const ProductCard = ({ product, onAddToCart, onViewDetails, onAddReview, compact
       </div>
 
       {/* Product Info */}
-      <div className="p-6">
-        <h3 className="font-bold text-gray-900 text-lg mb-2 line-clamp-2 h-14 hover:text-blue-600 transition-colors cursor-pointer"
+      <div className="p-5 flex flex-1 flex-col min-h-0">
+        <h3 className="font-bold text-gray-900 text-lg mb-2 line-clamp-2 min-h-[3.5rem] hover:text-blue-600 transition-colors cursor-pointer"
             onClick={() => onViewDetails(product)}>
           {product.name}
         </h3>
         
-        <p className="text-gray-600 text-sm mb-3 line-clamp-2">
+        <p className="text-gray-600 text-sm mb-3 line-clamp-2 min-h-[2.5rem]">
           {product.description || 'No description available'}
         </p>
 
         {/* Rating and Reviews */}
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center space-x-2">
-            <div className="flex items-center space-x-1 bg-yellow-50 px-2 py-1 rounded-lg">
+        <div className="mb-4 space-y-2 min-h-[4.25rem]">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="flex items-center space-x-1 bg-yellow-50 px-2 py-1 rounded-lg shrink-0">
               {renderStars(displayRating)}
               <span className="text-sm font-semibold text-gray-900 ml-1">{displayRating}</span>
+              </div>
+              {realTimeRating && (
+                <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full shrink-0">Live</span>
+              )}
             </div>
-            <span className="text-sm text-gray-600">
-              {displayReviewCount > 0 ? `${displayReviewCount} reviews` : 'No reviews yet'}
-            </span>
-            {realTimeRating && (
-              <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">Live Rating</span>
+            {product.tags && Array.isArray(product.tags) && product.tags.length > 0 && product.tags[0] && product.tags[0].trim() !== '' && (
+              <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-medium max-w-[40%] truncate shrink-0">
+              {product.tags[0]}
+              </span>
             )}
           </div>
-          {product.tags && Array.isArray(product.tags) && product.tags.length > 0 && product.tags[0] && product.tags[0].trim() !== '' && (
-            <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-medium">
-              {product.tags[0]}
-            </span>
-          )}
+          <span className="block text-sm text-gray-600 truncate">
+            {displayReviewCount > 0 ? `${displayReviewCount} reviews` : 'No reviews yet'}
+          </span>
         </div>
 
         {/* Price */}
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between gap-2 mb-4">
           <div className="flex items-center space-x-2">
-            <span className="text-2xl font-bold text-gray-900">
+            <span className="text-2xl font-bold text-gray-900 truncate">
               {formatNPR(product.price)}
             </span>
             {product.original_price && product.original_price > product.price && (
@@ -520,7 +522,7 @@ const ProductCard = ({ product, onAddToCart, onViewDetails, onAddReview, compact
             )}
           </div>
           {showDiscountBadge && offerBadge && (
-            <span className="text-sm bg-green-100 text-green-800 px-2 py-1 rounded-full font-semibold">
+            <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full font-semibold max-w-[45%] truncate shrink-0">
               {offerType === 'Bogo' 
                 ? 'Get 1 FREE!' 
                 : offerType === 'flat_discount'
@@ -538,10 +540,10 @@ const ProductCard = ({ product, onAddToCart, onViewDetails, onAddReview, compact
         </div>
 
         {/* Action Buttons */}
-        <div className="flex space-x-3">
+        <div className="flex space-x-3 mt-auto">
           <motion.button
             onClick={() => onViewDetails(product)}
-            className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-3 rounded-xl font-medium transition-all duration-200 border border-gray-300 flex items-center justify-center gap-2"
+            className="flex-1 min-w-0 bg-gray-100 hover:bg-gray-200 text-gray-700 py-3 rounded-xl font-medium transition-all duration-200 border border-gray-300 flex items-center justify-center gap-2"
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
           >
@@ -551,7 +553,7 @@ const ProductCard = ({ product, onAddToCart, onViewDetails, onAddReview, compact
           <motion.button
             onClick={() => onAddToCart(product)}
             disabled={product.stock_quantity === 0}
-            className={`flex-1 py-3 rounded-xl font-medium transition-all duration-200 shadow-lg flex items-center justify-center gap-2 ${
+            className={`flex-1 min-w-0 py-3 rounded-xl font-medium transition-all duration-200 shadow-lg flex items-center justify-center gap-2 ${
               product.stock_quantity === 0
                 ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 : 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white hover:shadow-xl'
