@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import AdminProductModal from './AdminProductModal.js';
 import Toast from '../Toast.js';
@@ -140,13 +140,13 @@ const ProductsManagement = () => {
     showToast(`Product ${editingProduct ? 'updated' : 'created'} successfully!`);
   };
 
-  const categories = [...new Set(products.map(p => p.category).filter(Boolean))];
+  const categories = useMemo(() => [...new Set(products.map(p => p.category).filter(Boolean))], [products]);
   const totalProducts = products.length;
-  const lowStockCount = products.filter(p => p.stock_quantity <= 10).length;
-  const outOfStockCount = products.filter(p => p.stock_quantity === 0).length;
+  const lowStockCount = useMemo(() => products.filter(p => p.stock_quantity <= 10).length, [products]);
+  const outOfStockCount = useMemo(() => products.filter(p => p.stock_quantity === 0).length, [products]);
 
   // Filter and sort products
-  const filteredProducts = products
+  const filteredProducts = useMemo(() => products
     .filter(product => {
       const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                            product.category?.toLowerCase().includes(searchTerm.toLowerCase());
@@ -179,14 +179,14 @@ const ProductsManagement = () => {
         default:
           return new Date(b.created_at) - new Date(a.created_at);
       }
-    });
+    }), [products, searchTerm, selectedCategory, stockFilter, sortBy]);
 
   // Pagination calculations
   const totalFilteredProducts = filteredProducts.length;
   const totalPages = Math.ceil(totalFilteredProducts / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
-  const currentProducts = filteredProducts.slice(startIndex, endIndex);
+  const currentProducts = useMemo(() => filteredProducts.slice(startIndex, endIndex), [filteredProducts, startIndex, endIndex]);
 
   // Pagination handlers
   const goToPage = (page) => {
