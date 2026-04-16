@@ -1,0 +1,179 @@
+1. Content‑Based Filtering – “Similar to what you’re looking at”
+What it does:
+When you view a product (say, an iPhone), the system finds other products that are similar in category or price.
+
+How it works (simple):
+
+Same category → gets +3 points
+
+Price within 30% range → gets +2 points
+
+Highest points win.
+
+Example:
+You are looking at a Samsung phone ($700).
+
+Another phone ($680) → same category (+3), price close (+2) → total 5 → recommended.
+
+A laptop ($1200) → different category (0 points), price not close → total 0 → not recommended.
+
+Why it’s useful:
+No need to know anything about the user. Works even for new users.
+
+2. Collaborative Filtering – “People like you also bought…”
+What it does:
+Finds other users who bought the same products as you, then recommends what they bought that you haven’t.
+
+How it works (simple):
+
+You bought a phone and a case.
+
+System finds 10 other people who also bought that phone and case.
+
+Among those people, the most popular other product is a screen protector.
+
+System recommends screen protector to you.
+
+Example:
+
+User A buys: Laptop, Mouse, Keyboard
+
+User B buys: Laptop, Mouse, USB Hub
+
+You bought: Laptop, Mouse
+
+System sees User A and B are similar to you, so it recommends Keyboard and USB Hub.
+
+Why it’s useful:
+Discovers products you didn’t know existed. Very powerful for repeat users.
+
+Fallback:
+If you have no purchase history, it shows popular products instead.
+
+3. Popularity‑Based – “What everyone is buying”
+What it does:
+Simply shows the most purchased, featured, or new products.
+
+Formula in simple words:
+Each product gets points:
+
+Every time it’s bought → 2 points
+
+If it’s marked “featured” → +3 points
+
+If it’s “new arrival” → +2 points
+Sort by total points, show top ones.
+
+Example:
+
+Product A: bought 10 times (20 points) + featured (3) = 23 points
+
+Product B: bought 5 times (10 points) + new (2) = 12 points
+
+Product A ranks higher.
+
+Why it’s useful:
+Perfect for new users, home page, or when other algorithms fail.
+
+4. ML (Cosine Similarity) – “Smart comparison using many features”
+What it does:
+Compares products using 8 different characteristics at once, like category, price, discount, stock, age, etc. Then calculates a similarity score between 0 and 1.
+
+How it works (very simple):
+Imagine each product is a person with 8 personality traits. The system measures how “close” two products are. If the score is above 0.1, it recommends.
+
+The 8 features (you can mention a few):
+
+Category (phone, laptop, etc.)
+
+Price (normalized)
+
+Is it featured?
+
+Is it new?
+
+How much stock is left?
+
+Discount percentage
+
+How old is the product? (newer = better)
+
+Price tier (cheap, medium, expensive)
+
+Example:
+iPhone 15 and Samsung S23:
+
+Same category → high similarity
+
+Price close → high similarity
+
+Both new → high similarity
+
+Similarity score = 0.85 → recommended.
+
+Why it’s useful:
+More accurate than simple category matching. Catches subtle similarities.
+
+Cache trick:
+The system stores these feature vectors for 5 minutes so it doesn’t recompute every time → faster response.
+
+5. Hybrid – “Best of all worlds”
+What it does:
+Runs ML, content, and popularity algorithms together, removes duplicates, and gives you a mixed list.
+
+How it works (simple):
+
+Ask ML for 5 recommendations
+
+Ask content for 5 recommendations
+
+Ask popularity for 5 recommendations
+
+Combine all, remove same products, pick top 5.
+
+Example:
+ML suggests: Phone, Phone Case, Charger
+Content suggests: Phone, Earbuds, Charger
+Popularity suggests: Phone, Laptop, Mouse
+Hybrid result: Phone, Phone Case, Charger, Earbuds, Laptop
+
+Why it’s useful:
+No single algorithm is perfect. Hybrid covers more possibilities.
+
+🗣️ How to Answer the Examiner’s Likely Questions
+Q: Which algorithm is best?
+
+“None is best alone. ML gives highest accuracy, but hybrid gives diversity. For a new user, we use popularity. For returning user, we use collaborative or hybrid.”
+
+Q: How do you know it works?
+
+“We tested each algorithm with sample data. For example, cosine similarity returned 0.85 for two phones in same category, and 0 for unrelated products. We also did unit tests (show test table).”
+
+Q: Why cosine similarity?
+
+“It’s simple, fast, and works well for high‑dimensional data like product features. We don’t need complex neural networks for this scale.”
+
+Q: What happens if no similar products?
+
+“We have fallbacks. ML falls back to content, collaborative falls back to popularity. The user always sees something.”
+
+Q: Can you give a real example from your project?
+
+“Yes. When you view ‘iPhone 17’ (product ID 7), the ML algorithm finds ‘Samsung S23’ because category matches and price is within 30%. The similarity score was 0.72, so it shows up in ‘You May Also Like’.”
+
+📝 Quick Memory Card (For You)
+Algorithm	One‑line explanation	When used
+Content‑based	“Same category or similar price”	Product detail page
+Collaborative	“People like you bought this”	User dashboard
+Popularity	“Trending and featured items”	Home page, fallback
+ML (Cosine)	“8‑feature smart comparison”	Default recommendation
+Hybrid	“Mix of all three”	“You may also like”
+✅ Final Tip for Viva
+Do not memorize math formulas. Instead, say:
+
+“We represent each product as a list of features, then use cosine similarity – which is like measuring the angle between two arrows in space. Smaller angle means more similar.”
+
+Then point to your test case table that shows cosineSimilarity([1,0,0.5], [1,0,0.5]) = 1.0.
+
+
+
