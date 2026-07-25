@@ -1060,15 +1060,3 @@ The system supports the following categories (configurable):
 - **Default Country**: Nepal
 - **Default Shipping**: Rs. 50 flat rate
 
----
-
-## 📝 Version History
-
-| Version | Date | Changes                                       |
-| ------- | ---- | --------------------------------------------- |
-| 1.0.0   | 2025 | Initial release with full e-commerce features |
-| 1.1.0   | 2026 | Offers/promo/payment/recommendation stabilization, role guardrails, homepage and modal UX updates |
-
----
-
-_Documentation generated for SmartShop Multi-Category E-Commerce System_
