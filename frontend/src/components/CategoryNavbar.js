@@ -12,7 +12,7 @@ const CategoryNavbar = ({ onCategorySelect, selectedCategory = 'all' }) => {
   const fetchCategories = async () => {
     try {
       const response = await fetch(
-        `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/products/categories`
+        `${(process.env.REACT_APP_API_URL || '')}/api/products/categories`
       );
       if (response.ok) {
         const data = await response.json();

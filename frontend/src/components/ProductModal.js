@@ -78,7 +78,7 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
     
     try {
       const response = await fetch(
-        `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/reviews/product/${product.id}`
+        `${(process.env.REACT_APP_API_URL || '')}/api/reviews/product/${product.id}`
       );
       if (response.ok) {
         const data = await response.json();
@@ -111,19 +111,19 @@ const ProductModal = ({ product, reviews, reviewsLoading, onClose, onAddToCart, 
 
       switch (activeAlgorithm) {
         case 'ml':
-          apiUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommendations/product/${product.id}?algorithm=ml&limit=4`;
+          apiUrl = `${(process.env.REACT_APP_API_URL || '')}/api/recommendations/product/${product.id}?algorithm=ml&limit=4`;
           break;
         case 'content':
-          apiUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommendations/product/${product.id}?algorithm=content&limit=4`;
+          apiUrl = `${(process.env.REACT_APP_API_URL || '')}/api/recommendations/product/${product.id}?algorithm=content&limit=4`;
           break;
         case 'collaborative':
-          apiUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommendations/user/personalized?limit=4`;
+          apiUrl = `${(process.env.REACT_APP_API_URL || '')}/api/recommendations/user/personalized?limit=4`;
           break;
         case 'popular':
-          apiUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommendations/popular?limit=4`;
+          apiUrl = `${(process.env.REACT_APP_API_URL || '')}/api/recommendations/popular?limit=4`;
           break;
         default:
-          apiUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommendations/product/${product.id}?algorithm=ml&limit=4`;
+          apiUrl = `${(process.env.REACT_APP_API_URL || '')}/api/recommendations/product/${product.id}?algorithm=ml&limit=4`;
       }
 
       const response = await fetch(apiUrl, { headers });

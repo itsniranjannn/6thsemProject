@@ -55,7 +55,7 @@ const NotificationCenter = () => {
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
-      const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const API_BASE_URL = (process.env.REACT_APP_API_URL || '');
       
       const response = await fetch(`${API_BASE_URL}/api/admin/user-notifications`, {
         headers: {
@@ -197,7 +197,7 @@ const NotificationCenter = () => {
   const markAsRead = async (notificationId) => {
     try {
       const token = localStorage.getItem('token');
-      const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const API_BASE_URL = (process.env.REACT_APP_API_URL || '');
       
       try {
         const response = await fetch(`${API_BASE_URL}/api/notifications/${notificationId}/read`, {
@@ -234,7 +234,7 @@ const NotificationCenter = () => {
   const markAllAsRead = async () => {
     try {
       const token = localStorage.getItem('token');
-      const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const API_BASE_URL = (process.env.REACT_APP_API_URL || '');
       
       try {
         const response = await fetch(`${API_BASE_URL}/api/notifications/mark-all-read`, {
@@ -267,7 +267,7 @@ const NotificationCenter = () => {
   const clearAllNotifications = async () => {
     try {
       const token = localStorage.getItem('token');
-      const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const API_BASE_URL = (process.env.REACT_APP_API_URL || '');
       
       try {
         const response = await fetch(`${API_BASE_URL}/api/notifications/clear-all`, {

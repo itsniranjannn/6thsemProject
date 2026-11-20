@@ -31,7 +31,7 @@ const ProductsManagement = () => {
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
-      const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const API_BASE = (process.env.REACT_APP_API_URL || '');
       
       const response = await fetch(`${API_BASE}/api/admin/products`, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -59,7 +59,7 @@ const ProductsManagement = () => {
 
     try {
       const token = localStorage.getItem('token');
-      const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const API_BASE = (process.env.REACT_APP_API_URL || '');
       
       const response = await fetch(`${API_BASE}/api/admin/products/${productId}`, {
         method: 'DELETE',
@@ -81,7 +81,7 @@ const ProductsManagement = () => {
   const toggleProductStatus = async (productId, currentStatus, statusType) => {
     try {
       const token = localStorage.getItem('token');
-      const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const API_BASE = (process.env.REACT_APP_API_URL || '');
       
       console.log(`Toggling ${statusType} for product ${productId}, current: ${currentStatus}`);
       

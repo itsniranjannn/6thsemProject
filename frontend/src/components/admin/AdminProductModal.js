@@ -117,7 +117,7 @@ const AdminProductModal = ({ product, onClose, onSave }) => {
 
     try {
       const token = localStorage.getItem('token');
-      const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const API_BASE = (process.env.REACT_APP_API_URL || '');
       
       const allImageUrls = [
         ...imageUrls.filter(url => url.trim() !== ''),
@@ -169,7 +169,7 @@ const AdminProductModal = ({ product, onClose, onSave }) => {
     setUploadLoading(true);
     try {
       const token = localStorage.getItem('token');
-      const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const API_BASE = (process.env.REACT_APP_API_URL || '');
       const formData = new FormData();
       formData.append('image', file);
 

@@ -36,7 +36,7 @@ const Dashboard = () => {
   const fetchDashboardData = async () => {
     try {
       const token = localStorage.getItem('token');
-      const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const API_BASE = (process.env.REACT_APP_API_URL || '');
       
       // Fetch stats
       const statsResponse = await fetch(`${API_BASE}/api/admin/stats?range=${timeRange}`, {
@@ -146,7 +146,7 @@ const Dashboard = () => {
     .replace(/'/g, '&#039;');
 
   const getReportHtml = () => {
-    const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+    const API_BASE = (process.env.REACT_APP_API_URL || '');
     const productImageFallback = 'https://via.placeholder.com/64x64.png?text=Product';
     const reportTopProducts = (stats.report?.topProducts && stats.report.topProducts.length > 0)
       ? stats.report.topProducts

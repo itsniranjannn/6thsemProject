@@ -28,7 +28,7 @@ const SearchBar = ({ onSearch, placeholder = "Search products, categories, brand
   const fetchTrendingSearches = async () => {
     try {
       const response = await fetch(
-        `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/products/trending-searches`
+        `${(process.env.REACT_APP_API_URL || '')}/api/products/trending-searches`
       );
       if (response.ok) {
         const data = await response.json();

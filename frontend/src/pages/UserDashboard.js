@@ -183,7 +183,7 @@ const ProfileSection = ({ user, onUpdate }) => {
     try {
       setIsSaving(true);
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5000/api/users/profile', {
+      const response = await fetch('/api/users/profile', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -226,7 +226,7 @@ const ProfileSection = ({ user, onUpdate }) => {
     try {
       setIsVerifyingEmail(true);
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5000/api/users/resend-verification', {
+      const response = await fetch('/api/users/resend-verification', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -594,7 +594,7 @@ const ChangePasswordSection = () => {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5000/api/users/change-password', {
+      const response = await fetch('/api/users/change-password', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1202,14 +1202,14 @@ const UserDashboard = () => {
       const token = localStorage.getItem('token');
       
       // Fetch dashboard stats
-      const statsResponse = await fetch('http://localhost:5000/api/users/dashboard/stats', {
+      const statsResponse = await fetch('/api/users/dashboard/stats', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
       
       // Fetch order history
-      const ordersResponse = await fetch('http://localhost:5000/api/users/orders/history?limit=20', {
+      const ordersResponse = await fetch('/api/users/orders/history?limit=20', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -1256,7 +1256,7 @@ const UserDashboard = () => {
   const handleViewOrderDetails = async (orderId) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/users/orders/${orderId}`, {
+      const response = await fetch(`/api/users/orders/${orderId}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -1286,7 +1286,7 @@ const UserDashboard = () => {
     setIsCancelling(true);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/users/orders/${orderToCancel.id}/cancel`, {
+      const response = await fetch(`/api/users/orders/${orderToCancel.id}/cancel`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,

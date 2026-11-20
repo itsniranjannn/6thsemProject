@@ -10,11 +10,11 @@ export const getRecommendations = async (productId, algorithm = 'ml', limit = 8)
       headers['Authorization'] = `Bearer ${token}`;
     }
 
-    let url = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommendations/product/${productId}?algorithm=${algorithm}&limit=${limit}`;
+    let url = `${(process.env.REACT_APP_API_URL || '')}/api/recommendations/product/${productId}?algorithm=${algorithm}&limit=${limit}`;
     
     // Use hybrid approach for better results
     if (algorithm === 'ml') {
-      url = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommendations/hybrid/${productId}?limit=${limit}`;
+      url = `${(process.env.REACT_APP_API_URL || '')}/api/recommendations/hybrid/${productId}?limit=${limit}`;
     }
 
     console.log(`🔄 Fetching ${algorithm} recommendations from:`, url);
@@ -64,7 +64,7 @@ export const getPersonalizedRecommendations = async (limit = 8) => {
     }
 
     const response = await fetch(
-      `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommendations/user/personalized?limit=${limit}`,
+      `${(process.env.REACT_APP_API_URL || '')}/api/recommendations/user/personalized?limit=${limit}`,
       {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -94,7 +94,7 @@ export const getPersonalizedRecommendations = async (limit = 8) => {
 export const getPopularProducts = async (limit = 8) => {
   try {
     const response = await fetch(
-      `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommendations/popular?limit=${limit}`
+      `${(process.env.REACT_APP_API_URL || '')}/api/recommendations/popular?limit=${limit}`
     );
 
     if (!response.ok) {
@@ -150,7 +150,7 @@ export const calculateSimilarity = (product1, product2) => {
 export const checkRecommendationHealth = async () => {
   try {
     const response = await fetch(
-      `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommendations/health`
+      `${(process.env.REACT_APP_API_URL || '')}/api/recommendations/health`
     );
     const data = await response.json();
     return data;

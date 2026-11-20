@@ -17,7 +17,7 @@ export const CartProvider = ({ children }) => {
   const [lastUpdate, setLastUpdate] = useState(Date.now());
   const { isAuthenticated, user } = useAuth();
 
-  const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+  const API_BASE_URL = (process.env.REACT_APP_API_URL || '');
 
   // Enhanced API response handler
   const handleApiResponse = async (response) => {

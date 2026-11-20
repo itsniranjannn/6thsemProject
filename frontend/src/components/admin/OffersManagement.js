@@ -89,7 +89,7 @@ const OffersManagement = () => {
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
-      const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const API_BASE = (process.env.REACT_APP_API_URL || '');
       
       const response = await fetch(`${API_BASE}/api/offers/admin/all`, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -112,7 +112,7 @@ const OffersManagement = () => {
   const fetchProducts = async () => {
     try {
       const token = localStorage.getItem('token');
-      const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const API_BASE = (process.env.REACT_APP_API_URL || '');
       
       const response = await fetch(`${API_BASE}/api/products`, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -136,7 +136,7 @@ const OffersManagement = () => {
 
     try {
       const token = localStorage.getItem('token');
-      const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const API_BASE = (process.env.REACT_APP_API_URL || '');
       
       const url = editingOffer 
         ? `${API_BASE}/api/offers/${editingOffer.id}`
@@ -199,7 +199,7 @@ const OffersManagement = () => {
 
     try {
       const token = localStorage.getItem('token');
-      const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const API_BASE = (process.env.REACT_APP_API_URL || '');
       
       const response = await fetch(`${API_BASE}/api/offers/${offerId}`, {
         method: 'DELETE',

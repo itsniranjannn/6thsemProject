@@ -32,7 +32,7 @@ const OrdersManagement = () => {
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
-      const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const API_BASE = (process.env.REACT_APP_API_URL || '');
       
       const response = await fetch(`${API_BASE}/api/admin/orders`, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -60,7 +60,7 @@ const OrdersManagement = () => {
   const updateOrderStatus = async (orderId, newStatus, statusType = 'order') => {
     try {
       const token = localStorage.getItem('token');
-      const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const API_BASE = (process.env.REACT_APP_API_URL || '');
       
       console.log(`Updating ${statusType} status for order ${orderId} to ${newStatus}`);
       

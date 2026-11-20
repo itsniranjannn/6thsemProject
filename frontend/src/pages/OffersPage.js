@@ -45,7 +45,7 @@ const OffersPage = () => {
     try {
       setLoading(true);
       const response = await fetch(
-        `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/offers`
+        `${(process.env.REACT_APP_API_URL || '')}/api/offers`
       );
       
       if (response.ok) {
@@ -66,7 +66,7 @@ const OffersPage = () => {
   const fetchProductReviews = async (productId) => {
     try {
       const response = await fetch(
-        `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/reviews/product/${productId}`
+        `${(process.env.REACT_APP_API_URL || '')}/api/reviews/product/${productId}`
       );
 
       if (!response.ok) return [];
@@ -81,7 +81,7 @@ const OffersPage = () => {
   const openProductDetails = async (offer) => {
     try {
       const response = await fetch(
-        `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/products/${offer.product_id}`
+        `${(process.env.REACT_APP_API_URL || '')}/api/products/${offer.product_id}`
       );
 
       if (!response.ok) {

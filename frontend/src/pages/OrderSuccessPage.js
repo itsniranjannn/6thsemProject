@@ -50,7 +50,7 @@ const OrderSuccessPage = () => {
   const clearCartFromAPI = async (token) => {
     try {
       const response = await fetch(
-        `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/cart/clear`, 
+        `${(process.env.REACT_APP_API_URL || '')}/api/cart/clear`, 
         {
           method: 'DELETE',
           headers: {
@@ -91,7 +91,7 @@ const OrderSuccessPage = () => {
 
         // Fetch user details
         const userResponse = await axios.get(
-          `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/users/profile`,
+          `${(process.env.REACT_APP_API_URL || '')}/api/users/profile`,
           { 
             headers: { Authorization: `Bearer ${token}` },
             timeout: 10000
@@ -105,7 +105,7 @@ const OrderSuccessPage = () => {
         // Fetch order details
         if (orderId) {
           const orderResponse = await axios.get(
-            `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/orders/${orderId}`,
+            `${(process.env.REACT_APP_API_URL || '')}/api/orders/${orderId}`,
             { 
               headers: { Authorization: `Bearer ${token}` },
               timeout: 10000

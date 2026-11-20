@@ -107,7 +107,7 @@ const CheckoutPage = () => {
   const loadFallbackPromos = async () => {
     try {
       const token = localStorage.getItem('token');
-      const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const API_BASE_URL = (process.env.REACT_APP_API_URL || '');
       
       const response = await fetch(`${API_BASE_URL}/api/promo/active`, {
         headers: {
@@ -154,7 +154,7 @@ const CheckoutPage = () => {
   const loadAvailablePromos = async () => {
     try {
       const token = localStorage.getItem('token');
-      const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const API_BASE_URL = (process.env.REACT_APP_API_URL || '');
       const cartCategories = getCartCategories();
       const totalAmount = getCartTotal();
       
@@ -242,7 +242,7 @@ const CheckoutPage = () => {
     setApplyingPromo(true);
     try {
       const token = localStorage.getItem('token');
-      const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const API_BASE_URL = (process.env.REACT_APP_API_URL || '');
       const cartCategories = getCartCategories();
       
       const response = await fetch(`${API_BASE_URL}/api/promo/validate`, {
@@ -359,7 +359,7 @@ const CheckoutPage = () => {
       console.log('📦 Order Data:', orderData);
 
       const token = localStorage.getItem('token');
-      const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const API_BASE_URL = (process.env.REACT_APP_API_URL || '');
       
       let paymentEndpoint = '';
       let paymentData = {};

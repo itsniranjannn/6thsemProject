@@ -174,7 +174,7 @@ const ProductPage = () => {
 
   const fetchProducts = async () => {
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/products`);
+      const response = await fetch(`${(process.env.REACT_APP_API_URL || '')}/api/products`);
       
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       
@@ -268,7 +268,7 @@ const ProductPage = () => {
 
   const fetchProductReviews = async (productId) => {
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/reviews/product/${productId}`);
+      const response = await fetch(`${(process.env.REACT_APP_API_URL || '')}/api/reviews/product/${productId}`);
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
@@ -330,27 +330,27 @@ const ProductPage = () => {
         
         switch (activeAlgorithm) {
           case 'ml':
-            apiUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommendations/product/${firstProduct.id}?algorithm=ml&limit=8`;
+            apiUrl = `${(process.env.REACT_APP_API_URL || '')}/api/recommendations/product/${firstProduct.id}?algorithm=ml&limit=8`;
             break;
           case 'content':
-            apiUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommendations/product/${firstProduct.id}?algorithm=content&limit=8`;
+            apiUrl = `${(process.env.REACT_APP_API_URL || '')}/api/recommendations/product/${firstProduct.id}?algorithm=content&limit=8`;
             break;
           case 'collaborative':
             if (user) {
               // User is logged in, try personalized recommendations
-              apiUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommendations/user/personalized?limit=8`;
+              apiUrl = `${(process.env.REACT_APP_API_URL || '')}/api/recommendations/user/personalized?limit=8`;
             } else {
               // User not logged in, fallback to trending (not content) and show message
-              apiUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommendations/popular?limit=8`;
+              apiUrl = `${(process.env.REACT_APP_API_URL || '')}/api/recommendations/popular?limit=8`;
               frontendFallback = true;
               setCollaborativeFallbackMessage('Log in to see personalized recommendations based on your purchase history.');
             }
             break;
           case 'popular':
-            apiUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommendations/popular?limit=8`;
+            apiUrl = `${(process.env.REACT_APP_API_URL || '')}/api/recommendations/popular?limit=8`;
             break;
           default:
-            apiUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommendations/product/${firstProduct.id}?algorithm=ml&limit=8`;
+            apiUrl = `${(process.env.REACT_APP_API_URL || '')}/api/recommendations/product/${firstProduct.id}?algorithm=ml&limit=8`;
         }
 
         const response = await fetch(apiUrl, { headers });
@@ -488,7 +488,7 @@ const ProductPage = () => {
       setIsLoading(true);
       
       const response = await fetch(
-        `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/products/search?q=${encodeURIComponent(query)}`
+        `${(process.env.REACT_APP_API_URL || '')}/api/products/search?q=${encodeURIComponent(query)}`
       );
       
       if (response.ok) {

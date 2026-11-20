@@ -67,7 +67,7 @@ const HomePage = () => {
   const fetchFeaturedProducts = async () => {
     try {
       const response = await fetch(
-        `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/products/featured?limit=8`
+        `${(process.env.REACT_APP_API_URL || '')}/api/products/featured?limit=8`
       );
       if (response.ok) {
         const data = await response.json();
@@ -89,7 +89,7 @@ const HomePage = () => {
   const fetchSpecialOffers = async () => {
     try {
       const response = await fetch(
-        `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/offers/active?limit=4`
+        `${(process.env.REACT_APP_API_URL || '')}/api/offers/active?limit=4`
       );
       if (response.ok) {
         const data = await response.json();
@@ -107,7 +107,7 @@ const HomePage = () => {
   const fetchNewArrivals = async () => {
     try {
       const response = await fetch(
-        `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/products/new-arrivals?limit=6`
+        `${(process.env.REACT_APP_API_URL || '')}/api/products/new-arrivals?limit=6`
       );
       if (response.ok) {
         const data = await response.json();
@@ -129,7 +129,7 @@ const HomePage = () => {
   const fetchStats = async () => {
     try {
       const response = await fetch(
-        `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/stats/homepage`
+        `${(process.env.REACT_APP_API_URL || '')}/api/stats/homepage`
       );
       if (!response.ok) {
         throw new Error(`Stats API failed: ${response.status}`);
@@ -272,7 +272,7 @@ const HomePage = () => {
 
   const fetchProductReviews = async (productId) => {
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/reviews/product/${productId}`);
+      const response = await fetch(`${(process.env.REACT_APP_API_URL || '')}/api/reviews/product/${productId}`);
       if (response.ok) {
         const data = await response.json();
         return {

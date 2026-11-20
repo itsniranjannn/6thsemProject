@@ -38,7 +38,7 @@ export const AuthProvider = ({ children }) => {
         return { success: false, error: 'No token found' };
       }
 
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/users/profile`, {
+      const response = await fetch(`${(process.env.REACT_APP_API_URL || '')}/api/users/profile`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -64,7 +64,7 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/users/login`, {
+      const response = await fetch(`${(process.env.REACT_APP_API_URL || '')}/api/users/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -98,7 +98,7 @@ export const AuthProvider = ({ children }) => {
 
   const register = async (name, email, password, phone = '', address = '', city = '', country = 'Nepal') => {
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/users/register`, {
+      const response = await fetch(`${(process.env.REACT_APP_API_URL || '')}/api/users/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -139,7 +139,7 @@ export const AuthProvider = ({ children }) => {
 
   const verifyEmail = async (code, email) => {
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/users/verify-email`, {
+      const response = await fetch(`${(process.env.REACT_APP_API_URL || '')}/api/users/verify-email`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -164,7 +164,7 @@ export const AuthProvider = ({ children }) => {
 
   const resendVerification = async (email) => {
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/users/resend-verification`, {
+      const response = await fetch(`${(process.env.REACT_APP_API_URL || '')}/api/users/resend-verification`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -191,7 +191,7 @@ export const AuthProvider = ({ children }) => {
 
   const forgotPassword = async (email) => {
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/users/forgot-password`, {
+      const response = await fetch(`${(process.env.REACT_APP_API_URL || '')}/api/users/forgot-password`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -214,7 +214,7 @@ export const AuthProvider = ({ children }) => {
 
   const resetPassword = async (code, newPassword, email) => {
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/users/reset-password`, {
+      const response = await fetch(`${(process.env.REACT_APP_API_URL || '')}/api/users/reset-password`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -249,7 +249,7 @@ export const AuthProvider = ({ children }) => {
   const updateProfile = async (profileData) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/users/profile`, {
+      const response = await fetch(`${(process.env.REACT_APP_API_URL || '')}/api/users/profile`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

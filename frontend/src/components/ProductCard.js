@@ -30,7 +30,7 @@ const ProductCard = ({ product, onAddToCart, onViewDetails, onAddReview, compact
     
     try {
       const response = await fetch(
-        `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/reviews/product/${product.id}`
+        `${(process.env.REACT_APP_API_URL || '')}/api/reviews/product/${product.id}`
       );
       if (response.ok) {
         const data = await response.json();
