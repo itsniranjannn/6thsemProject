@@ -181,12 +181,6 @@ const AboutPage = () => {
       image: '../images/n.jpg',
       expertise: 'Mastermind of Vision & Strategy'
     },
-        {
-      name: 'Shirshika Shrestha',
-      role: 'CTO & Co-Founder',
-      image: '../images/s.jpg',
-      expertise: 'Smart Assistant & Tech Innovator'
-    },
     {
       name: 'Prithivi Narayan Shah',
       role: 'Shree Pach Sarkar',

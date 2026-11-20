@@ -49,9 +49,14 @@ if (!fs.existsSync(uploadsDir)) {
 console.log('🔌 Connecting to database...');
 const db = mysql.createConnection({
   host: process.env.DB_HOST || 'localhost',
+  port: parseInt(process.env.DB_PORT, 10) || 3306,
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_NAME || 'smartshops'
+  database: process.env.DB_NAME || 'smartshops',
+  ssl: process.env.DB_SSL === 'true' ? {
+    minVersion: 'TLSv1.2',
+    rejectUnauthorized: true
+  } : false
 });
 
 db.connect((err) => {
@@ -158,4 +163,9 @@ process.on('unhandledRejection', (error) => {
 });
 
 // Extend keep-alive for some hosting providers
-server.keepAliveTimeout = 120000;
+if (server) {
+  server.keepAliveTimeout = 120000;
+}
+
+// Export app for serverless platforms like Vercel
+module.exports = app;
