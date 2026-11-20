@@ -20,8 +20,9 @@ const pool = mysql.createPool({
 const promisePool = pool.promise();
 
 // Export both promise and regular query methods
+// Note: TiDB requires pool.query for queries with LIMIT ? OFFSET ? instead of prepared statement binary protocol (execute)
 module.exports = {
   promise: promisePool,
-  execute: (...args) => promisePool.execute(...args),
+  execute: (...args) => promisePool.query(...args),
   query: (...args) => pool.query(...args)
 };
