@@ -98,30 +98,38 @@ db.connect((err) => {
 // ======================
 // Load API Routes
 // ======================
-const routes = [
-  { path: '/api/products', file: './routes/productRoutes' },
-  { path: '/api/users', file: './routes/userRoutes' },
-  { path: '/api/orders', file: './routes/orderRoutes' },
-  { path: '/api/cart', file: './routes/cartRoutes' },
-  { path: '/api/recommendations', file: './routes/recommendationRoutes' },
-  { path: '/api/payments', file: './routes/paymentRoutes' },
-  { path: '/api/reviews', file: './routes/reviewRoutes' },
-  { path: '/api/stats', file: './routes/statsRoutes' },
-  { path: '/api/promo', file: './routes/promoRoutes' },
-  { path: '/api/email', file: './routes/emailRoutes' },
-  { path: '/api/admin', file: './routes/adminRoutes' },
-  { path: '/api/offers', file: './routes/offerRoutes' },
-  { path: '/api/user-dashboard', file: './routes/userDashboardRoutes' },
-];
+const productRoutes = require('./routes/productRoutes');
+const userRoutes = require('./routes/userRoutes');
+const orderRoutes = require('./routes/orderRoutes');
+const cartRoutes = require('./routes/cartRoutes');
+const recommendationRoutes = require('./routes/recommendationRoutes');
+const reviewRoutes = require('./routes/reviewRoutes');
+const statsRoutes = require('./routes/statsRoutes');
+const promoRoutes = require('./routes/promoRoutes');
+const emailRoutes = require('./routes/emailRoutes');
+const adminRoutes = require('./routes/adminRoutes');
+const offerRoutes = require('./routes/offerRoutes');
+const userDashboardRoutes = require('./routes/userDashboardRoutes');
 
-routes.forEach((route) => {
-  try {
-    app.use(route.path, require(route.file));
-    console.log(`✅ ${route.path} routes loaded`);
-  } catch (err) {
-    console.error(`❌ Failed to load ${route.path}:`, err.message);
-  }
-});
+app.use('/api/products', productRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/orders', orderRoutes);
+app.use('/api/cart', cartRoutes);
+app.use('/api/recommendations', recommendationRoutes);
+app.use('/api/reviews', reviewRoutes);
+app.use('/api/stats', statsRoutes);
+app.use('/api/promo', promoRoutes);
+app.use('/api/email', emailRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/offers', offerRoutes);
+app.use('/api/user-dashboard', userDashboardRoutes);
+
+try {
+  const paymentRoutes = require('./routes/paymentRoutes');
+  app.use('/api/payments', paymentRoutes);
+} catch (err) {
+  console.error('⚠️ /api/payments failed to load:', err.message);
+}
 
 // ======================
 // Health & Base Routes
