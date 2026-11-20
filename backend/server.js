@@ -38,8 +38,17 @@ app.use(express.json());
 app.use((req, res, next) => {
   console.log(`📡 [${req.method}] originalUrl: ${req.originalUrl} | url: ${req.url}`);
   if (req.url === '/api/debug-routes') {
+    let routesList = [];
+    try {
+      if (app.router && app.router.stack) {
+        routesList = app.router.stack.map(l => ({ name: l.name, path: l.path, matchers: l.matchers ? l.matchers.length : 0 }));
+      }
+    } catch(e) {
+      routesList = e.message;
+    }
+
     return res.json({
-      routes: app._router ? 'found _router' : 'no _router',
+      routesList,
       database: db ? db.state : 'no db',
       db_host: process.env.DB_HOST,
       db_port: process.env.DB_PORT,
