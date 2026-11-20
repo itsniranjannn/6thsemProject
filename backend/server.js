@@ -34,6 +34,12 @@ app.use('/api/payments/stripe/webhook', express.raw({ type: 'application/json' }
 // Parse JSON for other routes
 app.use(express.json());
 
+// Debug log incoming request for Vercel
+app.use((req, res, next) => {
+  console.log(`📡 [${req.method}] originalUrl: ${req.originalUrl} | url: ${req.url}`);
+  next();
+});
+
 // Serve uploaded files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
@@ -117,12 +123,12 @@ app.get('/api/health', (req, res) => {
 });
 
 // ======================
-// Serve Frontend (Production)
+// Serve Frontend (Production Standalone)
 // ======================
-if (process.env.NODE_ENV === 'production') {
+// Only serve static frontend if NOT running on Vercel (Vercel routes frontend separately via vercel.json)
+if (process.env.NODE_ENV === 'production' && !process.env.VERCEL) {
   app.use(express.static(path.join(__dirname, '../frontend/build')));
 
-  // ✅ Modern Express 5 fix — use RegExp instead of '*'
   app.get(/.*/, (req, res) => {
     res.sendFile(path.join(__dirname, '../frontend/build', 'index.html'), (err) => {
       if (err) {
