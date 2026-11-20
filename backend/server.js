@@ -37,6 +37,18 @@ app.use(express.json());
 // Debug log incoming request for Vercel
 app.use((req, res, next) => {
   console.log(`📡 [${req.method}] originalUrl: ${req.originalUrl} | url: ${req.url}`);
+  if (req.url === '/api/debug-routes') {
+    return res.json({
+      routes: app._router ? 'found _router' : 'no _router',
+      database: db ? db.state : 'no db',
+      db_host: process.env.DB_HOST,
+      db_port: process.env.DB_PORT,
+      db_ssl: process.env.DB_SSL,
+      env: process.env.NODE_ENV,
+      url: req.url,
+      originalUrl: req.originalUrl
+    });
+  }
   next();
 });
 
